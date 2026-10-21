@@ -1,6 +1,6 @@
 # 005：文字候選與繁中譯表
 
-日期：2026-10-21。工作：[#7](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7)。
+建立：2026-10-21；更新：2026-10-22。工作：[#7](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7)。
 使用者已指定先完成中文化，再做全量 HD。地圖與 HD 批次延後，既有成果保留。
 
 ## 翻譯決定與權威來源
@@ -68,13 +68,15 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 860 筆術語、手冊對照、英文新譯來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 909 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
 | `story-caves.tsv`、`story-monsters.tsv` | 本作洞穴劇情、對話與怪物事件共 131 筆新譯 |
 | `story-undersea.tsv`、`story-travel-rescue.tsv` | 海底救援 201 筆及旅行、洞穴與救援短句 270 筆 |
 | `story-new-names.tsv`、`story-coast-hulder.tsv` | 新名稱相關事件 42 筆及海岸、哈德弗克事件 145 筆 |
+| `story-forest-thenol.tsv`、`ui-quests-magic.tsv` | 森林、西洛爾事件 252 筆及介面、任務、魔法短句 48 筆 |
+| `passage-candidates.json`、`passage-candidates.en.tsv` | 322 組靜態相鄰字串候選；獨立校讀輸入，未列入正式原文／譯文表 |
 | `term-corrections.tsv` | 已有譯文的精確鍵修訂，包括避難廳與不死怪物用語 |
 | `ui-effects-trade.tsv` | 204 筆狀態、交易、角色、存檔與戰鬥訊息新譯 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
@@ -100,12 +102,30 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 後續另補 163 筆角色管理、商店、存讀檔、營地、戰鬥結果與神廟訊息，以及 2 個新增人物名稱鍵，
 累計 669 筆。後續再補前作同文審閱 375、洞穴劇情 131、介面訊息 204、名稱與法術鍵 25，
 其後新增海底救援 201、旅行與救援短句 270、新名稱事件 42、海岸與哈德弗克事件 145、
-名稱鍵 66，目前共 2,128 筆。這是譯文進度，不能稱為 2,128 個功能、全遊戲覆蓋率或可玩中文化完成。
+名稱鍵 66；本輪再補森林與西洛爾 252、介面與魔法短句 48、名稱鍵 31，目前共 2,459 筆。
+這是譯文進度，不能稱為 2,459 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
 哈德弗克謎題仍保留 LIMENE、GEBENE 等原版英文字形，中文只解釋意思，未改輸入判定。
 動態傷害、角色代詞、部分切片與跨段引號仍需完整組句驗證。
+
+本輪另核對手冊第 65、66、81 頁的束縛動物、免受火焰傷害、流星火球術、召喚怪物及殺人之咒。
+Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Dragon Scale 依森林事件中的
+鐵製龍鱗形護符譯為「鐵製龍鱗」，不誤列為龍的種類。本作新增而缺完整中英手冊對照的名稱
+仍標記待全書校讀，不宣稱已有前作或官方中譯。
+
+## 相鄰劇情字串候選
+
+[passage_candidates.py](../../tools/passage_candidates.py) 先核對 ECL 與 catalog 的來源雜湊，
+再檢查 literal 的原始長度、6-bit 解碼及 HLIB 區塊邊界。只整理同一區塊內由 `11` 或
+`18 11` 相鄰接續、且首段前為 `11` 或 `12` 的字串；遇其他位元組即停止，不跨過未知控制碼。
+輸出保留每段來源鍵、檔案與區塊偏移、長度、前後位元組及工具雜湊。
+
+目前有 322 組不重複候選，來自 344 個來源位置，共 875 次片段出現。
+分組屬強推論，完整控制及分頁邊界尚未證實；每組都標記未經動態驗證。
+兩種接續在受控副本中的繪製行為已另驗，見 [研究 004](004-story-text.md#2026-10-22相鄰字串的受控接續實驗)。
+這個工具不修改 `en.tsv`、`zh-TW.tsv` 或原版資料，不把候選組數加入翻譯完成數。
 
 ## Docker 入口
 
@@ -117,6 +137,7 @@ bash tools/translation.sh extract
 bash tools/translation.sh terms
 bash tools/translation.sh seed
 bash tools/translation.sh batches
+bash tools/translation.sh passages
 bash tools/translation.sh check trial
 bash tools/translation.sh check names
 bash tools/translation.sh check ui-rest-combat
@@ -129,6 +150,8 @@ bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
 bash tools/translation.sh check story-coast-hulder
+bash tools/translation.sh check story-forest-thenol
+bash tools/translation.sh check ui-quests-magic
 bash tools/translation.sh check term-corrections
 bash tools/translation.sh check current-validation
 bash tools/translation.sh test

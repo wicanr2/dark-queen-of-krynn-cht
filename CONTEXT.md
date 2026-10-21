@@ -1,11 +1,11 @@
 # 目前真相
 
-更新：2026-10-21。規則見 [AGENTS.md](AGENTS.md)，歷程見 [WORKLOG.md](WORKLOG.md)。
+更新：2026-10-22。規則見 [AGENTS.md](AGENTS.md)，歷程見 [WORKLOG.md](WORKLOG.md)。
 
 | 項目 | 現況與證據 |
 |---|---|
 | 目前重心 | 使用者指定先完成中文化，再做全量 HD。集中遊戲譯文、術語、提早攔截與正常路徑接入；攻略重繪及 HD 批次延後 |
-| 翻譯與術語 | 已合併 2,128 筆本機譯文；首批 145 筆譯風已確認。860 筆術語以《幽靈騎士》優先；本作依英文新譯的名稱標記待校讀，Shield 語境歧義保留。8,381 筆來源候選仍含雜訊，不能當完成度分母；未接入正式遊戲，見 [研究 005](docs/re/005-translation-catalog.md) |
+| 翻譯與術語 | 已合併 2,459 筆本機譯文；首批 145 筆譯風已確認。909 筆術語以《幽靈騎士》優先；全表格式、字型及術語檢查通過，65 次句內歧義比對有校讀紀錄。本作依英文新譯的名稱標記待校讀，Shield 語境歧義保留。8,381 筆來源候選仍含雜訊，不能當完成度分母；未接入正式遊戲，見 [研究 005](docs/re/005-translation-catalog.md) |
 | 儲存庫 | [dark-queen-of-krynn-cht](https://github.com/wicanr2/dark-queen-of-krynn-cht)，PRIVATE，Issues 已啟用；主機 `gh` 回讀 |
 | 工作追蹤 | [#1 治理](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/1)、[#2 原始輸入](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)、[#3 執行基線](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3)、[#4 輸出掛勾](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)、[#5 手札與說明面板](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)、[#6 中文攻略](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)、[#7 繁中優先](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7)；狀態以遠端為準 |
 | 本機 Git | `main`，repo-local `wicanr2 <wicanr2@gmail.com>`，origin 指向本作私人庫 |
@@ -21,6 +21,7 @@
 | OCR 工具鏈 | `dqk-ocr:ppocr5-r1`，image `sha256:5625e878af8cce84fff9a7f63248fa38e6ed38dbf32d1be59a60e74519842ee2`，111 個套件固定版本並由乾淨來源重建；入口及界限見研究 002 |
 | 提早攔截 | 12 個角色選單字串在第一個字元繪製前 345 道指令可取得。實際視窗原子合成與原文組 guest 狀態相同；一般 27 幀、細分 560 幀已留存。背景建立與文字清除仍待驗證，規格 [001](docs/spec/001-early-text.md) 維持 DRAFT |
 | 劇情入口 | [研究 004](docs/re/004-story-text.md) 已定位 `0B72:0311`，首字元前 3,208 道指令取得完整首段及框。成對觀測不改比較的原版狀態；跨頁、清除與正式中文字級仍未定案 |
+| 劇情接續 | 兩種受控腳本接續實驗皆分兩次呼叫繪製，清除旗標依序為 1、0；第一段先畫，不能等收齊後才換中文。另有 322 組靜態相鄰字串候選，未逐組動態驗證、未列入正式譯表；見研究 004、005 |
 | 執行器 | 隔離 clone `workplace/dosgolem/`，來源 `/home/anr2/cht/dosgolem`，固定 `f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`，上游未改動 |
 | Go 工具鏈 | go1.24.13，`dosgolem-go-ebiten:1.24-r1`，image `sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581`；`bash tools/build-probe.sh` 重建 |
 | IDA | 9.4，既有 `ida-pro-9.4-idapython:py312-v1` 的非 root 最小匯出通過；只載入 resident 的資料庫不涵蓋動態載入區，不能把缺少 xref 當作無呼叫 |

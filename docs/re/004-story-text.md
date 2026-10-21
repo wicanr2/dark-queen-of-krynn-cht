@@ -86,3 +86,41 @@
 輸出在 `workplace/probe/story-text/preview-{16,20}px.png`、`preview-report.json`。
 角色管理選單的 20px 定案只適用選單；這兩張圖不代表劇情字級定案。
 目前只是短段落，尚未用最長實際段落、中文禁則、混合英文與跨頁狀態驗證。
+
+## 2026-10-22：相鄰字串的受控接續實驗
+
+目的為確認腳本把一句話拆成多段後，是否仍能在第一個字元前取得全部內容。
+工具 [make_text_chain_fixture.py](../../tools/make_text_chain_fixture.py) 建立兩份獨立資料副本，
+只置換 `DISK3/ECL.GLB` 檔案偏移 `0x321A` 的首段 literal，保留封包長度及 HLIB 索引。
+53 個檔案逐一回驗，只有 ECL 改變；`DQK.EXE` 與原始資料目錄不變。
+這是受控資料實驗，不能當作原版正常玩家路徑或中文化完成收據。
+
+- 原始 ECL SHA-256：`40542071e42d3cd125eabcead11456a99942bf55a7736fdb79f66a3c27c3664d`。
+- 快照來自正常入口 329M：`workplace/probe/startup/adventure-start.state`，SHA-256
+  `7c5ce572b8cd979f03ffd423e80c2c3048ed404b44f49a9f42d834b6f6fbacc5`。
+- 執行器與 Go 版本沿用上文；從現行 `story_text_probe.go` 重建後，二進位 SHA-256 為
+  `c015cd7b7b3f74d33585316dd2f111208c0956f0a5cec7d158c8db4e2eed5238`。
+- fixture 工具 SHA-256：`e4f533dfedd0442d3be8f9c363352d451e906f2ce63b69421cf8a45220d12c1a`。
+- 兩種副本分別以 `11` 及 `18 11` 連接兩個 literal；第一個 literal 之前保留原 `12`。
+  這裡的十六進位數是資料位元組，不是函式位址。
+
+| 接續位元組 | 第一段入口／首字元步數 | 第二段入口／首字元步數 | 清除旗標 |
+|---|---|---|---|
+| `11` | 334599045／334601829 | 339785948／339787956 | 1、0 |
+| `18 11` | 334598682／334601463 | 339785963／339787971 | 1、0 |
+
+已證實：在這兩個受控案例中，段落函式 `0B72:0311` 被呼叫兩次，文字框皆為
+`1,17,38,22`，第一段已開始繪製後才進入第二段。等待第二段到達才組成中文會太晚。
+尚未證實：`18` 的完整語意、其他控制碼、全遊戲分頁、輸入等待與所有靜態候選的執行情形。
+
+重跑入口為 `bash tools/translation.sh chain-fixture 新輸出名`，輸出名只能使用小寫字母、數字及
+連字號，而且必須尚未存在。需要既有正常入口快照、固定 dosgolem 副本及模組快取；缺件即停止。
+本次乾淨重建收據為 `workplace/probe/text-chain-rebuild-20261022/receipt.json`。
+
+| 該目錄下的追蹤檔 | SHA-256 |
+|---|---|
+| `direct-11/trace/trace.json` | `4522997ae2ad2a87e22c1fecfa8b8d9a72f8c41af26b1fd8bcfa8558330fb55e` |
+| `prefix-18-11/trace/trace.json` | `ff4d953c3b3898d1898edbe2d1b89b8eac4e71059156d8498332e8334c70ff8f` |
+
+因此先建立供校讀的整句候選，見 [研究 005](005-translation-catalog.md)。
+正式顯示前的整句辨識、中文分頁與清除生命週期仍依 DRAFT 規格 001 處理。

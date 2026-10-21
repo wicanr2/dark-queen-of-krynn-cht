@@ -7,6 +7,7 @@ DKK="${DQK_DKK_DIR:-/home/anr2/cht/golden_box/death_knight_of_krynn}"
 COK="${DQK_COK_DIR:-/home/anr2/cht/golden_box/champions_of_krynn}"
 PIL_IMAGE=sha256:44d0742ca1061bcd453440cdce925afa31c5324e115fca1334da0e364f0e2c48
 FONT_IMAGE=sha256:6d849051db2e108262fa689160011dc64045cc402f61985548a525559d3a1cf3
+GO_IMAGE=sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581
 test -d "$WORK"
 case "${1:-}" in
   extract)
@@ -50,6 +51,57 @@ case "${1:-}" in
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/translation:/out" \
       "$PIL_IMAGE" /tools/translation_batches.py /out
     ;;
+  passages)
+    test -f "$WORK/translation/catalog.json"
+    test -f "$WORK/input/dos/drkqueen/DISK3/ECL.GLB"
+    timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+      --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/translation:/out" \
+      -v "$WORK/input/dos/drkqueen:/orig:ro" "$PIL_IMAGE" /tools/passage_candidates.py \
+      /orig/DISK3/ECL.GLB /out/catalog.json /out
+    ;;
+  chain-fixture)
+    RUN_NAME="${2:-}"
+    [[ "$RUN_NAME" =~ ^[a-z0-9][a-z0-9-]+$ ]]
+    RUN_DIR="$WORK/probe/$RUN_NAME"
+    MODULES="${DQK_GOMODCACHE:-/home/anr2/cht/dosgolem/workplace/gomodcache}"
+    test -d "$WORK/probe"
+    test -d "$WORK/probe/gocache"
+    test -d "$MODULES"
+    test -f "$WORK/dosgolem/go.mod"
+    test -f "$WORK/probe/startup/adventure-start.state"
+    test -f "$WORK/input/dos/drkqueen/DQK.EXE"
+    test ! -e "$RUN_DIR"
+    test "$(git -C "$WORK/dosgolem" rev-parse HEAD)" = f79eab6db8c64a524a06535e53e5d32b0bbcf7c8
+    git -C "$WORK/dosgolem" diff --exit-code HEAD -- .
+    timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+      --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/probe:/out" \
+      -v "$WORK/input/dos/drkqueen:/orig:ro" "$PIL_IMAGE" /tools/make_text_chain_fixture.py \
+      /orig "/out/$RUN_NAME"
+    timeout 120s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 2g --cpus 2 --pids-limit 128 --user "$(id -u):$(id -g)" \
+      -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOPROXY=off -e GOMAXPROCS=2 \
+      -v "$WORK/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" -v "$RUN_DIR:/out" \
+      -v "$WORK/probe/gocache:/gocache" -v "$MODULES:/modules:ro" -w /src \
+      --entrypoint /usr/local/go/bin/go "$GO_IMAGE" build -o /out/story-probe /tools/story_text_probe.go
+    for VARIANT in direct-11 prefix-18-11; do
+      test -d "$RUN_DIR/$VARIANT/game"
+      test -d "$RUN_DIR/$VARIANT/trace"
+      timeout 180s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+        --network none --memory 1g --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+        -e GOMEMLIMIT=768MiB -e GOMAXPROCS=1 -v "$RUN_DIR:/bin-input:ro" \
+        -v "$WORK/probe/startup:/states:ro" -v "$RUN_DIR/$VARIANT/game:/orig:ro" \
+        -v "$RUN_DIR/$VARIANT/trace:/out" --entrypoint /bin-input/story-probe "$GO_IMAGE" \
+        /states/adventure-start.state /out
+    done
+    timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+      --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$RUN_DIR:/out" \
+      -v "$WORK/probe/startup:/states:ro" -v "$WORK/input/dos/drkqueen:/orig:ro" \
+      "$PIL_IMAGE" /tools/make_text_chain_fixture.py /orig /out --verify \
+      --snapshot /states/adventure-start.state --probe /out/story-probe
+    ;;
   check)
     BATCH="${2:-trial}"
     [[ "$BATCH" =~ ^[a-z0-9-]+$ ]]
@@ -76,5 +128,5 @@ case "${1:-}" in
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$DKK/font:/font:ro" \
       "$FONT_IMAGE" /tools/test_translation_guards.py /font/jf-openhuninn-2.1.ttf
     ;;
-  *) echo '用法：bash tools/translation.sh extract|terms|seed|batches|check [批次名稱]|test' >&2; exit 2 ;;
+  *) echo '用法：bash tools/translation.sh extract|terms|seed|batches|passages|chain-fixture 新輸出名|check [批次名稱]|test' >&2; exit 2 ;;
 esac
