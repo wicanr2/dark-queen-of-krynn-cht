@@ -1,0 +1,32 @@
+# 使用者提供的原始輸入與本機資料。
+/The Dark Queen of Krynn (1992).zip
+/珍181-克萊恩黑暗之后.rar
+/workplace/
+/dist-all/
+/walkthrough/
+/reference/
+
+# 封包、掃描與原版執行檔預設不入 Git。
+*.[zZ][iI][pP]
+*.[rR][aA][rR]
+*.7z
+*.iso
+*.[eE][xX][eE]
+*.[oO][vV][rR]
+*.[dD][aA][xX]
+*.[pP][dD][fF]
+
+# 存檔與本機工具狀態。
+/save/
+/saves/
+/.agents/
+/.codex/
+/.aws/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+.DS_Store
+Thumbs.db
