@@ -26,14 +26,18 @@ def main():
         root=Path(directory)
         source=root/"en.tsv"
         glossary=root/"glossary.tsv"
-        write(source,["key","text"],[("format","takes %d%s"),("name","Spectre"),("level","1st Level")])
-        write(glossary,["en","zh","category"],[("Spectre","幽靈","monster")])
+        write(source,["key","text"],[("format","takes %d%s"),("name","Spectre"),("level","1st Level"),
+            ("context","A fine for dragons")])
+        write(glossary,["en","zh","category"],[("Spectre","幽靈","monster"),("Fine","精良","item"),
+            ("Dragon","龍族","monster")])
         cases={"valid":[("format","受到%d%s","fixture"),("name","幽靈","fixture"),("level","第一級","fixture")],
             "orphan":[("unknown","未知","fixture")],
             "placeholder":[("format","受到%d","fixture")],
             "name":[("name","幽魂","fixture")],
             "number":[("level","第二級","fixture")],
-            "duplicate":[("name","幽靈","fixture"),("name","幽靈","fixture")]}
+            "duplicate":[("name","幽靈","fixture"),("name","幽靈","fixture")],
+            "multi-review":[("context","罰款與龍群","fixture")],
+            "duplicate-review":[("context","罰款與龍群","fixture")]}
         passed=[]
         for name,rows in cases.items():
             output=root/name
@@ -49,12 +53,23 @@ def main():
                 write(output/"term-reviews.tsv",["key","term","source_sha256","translation_sha256","reason"],
                     [("name","spectre",hashlib.sha256(b"Spectre").hexdigest(),
                       hashlib.sha256("幽魂".encode()).hexdigest(),"不得覆蓋正式名稱約束的fixture")])
+            if name in ("multi-review","duplicate-review"):
+                reviews=[("context",term,hashlib.sha256(b"A fine for dragons").hexdigest(),
+                    hashlib.sha256("罰款與龍群".encode()).hexdigest(),"同句不同詞的語境fixture")
+                    for term in ("fine","dragon")]
+                if name=="duplicate-review":
+                    reviews.append(reviews[0])
+                write(output/"term-reviews.tsv",["key","term","source_sha256","translation_sha256","reason"],reviews)
             run=subprocess.run([sys.executable,str(checker),str(source),str(batch),str(output),
                 "--font",str(args.font),"--glossary",str(glossary),"--style-approved"],
                 capture_output=True,text=True,timeout=15)
-            if name=="valid":
+            if name in ("valid","multi-review"):
                 assert run.returncode==0,run.stderr+run.stdout
                 assert list((output/"completed").glob("*.tsv"))
+                if name=="multi-review":
+                    report=json.loads((output/"trial-check.json").read_text())
+                    assert not report["term_warnings"]
+                    assert len(report["term_reviews_applied"])==2
             else:
                 assert run.returncode!=0,name
                 assert hashlib.sha256(target.read_bytes()).hexdigest()==before,name

@@ -13,7 +13,7 @@ import unicodedata
 FORMAT = re.compile(r"%(?:[-+ #0]*\d*(?:\.\d+)?[hlL]?[diuoxXfFeEgGcrsp%])")
 
 
-def load(path, header):
+def load(path, header, key_columns=1):
     raw = path.read_bytes()
     text = raw.decode("utf-8")
     if "\r" in text:
@@ -23,7 +23,7 @@ def load(path, header):
         raise ValueError(f"{path.name} 表頭不符")
     if any(len(row) != len(header) for row in rows[1:]):
         raise ValueError(f"{path.name} 欄數不符")
-    keys = [row[0] for row in rows[1:]]
+    keys = [tuple(row[:key_columns]) for row in rows[1:]]
     if len(keys) != len(set(keys)):
         raise ValueError(f"{path.name} key 重複")
     return [dict(zip(header,row)) for row in rows[1:]]
@@ -55,7 +55,7 @@ def main():
     term_reviews=[]
     review_path=args.output/"term-reviews.tsv"
     if review_path.is_file():
-        term_reviews=load(review_path,["key","term","source_sha256","translation_sha256","reason"])
+        term_reviews=load(review_path,["key","term","source_sha256","translation_sha256","reason"],key_columns=2)
     applied_reviews=[]
     if args.glossary:
         with args.glossary.open(encoding="utf-8") as stream:
@@ -63,6 +63,9 @@ def main():
                 all_canon.setdefault(item["en"].casefold(),set()).add(item["zh"])
                 if item["category"] in ("item","monster","person"):
                     canon.setdefault(item["en"].casefold(),set()).add(item["zh"])
+    # 術語多於 re 的快取容量時，逐句編譯會反覆逐出所有規則。
+    term_patterns=[(term,choices,re.compile(r"(?<![a-z0-9])"+re.escape(term)+r"s?(?![a-z0-9])"))
+        for term,choices in all_canon.items()]
     for row in rows:
         key,text = row["key"],row["text"]
         if key not in source:
@@ -82,12 +85,13 @@ def main():
             target_numbers=Counter([level[1]])
         if source_numbers != target_numbers:
             errors.append(f"數字需複核：{key}")
-        names=canon.get(source[key].casefold(),set())
+        source_folded=source[key].casefold()
+        names=canon.get(source_folded,set())
         if len(names)==1 and text not in names:
             errors.append(f"名稱未對齊幽靈騎士：{key}")
         matches=[]
-        for term,choices in all_canon.items():
-            for match in re.finditer(r"(?<![a-z0-9])"+re.escape(term)+r"s?(?![a-z0-9])",source[key].casefold()):
+        for term,choices,pattern in term_patterns:
+            for match in pattern.finditer(source_folded):
                 matches.append((match.start(),match.end(),term,choices))
         picked=[]
         for match in sorted(matches,key=lambda m:-(m[1]-m[0])):
@@ -123,7 +127,7 @@ def main():
     (args.output/(args.batch_id+"-check.json")).write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
     state = "使用者已確認本批譯風，尚未接入正式遊戲。" if args.style_approved else "試譯待確認，尚未接入正式遊戲。"
     review = ["# 《黑暗之后》繁中試譯", "", "狀態："+state, "",
-        "範圍：角色選單、帕蘭薩斯、凱爾高斯與出航。來源與譯文只留本機。", ""]
+        "範圍：本批 TSV 所列文字；實際語境與接入狀態見逐項註記。來源與譯文只留本機。", ""]
     for row in rows:
         review += [f'## {row["key"]}',"",source.get(row["key"],"缺少來源"),"",row["text"],"",row["note"],""]
     (args.output/(args.batch_id+"-review.md")).write_text("\n".join(review),encoding="utf-8")

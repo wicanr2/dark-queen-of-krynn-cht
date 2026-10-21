@@ -23,6 +23,11 @@
 例如多眼怪、黑布丁、大甲蟲、綠火怪與氣胞眼怪；相關掃描雜湊保存在本機術語來源。
 第 63、78、80 頁補上還陽術、分解術、狂舞術及保護心智。
 本作 Delayed Blast Fireball 的拼字變體沿用既有「延時爆發火球」，手冊異譯不覆蓋前作。
+海底與哈德弗克事件已核對諾里迪斯、西洛爾、鐵虎克、萊里恩、古朗思卡等本作名稱。
+泰索何夫、麥坦尼、科南沿用前作；Tasselhoff／Tasslehoff 的原文字形都保留，顯示譯名一致。
+特拉格與正式龍人族系分列，不因相近就一律加上龍人；本作手冊第 40 頁的族系異譯仍保留來源。
+未找到手冊完整中英對照的少數名稱，以英文原名新譯並標記待全書校讀，
+例如塞里亞斯、艾莉亞、瑟拉諾斯特及傳聲海螺，不冒充手冊中已有的中譯。
 
 ## 輸入與擷取界限
 
@@ -49,6 +54,8 @@ ECL 的 48 個區塊含首個對照區塊，不能稱作 48 張地圖；MONCHA �
 
 MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正式解析器。
 名稱候選數不代表已還原 98 種怪物。武器名稱目前主要來自 EXE；沒有為翻譯改寫 ITEM 資料。
+目前 98 筆 MONCHA 原始 ASCII 候選中有 96 筆譯文；其餘 AMT、HNZH 仍無法辨識為名稱。
+這個數字只描述候選譯表，沒有證實記錄邊界、怪物種類或實際遇敵顯示。
 
 ## 譯文、術語與檢查
 
@@ -61,13 +68,17 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 769 筆術語、原始來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 860 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
 | `story-caves.tsv`、`story-monsters.tsv` | 本作洞穴劇情、對話與怪物事件共 131 筆新譯 |
+| `story-undersea.tsv`、`story-travel-rescue.tsv` | 海底救援 201 筆及旅行、洞穴與救援短句 270 筆 |
+| `story-new-names.tsv`、`story-coast-hulder.tsv` | 新名稱相關事件 42 筆及海岸、哈德弗克事件 145 筆 |
+| `term-corrections.tsv` | 已有譯文的精確鍵修訂，包括避難廳與不死怪物用語 |
 | `ui-effects-trade.tsv` | 204 筆狀態、交易、角色、存檔與戰鬥訊息新譯 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
+| `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
 | `completed/` | 依批次名及輸入雜湊保存批次歷史與檢查收據；修訂前版本保留，現行值以 `zh-TW.tsv` 為準 |
 | `term-reviews.tsv` | 句內多義詞的校讀理由，固定原文與譯文雜湊；內容改變後自動失效 |
@@ -88,10 +99,13 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 首輪已檢查並合併 504 筆譯文：首批 145、名稱 323、休息與戰鬥訊息 36。
 後續另補 163 筆角色管理、商店、存讀檔、營地、戰鬥結果與神廟訊息，以及 2 個新增人物名稱鍵，
 累計 669 筆。後續再補前作同文審閱 375、洞穴劇情 131、介面訊息 204、名稱與法術鍵 25，
-目前共 1,404 筆。這是譯文進度，不能稱為 1,404 個功能、全遊戲覆蓋率或可玩中文化完成。
+其後新增海底救援 201、旅行與救援短句 270、新名稱事件 42、海岸與哈德弗克事件 145、
+名稱鍵 66，目前共 2,128 筆。這是譯文進度，不能稱為 2,128 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
+哈德弗克謎題仍保留 LIMENE、GEBENE 等原版英文字形，中文只解釋意思，未改輸入判定。
+動態傷害、角色代詞、部分切片與跨段引號仍需完整組句驗證。
 
 ## Docker 入口
 
@@ -111,6 +125,12 @@ bash tools/translation.sh check prior-reviewed
 bash tools/translation.sh check story-caves
 bash tools/translation.sh check story-monsters
 bash tools/translation.sh check ui-effects-trade
+bash tools/translation.sh check story-undersea
+bash tools/translation.sh check story-travel-rescue
+bash tools/translation.sh check story-new-names
+bash tools/translation.sh check story-coast-hulder
+bash tools/translation.sh check term-corrections
+bash tools/translation.sh check current-validation
 bash tools/translation.sh test
 ```
 
@@ -121,4 +141,7 @@ bash tools/translation.sh test
 
 [test_translation_guards.py](../../tools/test_translation_guards.py) 以最小 fixture 驗證正常批次、
 孤兒 key、遺失格式參數、錯誤怪物名稱、不同級數及重複 key。失敗時必須保留原有譯表，
-不得把拒絕批次存成完成收據。這是工具防錯檢查，不是原版規則或遊戲接入驗證。
+不得把拒絕批次存成完成收據。同句不同詞的校讀以 key 與 term 組合辨識；相同組合重複時拒絕。
+術語規則改為每輪預先編譯，避免大量術語超出正規表示式快取容量後逐句重新編譯。
+同一份 2,127 筆輸入的修正前後收據除工具雜湊外完全相同，8 項防錯測試通過。
+這是工具防錯檢查，不是原版規則或遊戲接入驗證。
