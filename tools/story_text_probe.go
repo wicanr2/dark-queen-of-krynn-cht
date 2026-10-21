@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,9 +20,12 @@ func storyCheck(err error) {
 }
 func main() {
 	if len(os.Args) < 3 || len(os.Args) > 4 {
-		panic("用法：story-probe state output [control|sequence|sequence-control|enter-sequence|enter-sequence-control|hall-sequence|hall-sequence-control]")
+		panic("用法：story-probe state output [control|sequence|sequence-control|enter-sequence|enter-sequence-control|hall-sequence|hall-sequence-control|city-state|save-sequence|save-sequence-control]")
 	}
 	observe, sequence, enter, hall := true, false, false, false
+	cityState := false
+	saveSequence := false
+	var exitCode *uint8
 	if len(os.Args) == 4 {
 		switch os.Args[3] {
 		case "control":
@@ -47,6 +51,16 @@ func main() {
 			enter = true
 			hall = true
 			observe = false
+		case "city-state":
+			sequence = true
+			enter = true
+			observe = false
+			cityState = true
+		case "save-sequence", "save-sequence-control":
+			sequence = true
+			enter = true
+			saveSequence = true
+			observe = os.Args[3] == "save-sequence"
 		default:
 			panic("未知模式")
 		}
@@ -150,6 +164,9 @@ func main() {
 		})
 		o.OnCall(oracle.Addr{Seg: 0x1212, Off: 0x03a0}, func(_ *oracle.Oracle) {
 			if len(calls) >= 4000 {
+				if saveSequence {
+					panic("存檔路徑文字超出研究上限")
+				}
 				return
 			}
 			s := stack()
@@ -188,6 +205,9 @@ func main() {
 			h := sha256.Sum256(ram)
 			pix := sha256.Sum256(o.Indexed())
 			checkpoints = append(checkpoints, map[string]any{"label": label, "step": o.Steps(), "regs": o.Regs(), "ram_sha256": hex.EncodeToString(h[:]), "indexed_sha256": hex.EncodeToString(pix[:]), "palette": o.Palette(), "keys_consumed": o.KeysConsumed(), "file_writes": o.Wrote(), "paragraphs": len(paragraphs)})
+			if saveSequence {
+				checkpoints[len(checkpoints)-1]["unimplemented"] = append([]string{}, o.Unimplemented()...)
+			}
 			storyCheck(o.WritePNG(filepath.Join(out, label+".png")))
 		}
 		capture("intro")
@@ -207,6 +227,41 @@ func main() {
 			storyCheck(o.Run(50000000))
 			capture("hall")
 		}
+		if cityState {
+			storyCheck(o.SaveStateFile(filepath.Join(out, "city.state")))
+		}
+		if saveSequence {
+			for _, action := range []struct {
+				key, label string
+				end        uint64
+			}{
+				{"l", "leave", 600000000},
+				{"Return", "returned-city", 615000000},
+				{"i", "inn", 640000000},
+				{"Return", "camp", 665000000},
+				{"s", "save-menu", 690000000},
+				{"j", "saved-j", 715000000},
+			} {
+				storyCheck(o.Run(1000000))
+				if action.key == "Return" {
+					storyCheck(o.SendKeys(action.key))
+				} else {
+					storyCheck(o.TypeKeys(action.key))
+				}
+				storyCheck(o.Run(action.end - o.Steps()))
+				capture(action.label)
+			}
+			storyCheck(o.SaveStateFile(filepath.Join(out, "saved-j.state")))
+			storyCheck(o.Run(1000000))
+			storyCheck(o.TypeKeys("y"))
+			err := o.Run(24000000)
+			var ended *oracle.ExitError
+			if !errors.As(err, &ended) || ended.Code != 0 {
+				panic(fmt.Sprintf("正常離開 DOS 失敗：%v", err))
+			}
+			exitCode = &ended.Code
+			capture("exit-dos")
+		}
 	}
 	ram := make([]byte, 1<<20)
 	for i := range ram {
@@ -216,7 +271,7 @@ func main() {
 	b, err = json.MarshalIndent(map[string]any{"prototype": true, "observe": observe,
 		"source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "input_sha256": hex.EncodeToString(h[:]),
 		"ram_sha256": hex.EncodeToString(ramHash[:]), "indexed_sha256": hex.EncodeToString(pixelsHash[:]), "palette": o.Palette(),
-		"evidence_level": "raw observation; vararg candidate is not a proven parser", "calls": calls, "glyphs": glyphs, "paragraphs": paragraphs, "steps": o.Steps(), "regs": o.Regs(), "sequence": sequence, "enter_sequence": enter, "checkpoints": checkpoints, "unimplemented": o.Unimplemented()}, "", "  ")
+		"evidence_level": "raw observation; vararg candidate is not a proven parser", "calls": calls, "glyphs": glyphs, "paragraphs": paragraphs, "steps": o.Steps(), "regs": o.Regs(), "sequence": sequence, "enter_sequence": enter, "save_sequence": saveSequence, "exit_code": exitCode, "checkpoints": checkpoints, "unimplemented": o.Unimplemented()}, "", "  ")
 	storyCheck(err)
 	storyCheck(os.WriteFile(filepath.Join(out, "trace.json"), append(b, '\n'), 0644))
 	storyCheck(o.WritePNG(filepath.Join(out, "final.png")))

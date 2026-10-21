@@ -218,3 +218,68 @@ bash tools/interactive-menu.sh verify 全新取消返回名 全新冒險名
 
 限制：仍是 DRAFT，僅十二項角色選單中文。其他按鈕路徑、滑鼠、IME、音訊、正式存讀檔、
 長段分頁與其餘遊戲中文尚未完成；劇情字級問題仍待選。沒有新增前作的作弊鍵或 HD 選項。
+
+## 2026-10-22：原版旅店存檔與冷啟動讀回
+
+[story_text_probe.go](../../tools/story_text_probe.go) 新增 `city-state`、`save-sequence` 與
+`save-sequence-control` 研究模式。從既有正常形成的 329M 查驗頁開始，依已核對的手冊答案
+與八次 Return 進城，不改記憶體、座標、任務旗標或原版資料。輸入仍為 `DQK.EXE` 1.1、
+固定 dosgolem `f79eab6db8c64a524a06535e53e5d32b0bbcf7c8` 及既有 Go 1.24.13 image。
+329M 快照 SHA-256 為 `7c5ce572b8cd979f03ffd423e80c2c3048ed404b44f49a9f42d834b6f6fbacc5`。
+兩組起於相同完整快照，沿用執行器的虛擬時鐘；沒有辨識或修改遊戲 seed，不宣稱戰鬥骰序相同。
+
+| 正常輸入 | 步數 | 畫面與結果 |
+|---|---|---|
+| 城內 Leave | 576M | 守衛要求先覲見王宮，不能直接離城 |
+| Return、Inn | 601M、616M | 返回城內，進入旅店，公共房間免費 |
+| Return | 641M | 進入營地，顯示 View／Magic／Rest／Alt／Fix／Load／Save／Exit |
+| Save、J | 666M、691M | 選擇存檔槽位 J，隨後詢問是否回 DOS |
+| Yes | 716M | 原版於 `716031795` 正常結束，退出碼 0 |
+
+已證實：輸出只落在該次 `scratch/SAVE/`，原版 `/orig` 唯讀。
+觀測與無觀測組的 16 個檢查點，暫存器、1 MiB RAM、色號、色盤、消耗按鍵及寫檔紀錄相同。
+兩組存檔逐位元組相同；另外與逐步探索時寫出的兩檔相同，不只檢查檔案存在。
+
+| 檔案 | 位元組 | SHA-256 |
+|---|---|---|
+| `SAVE/SavGamJ.qsv` | 7,965 | `72a45079a189126c3a96d4681fac846086a6edaf26748d260d3a73fbc8905488` |
+| `SAVE/VaultJ.DAT` | 866 | `2acc13fa21f319fac65ad823d7ca52f1ed02d13ce8708431f7ce5c116d9db7ba` |
+
+遊戲內至存檔後確認頁沒有未實作服務。回 DOS 的最後檢查點保留
+`int 10h AH=01 AL=00 ×1`，沒有把它隱藏成零缺口，也沒有修改執行器或深挖硬體 driver。
+CLI 的舊「被擋下來的寫檔」標籤不能證明失敗，本輪以實際兩檔與另一程序的讀回確認落地。
+
+[cold-save-load.sh](../../tools/cold-save-load.sh) 只接受上述固定兩檔，從原始 MZ 入口另起程序，
+經七次片頭空白鍵、Play、Load、This Game、J、Begin Adventure 與正常查驗頁讀回。
+第一階段沒有載入機器快照；後續快照只是同一條正常輸入路徑的檢查點。
+查驗頁色號雜湊完全相同才送已核對的答案，不猜題、不重試、不修改答案判定。
+冷讀後六名角色、位置 `1,2`、時間 `9:00 AM` 及整張 320×200 城內 RGB 畫面，
+與原先進城畫面逐點相同。這不是冷啟動前後整機記憶體相同或所有存檔欄位已解碼的宣稱。
+
+| 收據，均在 `workplace/probe/` | SHA-256 |
+|---|---|
+| `save-load-observe-r2-20261022/trace.json` | `c518d4d2929b56b489dbb2a057fb3cff15aa1298304e9c11d0a713310f993a50` |
+| `save-load-control-r2-20261022/trace.json` | `5fe9f28d7f3ef208bf97b600b4840f294909aa526eef02cef0b3db6372df82f6` |
+
+冷讀的腳本收據位於 `save-load-cold-wrapper-r2-20261022/`，含三階段原版 I/O log、色號、PNG
+及正常形成的快照。[check_save_load.py](../../tools/check_save_load.py) 核對兩組狀態、檔案、
+冷啟動按鍵與讀檔紀錄及整張恢復畫面；比較收據為觀測組的 `save-load-comparison.json`。
+初次通用 CLI 擷取誤用只支援平面模式的 `-dump-screen-png`，改用其既有 mode 13h
+`-dump-vram` 輸出色號與 PNG 後重跑。這是驗證選項問題，不是遊戲缺陷。
+
+重生入口如下；輸出名必須全新，研究輸入唯讀，暫存存檔不加入 Git。
+
+```sh
+bash tools/story-live.sh probe-build
+bash tools/story-live.sh save-probe 全新觀測名
+bash tools/story-live.sh save-probe-control 全新控制名
+bash tools/cold-save-load.sh 全新控制名 全新冷讀名
+```
+
+檢查器在既有 Pillow image 內執行，`/tools` 唯讀掛載專案 `tools/`，`/out` 為
+`workplace/probe/`。命令為 `python3 /tools/check_save_load.py /out 觀測名 控制名 冷讀名`。
+`city-state` 可另外保存正常 575M 城內快照；逐步探索、Alt 設定選單與早期失敗保存在
+`save-load-city-20261022/`。新觀測的營地及存檔短標籤來源見 [研究 005](005-translation-catalog.md)。
+
+限制：這是 dosgolem 執行原版的存檔 J 與冷讀路徑。未驗中文覆繪、實際 GUI 前端、
+營地內 Load、其他槽位、覆寫取消、長段分頁、戰鬥或跨平台封包。規格 001 維持 DRAFT。

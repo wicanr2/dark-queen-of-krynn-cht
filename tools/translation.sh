@@ -21,6 +21,7 @@ case "${1:-}" in
     test -f "$WORK/probe/story-observe/trace.json"
     test -f "$WORK/probe/story-return-sequence-20261022/trace.json"
     test -f "$WORK/probe/story-hall-20261022/trace.json"
+    test -f "$WORK/probe/save-load-observe-r2-20261022/trace.json"
     timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
       --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/input/dos/drkqueen:/orig:ro" \
@@ -28,7 +29,8 @@ case "${1:-}" in
       "$PIL_IMAGE" /tools/text_catalog.py /orig /out \
       --trace /receipts/early-observe/trace.json --trace /receipts/story-observe/trace.json \
       --trace /receipts/story-return-sequence-20261022/trace.json \
-      --trace /receipts/story-hall-20261022/trace.json
+      --trace /receipts/story-hall-20261022/trace.json \
+      --trace /receipts/save-load-observe-r2-20261022/trace.json
     ;;
   terms|seed)
     test -f "$WORK/translation/catalog.json"
