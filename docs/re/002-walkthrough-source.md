@@ -48,6 +48,60 @@
 - 閱讀頁必須使用重新排版的正文及重繪圖；放入 PDF、整頁掃描、裁切圖或單純放大原圖，
   都不算完成重繪。各張地圖仍待盤點、製作與驗證。
 
+### 圖區初盤與首張重繪
+
+已檢視 25 張掃描及接觸表，初盤 51 個圖區。計數單位為獨立分圖，同一區的不同樓層、
+跨頁續圖及大陸圖分別計數，不能當作遊戲地圖數。圖名與各張幾何仍待校讀。
+逐圖來源檔名、印刷頁碼及 SHA-256 保存於 `workplace/guide-map-index.json`，由
+[index_guide_maps.py](../../tools/index_guide_maps.py) 合併人工圖區註記與原始掃描產生。
+索引 SHA-256 為 `7b2b998ff08dd1bfc9862e0c16548d992acbb093cad0fe3d12b911a66785830f`。
+
+| 期數 | 印刷頁碼 | 初盤圖區數 |
+|---|---|---|
+| 47 | 62、63、64、65、66、67 | 1、1、2、3、3、10 |
+| 48 | 58、59、60、61、62、63 | 1、1、1、3、1、1 |
+| 48 | 64、65、66、67、68、69 | 2、2、4、3、1、4 |
+| 48 | 71、72 | 3、4 |
+
+首張樣張為 Caergoth，來源 `軟體世界47期/63.jpeg`，印刷第 62 頁，SHA-256
+`8012ada4d9fc9f763b28ea2e35f84de32f06a1681324445c14adab2aac8c293f`。
+人工依原圖校讀可行走區、密林、樹牆、牆、瓦礫、不可通行區與 9 個門符號，再以獨立線段及
+多邊形重繪。樣張座標採 14×17 的印刷格線近似，不是遊戲座標，也未證實遊戲地圖尺寸。
+
+- 原圖 1 至 10 號共有 11 處標記，2 號標了兩處，原樣保留。
+- 原頁只附 1、2、3、4、10 號說明。5 至 9 保留編號並顯示待查，不猜補用途。
+- 原圖沒有方向箭頭，樣張不添加北箭頭。Caergoth 的正式繁中地名尚待術語對齊。
+- 幾何與標記已對照來源初校，沒有獨立複核或遊戲逐格驗證，證據只到「依來源重繪」。
+- 線條、色彩、字級與閱讀布局均未定版，沒有接入正式遊戲。
+
+本機成果在 `workplace/caergoth-redraw/`：`map.svg` 是獨立向量，`map.png` 供檢視，
+`reader.html` 是可縮放、拖曳及點選編號讀說明的可丟棄原型。SVG 沒有 `<image>` 元素，
+不包含掃描像素。內嵌 OFL 字型供離線顯示，隨附 `FONT-LICENSE.txt`；原圖、衍生圖及正文
+均只留本機，不入 Git。`receipt.json` 保存輸入、字型、工具及輸出雜湊。
+
+### 重生與瀏覽器驗證
+
+入口 [guide-map.sh](../../tools/guide-map.sh)，依序執行 `index`、`redraw`、`check`。
+此入口只讀既有本機研究輸入，缺少掃描、人工註記或字型時停止，不下載或捏造替代輸入。
+寫入 UID/GID 沿用目前使用者，網路關閉，容器有資源及時間限制，使用已存在且固定 ID 的工具。
+
+```sh
+bash tools/guide-map.sh index
+bash tools/guide-map.sh redraw
+bash tools/guide-map.sh check
+```
+
+[redraw_guide_map.py](../../tools/redraw_guide_map.py) 讀取 `workplace/caergoth-redraw.json`
+的人工幾何與標記。這是研究輸入，尚非正式 schema。來源圖不掛入繪圖步驟。
+Pillow 11.3.0 生成 PNG；字型沿用前作粉圓 2.1 與其 OFL，工具及來源雜湊同規格 001。
+
+[check_map_reader.mjs](../../tools/check_map_reader.mjs) 在既有
+`mcr.microsoft.com/playwright:v1.56.1-noble` 內以 Chromium DevTools pipe 驗證，沒有安裝新套件。
+image ID 為 `sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2b837a`，
+Chromium `141.0.7390.37`。已通過中文字型、11 個標記、沒有點陣圖元素、鍵盤查閱、縮放、
+真實指標拖曳及未知標記提示；截圖為 `browser.png`，收據為 `browser-receipt.json`。
+操作檢查不證明原版地圖或事件正確，也不代表已完成遊戲內開啟與返回。
+
 ## OCR 工具與校對界限
 
 `tools/docker/ocr.Dockerfile` 與同目錄 `ocr-runtime-versions.txt` 固定 111 個套件版本，
