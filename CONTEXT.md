@@ -5,7 +5,7 @@
 | 項目 | 現況與證據 |
 |---|---|
 | 目前重心 | 使用者指定先完成中文化，再做全量 HD。集中遊戲譯文、術語、提早攔截與正常路徑接入；攻略重繪及 HD 批次延後 |
-| 翻譯與術語 | 已合併 3,467 筆本機譯文；首批 145 筆譯風已確認。950 筆術語以《幽靈騎士》優先；全表格式、字型及術語檢查通過，156 次句內歧義比對有校讀紀錄。本作新名依手冊補核，未見對照者標記待校讀，Shield 語境歧義保留。8,381 筆來源候選仍含雜訊，不能當完成度分母；未接入正式遊戲，見 [研究 005](docs/re/005-translation-catalog.md) |
+| 翻譯與術語 | 已合併 4,209 筆本機譯文；首批 145 筆譯風已確認。950 筆術語以《幽靈騎士》優先；全表格式、字型及術語檢查通過，174 次句內歧義比對有校讀紀錄。本作新名依手冊補核，未見對照者標記待校讀，Shield 語境歧義保留。8,381 筆來源候選仍含雜訊，不能當完成度分母；未接入正式遊戲，見 [研究 005](docs/re/005-translation-catalog.md) |
 | 儲存庫 | [dark-queen-of-krynn-cht](https://github.com/wicanr2/dark-queen-of-krynn-cht)，PRIVATE，Issues 已啟用；主機 `gh` 回讀 |
 | 工作追蹤 | [#1 治理](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/1)、[#2 原始輸入](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)、[#3 執行基線](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3)、[#4 輸出掛勾](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)、[#5 手札與說明面板](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)、[#6 中文攻略](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)、[#7 繁中優先](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7)；狀態以遠端為準 |
 | 本機 Git | `main`，repo-local `wicanr2 <wicanr2@gmail.com>`，origin 指向本作私人庫 |
