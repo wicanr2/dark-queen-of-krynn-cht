@@ -35,7 +35,7 @@
 - 地圖上的位置、門與事件標記尚未與遊戲實際資料核對，暫不當作原版規則證據。
 - 修改資料只列來源，不把修改值套入遊戲、測試狀態或存檔。
 - 掃描含多欄細字與圖文混排。OCR 只能作草稿；必須保留頁碼、區塊位置及校對狀態。
-- 內建手札與說明面板已獲使用者確認。攻略面板、答案提示及地圖疊層尚待範圍定案。
+- 使用者已確認內建手札、說明與獨立手動攻略閱讀頁。自動答案提示及地圖疊層尚未定案。
 
 ## OCR 工具與校對界限
 
@@ -65,3 +65,23 @@ PaddleOCR 3.1.0、PaddleX 3.1.0、PaddlePaddle 3.1.1；`pip check` 通過。
 
 - 完成 manifest SHA-256：`ccc16f8b16fe126fe542cb56262c9622b51f59d189ad0d77a97013996765e36c`。
 - provenance SHA-256：`a43b72e71ee8922ec85e2ce94ba7a6116c757534c2a091586c98a1cfeffabb26`。
+
+## 手動閱讀頁原型
+
+使用者已選擇獨立、手動開啟的攻略閱讀頁。首次試排由
+[reader_preview.py](../../tools/reader_preview.py) 讀取本機節錄及字型，輸出
+`workplace/reader-preview.png`。試排將旅行手札、說明書與攻略並列，攻略保留章節目錄、
+印刷頁碼、作者及原頁入口；這些按鈕目前只是圖面，尚未接入遊戲。
+
+原型尺寸為 960×600，正文暫用 20px 粉圓。這是閱讀頁試排，尚非正式版面或字級決定，
+也不改變角色管理選單已確認的 20px 契約。只試排上篇首頁節錄，未驗證全文、長章節與地圖。
+私有輸入 `workplace/reader-sample.json` 與生成圖皆不入 Git；正式資料須先校對。
+
+重現時使用 `sc-cht-hdtools:pillow11.3.0-r1`，停用網路，以非 root 執行：
+
+```text
+python3 tools/reader_preview.py <本機節錄 JSON> <已授權字型 TTF> <輸出 PNG>
+```
+
+JSON 欄位為 `title`、`source` 及字串陣列 `paragraphs`。本輪唯讀使用前作的
+`font/jf-openhuninn-2.1.ttf`，來源與授權沿用規格 001 的字型記錄，沒有複製進 Git。
