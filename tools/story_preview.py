@@ -12,6 +12,45 @@ from PIL import Image, ImageDraw, ImageFont
 
 root, font_path = map(Path, sys.argv[1:3])
 trace = json.loads((root / "trace.json").read_text())
+if len(sys.argv) == 5 and sys.argv[3] == "--runtime-inputs":
+    catalogs = Path(sys.argv[4])
+    def load(name):
+        with (catalogs / name).open() as file:
+            rows = list(csv.DictReader(file, delimiter="\t", quoting=csv.QUOTE_NONE))
+        result = {r["key"]: r["text"] for r in rows}
+        if len(result) != len(rows):
+            raise ValueError("來源 TSV 重複 key")
+        return result
+    en, zh = load("en.tsv"), load("zh-TW.tsv")
+    selected = {}
+    unmatched = []
+    for entry in trace["paragraphs"]:
+        if not entry["source"]["nul_terminated"]:
+            raise ValueError("觀測來源未結束")
+        source = entry["source"]["text"]
+        key = "ecl." + hashlib.sha256(source.encode()).hexdigest()[:20]
+        if en.get(key) != source or key not in zh:
+            unmatched.append({"step": entry["step"], "key": key})
+            continue
+        selected[key] = zh[key]
+    if "ecl.6eddbe9ac1fb277bfaab" not in selected:
+        raise ValueError("缺少正常首段的現行譯文")
+    output = root / "runtime-zh-TW.tsv"
+    if output.exists():
+        raise ValueError("不覆寫既有原型輸入")
+    with output.open("w") as file:
+        writer = csv.writer(file, delimiter="\t", quoting=csv.QUOTE_NONE, quotechar=None, lineterminator="\n")
+        writer.writerow(["key", "text"])
+        writer.writerows(sorted(selected.items()))
+    manifest = {"draft": True, "source_catalog_sha256": hashlib.sha256((catalogs / "en.tsv").read_bytes()).hexdigest(),
+                "translation_catalog_sha256": hashlib.sha256((catalogs / "zh-TW.tsv").read_bytes()).hexdigest(),
+                "trace_sha256": hashlib.sha256((root / "trace.json").read_bytes()).hexdigest(),
+                "output_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+                "selected_keys": sorted(selected), "unmatched": unmatched,
+                "scope": "Derived subset for glyph baking only; no promotion to formal runtime."}
+    (root / "runtime-inputs.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    print(json.dumps(manifest, ensure_ascii=False))
+    raise SystemExit(0)
 paragraph = trace["paragraphs"][0]
 source = paragraph["source"]["text"]
 key = hashlib.sha256(source.encode()).hexdigest()

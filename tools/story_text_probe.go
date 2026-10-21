@@ -19,13 +19,35 @@ func storyCheck(err error) {
 }
 func main() {
 	if len(os.Args) < 3 || len(os.Args) > 4 {
-		panic("用法：story-probe state output [control]")
+		panic("用法：story-probe state output [control|sequence|sequence-control|enter-sequence|enter-sequence-control]")
 	}
-	observe := len(os.Args) == 3
-	if !observe && os.Args[3] != "control" {
-		panic("未知模式")
+	observe, sequence, enter := true, false, false
+	if len(os.Args) == 4 {
+		switch os.Args[3] {
+		case "control":
+			observe = false
+		case "sequence":
+			sequence = true
+		case "sequence-control":
+			sequence = true
+			observe = false
+		case "enter-sequence":
+			sequence = true
+			enter = true
+		case "enter-sequence-control":
+			sequence = true
+			enter = true
+			observe = false
+		default:
+			panic("未知模式")
+		}
 	}
 	out := os.Args[2]
+	if sequence {
+		if _, err := os.Stat(out); !os.IsNotExist(err) {
+			panic("連續劇情輸出必須為全新目錄")
+		}
+	}
 	storyCheck(os.MkdirAll(out, 0755))
 	b, err := os.ReadFile("/orig/DQK.EXE")
 	storyCheck(err)
@@ -79,6 +101,13 @@ func main() {
 		return v
 	}
 	var calls, glyphs, paragraphs []map[string]any
+	type pendingReturn struct {
+		index  int
+		addr   oracle.Addr
+		ss, sp uint16
+	}
+	var pending []pendingReturn
+	registered := map[oracle.Addr]bool{}
 	if observe {
 		o.OnCall(oracle.Addr{Seg: 0x0b72, Off: 0x0311}, func(_ *oracle.Oracle) {
 			s := stack()
@@ -86,8 +115,34 @@ func main() {
 				"source": read(s[10], s[9]), "left_column": byte(s[2]), "top_row": byte(s[3]),
 				"right_column": byte(s[4]), "bottom_row": byte(s[5]), "foreground": byte(s[6]),
 				"background": byte(s[7]), "clear": byte(s[8])})
+			if sequence {
+				if len(paragraphs) > 128 {
+					panic("超過段落研究上限")
+				}
+				r := o.Regs()
+				target := o.Caller()
+				pending = append(pending, pendingReturn{len(paragraphs) - 1, target, r.SS, r.SP + 4})
+				if !registered[target] {
+					registered[target] = true
+					o.OnCall(target, func(_ *oracle.Oracle) {
+						if len(pending) == 0 {
+							return
+						}
+						p := pending[len(pending)-1]
+						r := o.Regs()
+						if p.addr != target || p.ss != r.SS || p.sp != r.SP {
+							return
+						}
+						paragraphs[p.index]["return_step"] = o.Steps()
+						pending = pending[:len(pending)-1]
+					})
+				}
+			}
 		})
 		o.OnCall(oracle.Addr{Seg: 0x1212, Off: 0x03a0}, func(_ *oracle.Oracle) {
+			if len(calls) >= 4000 {
+				return
+			}
 			s := stack()
 			calls = append(calls, map[string]any{"step": o.Steps(), "stack": s, "regs": o.Regs(), "format": read(s[6], s[5]), "vararg_1_candidate": read(s[8], s[7]), "cursor_x": o.Word(oracle.Addr{Seg: o.Regs().DS, Off: 0xca12}), "cursor_y": o.Word(oracle.Addr{Seg: o.Regs().DS, Off: 0xca14})})
 		})
@@ -114,6 +169,31 @@ func main() {
 		storyCheck(o.Run(500000))
 	}
 	storyCheck(o.Run(375000000 - o.Steps()))
+	var checkpoints []map[string]any
+	if sequence {
+		capture := func(label string) {
+			ram := make([]byte, 1<<20)
+			for i := range ram {
+				ram[i] = o.Byte(oracle.Addr{Seg: uint16(i >> 4), Off: uint16(i & 15)})
+			}
+			h := sha256.Sum256(ram)
+			pix := sha256.Sum256(o.Indexed())
+			checkpoints = append(checkpoints, map[string]any{"label": label, "step": o.Steps(), "regs": o.Regs(), "ram_sha256": hex.EncodeToString(h[:]), "indexed_sha256": hex.EncodeToString(pix[:]), "palette": o.Palette(), "keys_consumed": o.KeysConsumed(), "file_writes": o.Wrote(), "paragraphs": len(paragraphs)})
+			storyCheck(o.WritePNG(filepath.Join(out, label+".png")))
+		}
+		capture("intro")
+		for i := 1; i <= 8; i++ {
+			label := "space"
+			if enter {
+				storyCheck(o.SendKeys("Return"))
+				label = "return"
+			} else {
+				storyCheck(o.TypeKeys(" "))
+			}
+			storyCheck(o.Run(25000000))
+			capture(fmt.Sprintf("%s-%02d", label, i))
+		}
+	}
 	ram := make([]byte, 1<<20)
 	for i := range ram {
 		ram[i] = o.Byte(oracle.Addr{Seg: uint16(i >> 4), Off: uint16(i & 15)})
@@ -122,7 +202,7 @@ func main() {
 	b, err = json.MarshalIndent(map[string]any{"prototype": true, "observe": observe,
 		"source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "input_sha256": hex.EncodeToString(h[:]),
 		"ram_sha256": hex.EncodeToString(ramHash[:]), "indexed_sha256": hex.EncodeToString(pixelsHash[:]), "palette": o.Palette(),
-		"evidence_level": "raw observation; vararg candidate is not a proven parser", "calls": calls, "glyphs": glyphs, "paragraphs": paragraphs, "steps": o.Steps(), "regs": o.Regs()}, "", "  ")
+		"evidence_level": "raw observation; vararg candidate is not a proven parser", "calls": calls, "glyphs": glyphs, "paragraphs": paragraphs, "steps": o.Steps(), "regs": o.Regs(), "sequence": sequence, "enter_sequence": enter, "checkpoints": checkpoints, "unimplemented": o.Unimplemented()}, "", "  ")
 	storyCheck(err)
 	storyCheck(os.WriteFile(filepath.Join(out, "trace.json"), append(b, '\n'), 0644))
 	storyCheck(o.WritePNG(filepath.Join(out, "final.png")))
