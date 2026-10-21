@@ -1,4 +1,4 @@
-// DRAFT 研究原型：只驗初始角色選單的實際前端提交，不供正式遊玩。
+// DRAFT 研究原型：初始角色選單與一般 p/l/e 往返，不供正式遊玩。
 package main
 
 import (
@@ -12,6 +12,8 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/pprof"
 	"sort"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -28,23 +30,38 @@ type liveFrame struct {
 	Step         uint64 `json:"step"`
 	Events       int    `json:"events"`
 	File, SHA256 string
+	Held         bool `json:"held"`
+	Active       int  `json:"active"`
+}
+type paintReturn struct {
+	Addr   oracle.Addr
+	SS, SP uint16
 }
 type glyphSet struct {
 	Size, Height int
 	Glyphs       map[string][]byte
 }
 type liveGame struct {
-	o         *oracle.Oracle
-	out       string
-	translate bool
-	fine      bool
-	catalog   map[string]string
-	glyphs    glyphSet
-	events    []liveEvent
-	active    map[[2]int]liveEvent
-	frames    []liveFrame
-	texture   *ebiten.Image
-	finished  bool
+	o           *oracle.Oracle
+	out         string
+	translate   bool
+	fine        bool
+	catalog     map[string]string
+	glyphs      glyphSet
+	events      []liveEvent
+	active      map[[2]int]liveEvent
+	frames      []liveFrame
+	texture     *ebiten.Image
+	textureHash string
+	uploads     int
+	finished    bool
+	lifecycle   bool
+	transition  bool
+	renderDepth int
+	paints      []paintReturn
+	lastPixels  []byte
+	boundaries  []map[string]any
+	checkpoints []map[string]any
 }
 
 func must(err error) {
@@ -53,21 +70,114 @@ func must(err error) {
 	}
 }
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+func (g *liveGame) limit() uint64 {
+	if g.lifecycle {
+		return 290000000
+	}
+	return 246000000
+}
+func (g *liveGame) capture() {
+	ram := make([]byte, 1<<20)
+	for i := range ram {
+		ram[i] = g.o.Byte(oracle.Addr{Seg: uint16(i >> 4), Off: uint16(i & 15)})
+	}
+	g.checkpoints = append(g.checkpoints, map[string]any{"step": g.o.Steps(), "regs": g.o.Regs(), "ram_sha256": digest(ram), "indexed_sha256": digest(g.o.Indexed()), "palette": g.o.Palette(), "keys_consumed": g.o.KeysConsumed(), "file_writes": g.o.Wrote()})
+}
+func (g *liveGame) installLifecycle() {
+	o := g.o
+	for _, p := range []struct {
+		a     oracle.Addr
+		bytes string
+	}{
+		{oracle.Addr{Seg: 0x0ceb, Off: 0x008e}, "558bec83ec085657c45e0626f6471c20"},
+		{oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, "558bec83ec0456803ec2da00751833c0"},
+		{oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, "cb558bec56803ecfda00750e1eb811a2"},
+		{oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, "cb558bec83ec085657168d46fe50168d"},
+	} {
+		if got := hex.EncodeToString(o.Bytes(p.a, len(p.bytes)/2)); got != p.bytes {
+			panic(fmt.Sprintf("選單生命週期 %04X:%04X bytes 不符：%s", p.a.Seg, p.a.Off, got))
+		}
+	}
+	log := func(kind string) {
+		g.boundaries = append(g.boundaries, map[string]any{"step": o.Steps(), "kind": kind, "active": len(g.active), "render_depth": g.renderDepth, "paint_depth": len(g.paints), "transition": g.transition})
+	}
+	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, func(_ *oracle.Oracle) {
+		if o.Regs().AX != 0xffff {
+			g.transition = true
+			log("selection-return")
+		}
+	})
+	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, func(_ *oracle.Oracle) {
+		if g.transition {
+			g.active = map[[2]int]liveEvent{}
+		}
+		g.renderDepth++
+		if g.transition {
+			log("transition-render-entry")
+		}
+	})
+	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, func(_ *oracle.Oracle) {
+		g.renderDepth--
+		if g.renderDepth < 0 {
+			panic("繪製邊界不成對")
+		}
+		if g.transition {
+			g.transition = false
+			log("transition-render-return")
+		}
+	})
+	registered := map[oracle.Addr]bool{}
+	o.OnCall(oracle.Addr{Seg: 0x0ceb, Off: 0x008e}, func(_ *oracle.Oracle) {
+		if o.StackWord(4) != 1 {
+			return
+		}
+		r := o.Regs()
+		target := o.Caller()
+		g.paints = append(g.paints, paintReturn{target, r.SS, r.SP + 4})
+		log("button-paint-entry")
+		if registered[target] {
+			return
+		}
+		registered[target] = true
+		o.OnCall(target, func(_ *oracle.Oracle) {
+			if len(g.paints) == 0 {
+				return
+			}
+			last := g.paints[len(g.paints)-1]
+			r := o.Regs()
+			if last.Addr != target || last.SS != r.SS || last.SP != r.SP {
+				return
+			}
+			g.paints = g.paints[:len(g.paints)-1]
+			log("button-paint-return")
+		})
+	})
+}
 func (g *liveGame) Update() error {
 	if g.finished {
 		return ebiten.Termination
 	}
-	if g.o.Steps() >= 246000000 {
+	if g.o.Steps() >= g.limit() {
 		return nil
 	}
 	if g.o.Steps() == 241000000 {
 		must(g.o.TypeKeys("p"))
 	}
+	if g.lifecycle && g.o.Steps() == 260000000 {
+		must(g.o.TypeKeys("l"))
+	}
+	if g.lifecycle && g.o.Steps() == 275000000 {
+		must(g.o.TypeKeys("e"))
+	}
 	batch := uint64(100000)
-	if g.fine && g.o.Steps() >= 241000000 && g.o.Steps() < 242000000 {
+	step := g.o.Steps()
+	if g.fine && ((step >= 241000000 && step < 242000000) || (g.lifecycle && ((step >= 260000000 && step < 261000000) || (step >= 275000000 && step < 276000000)))) {
 		batch = 2000
 	}
 	must(g.o.Run(batch))
+	if g.lifecycle && (g.o.Steps() == 246000000 || g.o.Steps() == 275000000 || g.o.Steps() == 290000000) {
+		g.capture()
+	}
 	return nil
 }
 func (g *liveGame) Layout(_, _ int) (int, int) { return 640, 400 }
@@ -133,12 +243,27 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			}
 		}
 	}
-	g.texture.WritePixels(px)
+	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
+	if held {
+		if len(g.lastPixels) == 0 {
+			panic("尚無完整畫格可保留")
+		}
+		px = g.lastPixels
+	} else {
+		g.lastPixels = px
+	}
+	composedHash := digest(px)
+	// 保留或空閒畫格不重複上傳。每次 Draw 仍實際讀回並比對呈現內容。
+	if composedHash != g.textureHash {
+		g.texture.WritePixels(px)
+		g.textureHash = composedHash
+		g.uploads++
+	}
 	screen.DrawImage(g.texture, nil)
 	// 擷取 GPU 實際讀回的已提交畫格，逐點確認與原子合成的輸入相同。
 	readback := make([]byte, len(px))
 	screen.ReadPixels(readback)
-	if digest(px) != digest(readback) {
+	if composedHash != digest(readback) {
 		panic("前端提交與合成畫格不同")
 	}
 	name := fmt.Sprintf("frame-%03d-%09d.png", len(g.frames), g.o.Steps())
@@ -147,8 +272,27 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	im := &image.RGBA{Pix: readback, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
 	must(png.Encode(f, im))
 	must(f.Close())
-	g.frames = append(g.frames, liveFrame{g.o.Steps(), len(g.events), name, digest(readback)})
-	if g.o.Steps() >= 246000000 {
+	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
+	if len(g.frames)%200 == 0 {
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+		current, _ := os.ReadFile("/sys/fs/cgroup/memory.current")
+		stats, _ := os.ReadFile("/sys/fs/cgroup/memory.stat")
+		row, err := json.Marshal(map[string]any{"frames": len(g.frames), "step": g.o.Steps(), "heap_alloc": mem.HeapAlloc, "heap_sys": mem.HeapSys, "sys": mem.Sys, "cgroup_current": string(current), "cgroup_stat": string(stats)})
+		must(err)
+		log, err := os.OpenFile(filepath.Join(g.out, "memory-samples.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		must(err)
+		_, err = log.Write(append(row, '\n'))
+		must(err)
+		must(log.Close())
+		if len(g.frames) == 600 {
+			profile, err := os.Create(filepath.Join(g.out, "heap-600.pprof"))
+			must(err)
+			must(pprof.WriteHeapProfile(profile))
+			must(profile.Close())
+		}
+	}
+	if g.o.Steps() >= g.limit() {
 		g.finished = true
 	}
 }
@@ -159,7 +303,11 @@ func main() {
 	glyphPath := flag.String("glyphs", "", "已核對的 20px 原型字模")
 	translate := flag.Bool("translate", true, "啟用呈現層原型")
 	fine := flag.Bool("fine", false, "每 2,000 道指令提交一幀，觀察逐字建立期間")
+	lifecycle := flag.Bool("lifecycle", false, "DRAFT：一般 p/l/e 選單往返及呈現交易")
 	flag.Parse()
+	if _, err := os.Stat(*out); !os.IsNotExist(err) {
+		panic("輸出必須為全新目錄")
+	}
 	must(os.MkdirAll(*out, 0755))
 	b, err := os.ReadFile("/orig/DQK.EXE")
 	must(err)
@@ -180,6 +328,10 @@ func main() {
 		}
 	}
 	g := &liveGame{o: o, out: *out, translate: *translate, fine: *fine, catalog: map[string]string{}, active: map[[2]int]liveEvent{}}
+	g.lifecycle = *lifecycle
+	if g.lifecycle {
+		g.installLifecycle()
+	}
 	b, err = os.ReadFile(*glyphPath)
 	must(err)
 	must(json.Unmarshal(b, &g.glyphs))
@@ -242,6 +394,21 @@ func main() {
 	result := map[string]any{"prototype": true, "scope": "initial character-menu only; no clear/scroll lifecycle", "translate": *translate,
 		"source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "steps": o.Steps(), "regs": o.Regs(), "ram_sha256": digest(ram),
 		"indexed_sha256": digest(o.Indexed()), "palette": o.Palette(), "events": g.events, "frames": g.frames}
+	result["texture_uploads"] = g.uploads
+	for key, path := range map[string]string{"initial_state_sha256": *state, "catalog_sha256": *catalogPath, "glyphs_sha256": *glyphPath} {
+		data, err := os.ReadFile(path)
+		must(err)
+		result[key] = digest(data)
+	}
+	if g.lifecycle {
+		if g.transition || g.renderDepth != 0 || len(g.paints) != 0 {
+			panic("未完成的呈現交易")
+		}
+		result["scope"] = "DRAFT normal p/l/e menu roundtrip; twelve labels only; no story/scroll/save"
+		result["boundaries"] = g.boundaries
+		result["checkpoints"] = g.checkpoints
+		result["unimplemented"] = o.Unimplemented()
+	}
 	b, err = json.MarshalIndent(result, "", "  ")
 	must(err)
 	must(os.WriteFile(filepath.Join(*out, "receipt.json"), append(b, '\n'), 0644))
