@@ -1,0 +1,2 @@
+platform_module	address_key	semantic	level	evidence	older	marker
+DOS:DQK.EXE:3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58:resident	0x0CD31	首段完整劇情在逐字輸出前的入口	已證實	docs/re/004-story-text.md	docs/spec/001-early-text.md	RESOLVED-DQK-resident-0CD31
