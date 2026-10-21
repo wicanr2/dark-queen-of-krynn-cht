@@ -121,6 +121,20 @@ case "${1:-}" in
       /out/en.tsv "/out/$FILE" /out --font /font/jf-openhuninn-2.1.ttf \
       --style-approved --glossary /out/glossary.tsv --batch-id "$BATCH"
     ;;
+  check-passages)
+    test -f "$WORK/translation/passage-candidates.en.tsv"
+    test -d "$WORK/translation/passage-review"
+    test -f "$WORK/translation/passage-review/zh-TW.review.tsv"
+    test -f "$WORK/translation/glossary.tsv"
+    test -f "$DKK/font/jf-openhuninn-2.1.ttf"
+    timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+      --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/translation:/input:ro" \
+      -v "$WORK/translation/passage-review:/out" -v "$DKK/font:/font:ro" \
+      "$FONT_IMAGE" /tools/translation_check.py /input/passage-candidates.en.tsv \
+      /out/zh-TW.review.tsv /out --font /font/jf-openhuninn-2.1.ttf \
+      --style-approved --review-only --glossary /input/glossary.tsv --batch-id passage-review
+    ;;
   test)
     test -f "$DKK/font/jf-openhuninn-2.1.ttf"
     timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
@@ -128,5 +142,5 @@ case "${1:-}" in
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$DKK/font:/font:ro" \
       "$FONT_IMAGE" /tools/test_translation_guards.py /font/jf-openhuninn-2.1.ttf
     ;;
-  *) echo '用法：bash tools/translation.sh extract|terms|seed|batches|passages|chain-fixture 新輸出名|check [批次名稱]|test' >&2; exit 2 ;;
+  *) echo '用法：bash tools/translation.sh extract|terms|seed|batches|passages|check-passages|chain-fixture 新輸出名|check [批次名稱]|test' >&2; exit 2 ;;
 esac

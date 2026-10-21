@@ -37,7 +37,8 @@ def main():
             "number":[("level","第二級","fixture")],
             "duplicate":[("name","幽靈","fixture"),("name","幽靈","fixture")],
             "multi-review":[("context","罰款與龍群","fixture")],
-            "duplicate-review":[("context","罰款與龍群","fixture")]}
+            "duplicate-review":[("context","罰款與龍群","fixture")],
+            "review-only":[("format","受到%d%s","fixture")]}
         passed=[]
         for name,rows in cases.items():
             output=root/name
@@ -45,6 +46,9 @@ def main():
             # 每次先放入已存在譯文，錯誤批次不得清空或重寫它。
             target=output/"zh-TW.tsv"
             write(target,["key","text"],[("name","幽靈")])
+            if name=="review-only":
+                # 候選來源可屬另一份清單；純校讀不能合併或驗成既有語系表。
+                write(target,["key","text"],[("other-catalog-only","既有譯文")])
             before=hashlib.sha256(target.read_bytes()).hexdigest()
             batch=output/"batch.tsv"
             write(batch,["key","text","note"],rows)
@@ -60,10 +64,20 @@ def main():
                 if name=="duplicate-review":
                     reviews.append(reviews[0])
                 write(output/"term-reviews.tsv",["key","term","source_sha256","translation_sha256","reason"],reviews)
-            run=subprocess.run([sys.executable,str(checker),str(source),str(batch),str(output),
-                "--font",str(args.font),"--glossary",str(glossary),"--style-approved"],
+            command=[sys.executable,str(checker),str(source),str(batch),str(output),
+                "--font",str(args.font),"--glossary",str(glossary),"--style-approved"]
+            if name=="review-only":
+                command.append("--review-only")
+            run=subprocess.run(command,
                 capture_output=True,text=True,timeout=15)
-            if name in ("valid","multi-review"):
+            if name=="review-only":
+                assert run.returncode==0,run.stderr+run.stdout
+                assert hashlib.sha256(target.read_bytes()).hexdigest()==before,name
+                assert not (output/"completed").exists(),name
+                report=json.loads((output/"trial-check.json").read_text())
+                assert report["review_only"] and report["style_approved"]
+                assert not report["errors"]
+            elif name in ("valid","multi-review"):
                 assert run.returncode==0,run.stderr+run.stdout
                 assert list((output/"completed").glob("*.tsv"))
                 if name=="multi-review":

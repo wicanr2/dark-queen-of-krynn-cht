@@ -36,13 +36,14 @@ def main():
     parser.add_argument("output",type=Path)
     parser.add_argument("--font",type=Path,required=True)
     parser.add_argument("--style-approved",action="store_true",help="僅在使用者明確確認此批譯風後使用")
+    parser.add_argument("--review-only",action="store_true",help="只產生候選校讀輸出，不讀寫既有譯表或標記批次完成")
     parser.add_argument("--glossary",type=Path)
     parser.add_argument("--batch-id",default="trial")
     args = parser.parse_args()
     source = {row["key"]:row["text"] for row in load(args.source,["key","text"])}
     rows = load(args.trial,["key","text","note"])
     existing={}
-    if (args.output/"zh-TW.tsv").is_file():
+    if not args.review_only and (args.output/"zh-TW.tsv").is_file():
         existing={r["key"]:r["text"] for r in load(args.output/"zh-TW.tsv",["key","text"])}
     from fontTools.ttLib import TTFont
     with TTFont(args.font) as font:
@@ -122,16 +123,20 @@ def main():
         "glossary_sha256":hashlib.sha256(args.glossary.read_bytes()).hexdigest() if args.glossary else None,
         "input_sha256":hashlib.sha256(args.trial.read_bytes()).hexdigest(),
         "source_sha256":hashlib.sha256(args.source.read_bytes()).hexdigest()}
+    if args.review_only:
+        report["review_only"]=True
     if not re.fullmatch(r"[a-z0-9-]+",args.batch_id):
         raise ValueError("批次名稱格式不符")
     (args.output/(args.batch_id+"-check.json")).write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
     state = "使用者已確認本批譯風，尚未接入正式遊戲。" if args.style_approved else "試譯待確認，尚未接入正式遊戲。"
+    if args.review_only:
+        state = "候選校讀稿；組句邊界及正式接入尚待驗證。"
     review = ["# 《黑暗之后》繁中試譯", "", "狀態："+state, "",
         "範圍：本批 TSV 所列文字；實際語境與接入狀態見逐項註記。來源與譯文只留本機。", ""]
     for row in rows:
         review += [f'## {row["key"]}',"",source.get(row["key"],"缺少來源"),"",row["text"],"",row["note"],""]
     (args.output/(args.batch_id+"-review.md")).write_text("\n".join(review),encoding="utf-8")
-    if args.style_approved and not errors:
+    if args.style_approved and not args.review_only and not errors:
         completed=args.output/"completed"
         completed.mkdir(exist_ok=True)
         archive=completed/(args.batch_id+"-"+report["input_sha256"][:20]+".tsv")

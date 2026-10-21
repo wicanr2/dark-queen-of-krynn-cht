@@ -68,7 +68,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 963 筆術語、手冊對照、英文新譯來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 970 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
@@ -93,6 +93,11 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `manual-deity-corrections.tsv` | 手冊第 124 頁核對後，校正一個既有喜得卡譯文鍵；不增加譯文數 |
 | `*-review-input.json` | 逐批校讀時固定的來源字串與原文表 SHA-256；不是正式顯示來源 |
 | `passage-candidates.json`、`passage-candidates.en.tsv` | 322 組靜態相鄰字串候選；獨立校讀輸入，未列入正式原文／譯文表 |
+| `passage-review/zh-TW.review.tsv` | 284 組候選繁中校讀稿，含段落、引語前導及動態主詞片段；不合併目前譯表 |
+| `passage-review/source-snapshot.json` | 校讀候選的完整來源快照、固定輸入雜湊與目前譯表的保護雜湊 |
+| `passage-review/deferred.tsv` | 38 組未譯候選的疑問與推論等級；保留原始候選，不作刪除依據 |
+| `passage-review/term-reviews.tsv` | 候選校讀稿的逐句歧義理由，18 則覆蓋 19 次匹配，與目前譯表的校讀紀錄分開保存 |
+| `passage-review/passage-review-check.json`、`passage-review/passage-review-review.md` | 純校讀檢查收據與雙語稿；`review_only` 為真，未標記批次完成 |
 | `term-corrections.tsv` | 已有譯文的精確鍵修訂，包括避難廳與不死怪物用語 |
 | `ui-effects-trade.tsv` | 204 筆狀態、交易、角色、存檔與戰鬥訊息新譯 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
@@ -201,6 +206,26 @@ SARAKI 保留字形並翻出原文已有解釋；TRAKVALHISS DRAACKISS 未解，
 兩種接續在受控副本中的繪製行為已另驗，見 [研究 004](004-story-text.md#2026-10-22相鄰字串的受控接續實驗)。
 這個工具不修改 `en.tsv`、`zh-TW.tsv` 或原版資料，不把候選組數加入翻譯完成數。
 
+已逐組檢視 322 組候選，其中 284 組補上獨立繁中校讀稿，包含可讀段落、引語前導與帶動態主詞的
+片段。38 組的分支或上下文不足，理由與推論等級保存在 `passage-review/deferred.tsv`。
+例如相鄰代詞或升降選項可能屬不同分支，不能因位元組相鄰就當作同一敘述；未證實的分支假說
+保留待查，不丟棄原始字串，也不補造缺文。這批與既有字串內容有重疊，不與 6,040 筆加總。
+
+`translation_check.py --review-only` 只產生候選檢查及雙語稿，即使譯風已確認，也不讀寫既有
+`zh-TW.tsv`、不建立 `completed/`。`translation.sh check-passages` 將目前譯表掛為唯讀，
+只有 `passage-review/` 可寫。實際執行確認目前譯表雜湊不變，候選原文、來源快照、284 組校讀稿
+及 38 組待查項目完整對應；格式、字型與術語檢查通過。靜態組句邊界仍為強推論，
+尚未逐組動態驗證或接入正式顯示。
+
+本批目視核對手冊第 121 頁、旅行手札 56 的 Luminari「魯明那里」。手冊稱其為月亮，
+燈塔名稱沿用此詞根，來源與掃描雜湊保存在術語表。Jennifer「珍妮佛」沿用《幽靈騎士》
+`text/translit-names.tsv` 的已校讀譯字，不據此判定是同一角色。
+雙輪交通增強器、贊托斯、歐雷格、漢姆漢德與艾瑞克．史壯邦德仍為英文新譯，待全書校讀。
+
+Shield 的同一原文鍵有兩個 `DQK.EXE` 來源，檔案偏移分別為 `421649` 與 `429507`。
+前者介於 Read Magic、Shocking Grasp，後者介於 Plate、Scroll。這是字串表相鄰資料的
+靜態證據，支持法術與裝備兩種語境的強推論；實際顯示呼叫者仍待驗證，保留歧義不全域定譯。
+
 ## Docker 入口
 
 [translation.sh](../../tools/translation.sh) 提供以下入口，原版及前作唯讀，僅本作研究工作區可寫。
@@ -212,6 +237,7 @@ bash tools/translation.sh terms
 bash tools/translation.sh seed
 bash tools/translation.sh batches
 bash tools/translation.sh passages
+bash tools/translation.sh check-passages
 bash tools/translation.sh check trial
 bash tools/translation.sh check names
 bash tools/translation.sh check ui-rest-combat
@@ -265,3 +291,7 @@ bash tools/translation.sh test
 術語規則改為每輪預先編譯，避免大量術語超出正規表示式快取容量後逐句重新編譯。
 同一份 2,127 筆輸入的修正前後收據除工具雜湊外完全相同，8 項防錯測試通過。
 這是工具防錯檢查，不是原版規則或遊戲接入驗證。
+
+新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
+新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
+目前 6,040 筆以預設模式乾淨回驗，格式與術語結果不變；新模式沒有放寬名稱、數字或格式檢查。
