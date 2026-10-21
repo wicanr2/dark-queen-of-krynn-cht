@@ -122,6 +122,7 @@ def extract(original, output, traces):
                 add("name",text,{"file":"DISK2/MONCHA.GLB","chunk":chunk,
                     "file_offset":begin+match.start(),"encoding":"raw ASCII candidate; record layout unverified"})
     missing, excluded_formats = [], 0
+    runtime_labels = 0
     for path in traces:
         data = json.loads(path.read_text())
         trace_digest = digest(path.read_bytes())
@@ -133,6 +134,33 @@ def extract(original, output, traces):
             source = event.get("source", {})
             if source.get("nul_terminated"):
                 values.append(("ecl", source["text"], event["step"]))
+        # 正常劇情探針的 calls 是原始 1212:03A0 參數。
+        # 僅接收完整 ASCII literal、直接螢幕座標；格式出口與編碼座標仍排除。
+        if data.get("calls") and data.get("input_sha256") != digest(exe):
+            raise ValueError("呼叫觀測的 EXE 雜湊不符")
+        for event in data.get("calls", []):
+            source, stack = event.get("format", {}), event.get("stack", [])
+            regs = event.get("regs", {})
+            text = source.get("text", "")
+            if (not source.get("nul_terminated") or not text or "%" in text
+                    or regs.get("CS") != 0x1212 or regs.get("IP") != 0x03a0
+                    or len(stack) < 7 or not (0 <= stack[2] < 200 and 0 <= stack[3] < 320)
+                    or not (0 <= stack[5] <= 0xffff and 0 <= stack[6] <= 0xffff)
+                    or stack[6]*16+stack[5]+len(text)+1 > 0xa0000
+                    or not all(32 <= ord(c) <= 126 for c in text)):
+                continue
+            if source.get("segment") != stack[6] or source.get("offset") != stack[5]:
+                raise ValueError("執行期字串指標與堆疊不符")
+            location = {"file": "runtime RAM", "address_space": "dosgolem runtime segment:offset",
+                        "segment": source["segment"], "offset": source["offset"],
+                        "encoding": "observed ASCII NUL; original file origin unknown",
+                        "screen_x": stack[3], "screen_y": stack[2]}
+            anchor = {"trace_sha256": trace_digest, "step": event["step"],
+                      "runtime_pointer": {"segment": source["segment"], "offset": source["offset"]},
+                      "address_space": "dosgolem runtime segment:offset",
+                      "screen_x": stack[3], "screen_y": stack[2]}
+            add("ui", text, location, anchor)
+            runtime_labels += 1
         for domain, text, step in values:
             if domain == "ui" and re.fullmatch(r"%[rsc]",text):
                 excluded_formats += 1
@@ -151,11 +179,20 @@ def extract(original, output, traces):
             anchor = {"trace_sha256":trace_digest, "step":step}
             if anchor not in records[key]["observations"]:
                 records[key]["observations"].append(anchor)
-    ordered = sorted(records.values(), key=lambda e:(e["domain"],e["sources"][0]["file_offset"]))
+    def order(entry):
+        file_positions = [s["file_offset"] for s in entry["sources"] if "file_offset" in s]
+        # 原始檔與 RAM 是不同位址空間。執行期專有條目另排，不把 seg:off 偽裝成檔案偏移。
+        return (entry["domain"], 0 if file_positions else 1,
+                min(file_positions) if file_positions else 0, entry["key"])
+    ordered = sorted(records.values(), key=order)
+    def source_label(source):
+        if "file_offset" in source:
+            return f'{source["file"]}@0x{source["file_offset"]:X}'
+        return f'runtime RAM {source["segment"]:04X}:{source["offset"]:04X}'
     write_tsv(output/"en.tsv", ["key","text"], ((e["key"],e["text"]) for e in ordered))
     write_tsv(output/"events.tsv", ["key","domain","sha256","length","status","sources"],
         ((e["key"],e["domain"],e["sha256"],len(e["text"]),e["status"],
-          ";".join(f'{p["file"]}@0x{p["file_offset"]:X}' for p in e["sources"])) for e in ordered))
+          ";".join(source_label(p) for p in e["sources"])) for e in ordered))
     (output/"catalog.json").write_text(json.dumps({"candidate_catalog":True,
         "inputs":inputs, "entries":ordered, "missing_observations":missing},ensure_ascii=False,indent=2)+"\n")
     summary = {"candidate_catalog":True,"entries":len(ordered),
@@ -163,6 +200,7 @@ def extract(original, output, traces):
         "characters":sum(len(e["text"]) for e in ordered),
         "observed":sum(e["status"]=="observed" for e in ordered),
         "excluded_format_events":excluded_formats,
+        "runtime_label_observations":runtime_labels,
         "missing_observations":len(missing), "inputs":inputs,
         "tool_sha256":digest(Path(__file__).read_bytes()),
         "outputs":{name:digest((output/name).read_bytes()) for name in ("en.tsv","events.tsv","catalog.json")}}

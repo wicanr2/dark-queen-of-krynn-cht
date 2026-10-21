@@ -42,14 +42,15 @@ ECL 的 48 個區塊含首個對照區塊，不能稱作 48 張地圖；MONCHA �
 本輪在 ECL 資料區塊掃描 `80 <長度> <6-bit bytes>`，以可讀字詞啟發式留下候選。
 這不是完整腳本解譯器，仍可能留下內部訊息、偶然字節及嵌在長段裡的切片。
 
-第一段完整 185 字元與 [研究 004](004-story-text.md) 的執行期觀測逐字相同；
-正常選單另有 13 個完整字串，共 14 筆已觀測項目。6 次 `%c` 格式出口不當作玩家文字。
-這組觀測在候選清單中沒有遺漏，不能因此宣稱全遊戲擷取完整。
+第一段完整 185 字元與 [研究 004](004-story-text.md) 的執行期觀測逐字相同。
+最初清單有 14 筆已觀測項目；正常進城及訓練所來源補入後，現為 28 個不重複已觀測鍵，
+包含 21 個介面鍵、7 個劇情鍵。40 次執行期 literal 觀測含重複按鈕重畫，不當作 40 個功能。
+格式出口與編碼座標另行排除。這些正常觀測在清單中沒有遺漏，不能宣稱全遊戲擷取完整。
 
 | 分類 | 目前候選數 | 限制 |
 |---|---|---|
 | 劇本 | 6,937 | 包含開發訊息、雜訊與切片，尚未全數分類 |
-| EXE 文字 | 1,346 | 包含資源名稱、系統錯誤及偶然機器碼，並非全是介面 |
+| 介面文字 | 1,353 | 1,346 個 EXE 掃描候選與 7 個執行期新鍵；仍含資源名稱、錯誤與機器碼雜訊 |
 | MONCHA 名稱 | 98 | 直接掃描原始 ASCII，含非名稱雜訊；記錄結構與壓縮尚未證實 |
 
 MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正式解析器。
@@ -66,7 +67,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 |---|---|
 | `en.tsv` | 唯一候選原文表，`key`、`text`，保留大小寫及頭尾空白 |
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
-| `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
+| `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未正式接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
 | `glossary.tsv`、`terminology-provenance.json` | 前作優先的 970 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
@@ -100,6 +101,8 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `passage-review/passage-review-check.json`、`passage-review/passage-review-review.md` | 純校讀檢查收據與雙語稿；`review_only` 為真，未標記批次完成 |
 | `term-corrections.tsv` | 已有譯文的精確鍵修訂，包括避難廳與不死怪物用語 |
 | `ui-effects-trade.tsv` | 204 筆狀態、交易、角色、存檔與戰鬥訊息新譯 |
+| `ui-palanthas-observed.tsv` | 正常城內去向選單的 7 個新介面鍵，保留實際大小寫及 Hall 語境 |
+| `story-city-sea-choices.tsv` | 城鎮、海底短句及選項 91 筆；怪物與人名沿用既有術語，未全數驗證顯示呼叫 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
@@ -119,10 +122,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 6,040 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+目前已檢查並合併 6,138 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
 森林、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 6,040 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 6,138 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -148,7 +151,7 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 6,040 筆，0 格式錯誤、0 未處理術語警示，254 則逐句校讀覆蓋 260 次匹配。
+完整譯表回驗為 6,138 筆，0 格式錯誤、0 未處理術語警示，255 則逐句校讀覆蓋 261 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -194,6 +197,54 @@ SARAKI 保留字形並翻出原文已有解釋；TRAKVALHISS DRAACKISS 未解，
 不推定是真名或咒語。呼語疑似誤用數字 0 的原文鍵 `ecl.87600d86b65255df4aec` 保留待核，
 沒有在譯文塞入多餘數字，也未放寬數字檢查。其餘片段與開發訊息仍待分類，不從待譯數推算覆蓋率。
 
+## 正常城內選單的七個新增原文鍵
+
+正常進城收據另有七個直接像素座標的 `1212:03A0` 呼叫，內容是 Palace、Temple、Hall、Shop、
+Inn、Bar、Leave。它們不是目前大寫劇本鍵的位元組同文，不能只用不分大小寫的替換冒充來源。
+本輪將這七個實際字串加入介面原文表，保留英文大小寫與獨立 key，總候選由 8,381 增至 8,388。
+原先 8,381 個鍵的原文與原始來源定位全部保留，原版資料雜湊不變。
+
+來源是 `workplace/probe/story-return-sequence-20261022/trace.json` 及新補的訓練所路徑。
+後者從同一正常入口到城內選單，在 575M 按一般 `h`，625M 回到可訓練角色的管理選單，
+沒有選角色或實際支付訓練費用。觀測與無觀測控制組在十處的暫存器、RAM、色號、色盤、
+按鍵及寫檔紀錄相同；未寫檔、沒有未實作服務。因此本場景 Hall 譯「訓練所」，
+不套用大廳的場所描述，也不把進入選單當作已驗證訓練規則。
+
+| 正常訓練所收據 | SHA-256 |
+|---|---|
+| `workplace/probe/story-hall-20261022/trace.json` | `6460ac64359118846bc75c11f29fd42424c0ec9291bcc990d8e001aa63f8624e` |
+| `workplace/probe/story-hall-control-20261022/trace.json` | `7dd602b5c3ae9bf004072c69289783b0667cdaf1410a2a3258961b06fe6d00e0` |
+
+625M RAM SHA-256 為 `8b401afcd09716205e10c447a29f51752a4aadafa914f63352e5d2dcb56b939e`。
+[story-live.sh](../../tools/story-live.sh) 先 `probe-build`，再以 `hall-probe 新名`、
+`hall-probe-control 另一新名` 重生這條原版路徑。
+
+候選 JSON 仍屬研究資料。本輪為它加上執行期來源位置，正式 TSV 的 `key`、`text` 兩欄不變。
+執行期來源使用 `file: runtime RAM`、明示位址空間、segment、offset 與螢幕位置；沒有
+`file_offset`，不把 RAM 位址偽裝成 EXE 偏移。原始檔來源與 RAM 來源分別排序。
+觀測另保留 trace SHA-256、虛擬步數及指標。實際 RAM 字串已證實，回到原始檔的生成來源仍未知。
+
+[text_catalog.py](../../tools/text_catalog.py) 的新入口只接收符合 EXE 身分、已核對呼叫入口、
+完整 ASCII literal、直接座標及傳統記憶體範圍的觀測。格式出口、編碼座標與未結束字串不收。
+[test_runtime_label_catalog.py](../../tools/test_runtime_label_catalog.py) 以真實遊戲及正常觀測衍生
+八項檢查，涵蓋正例、編碼座標、格式、結尾、錯誤入口、指標失配、顯存及 EXE 失配。
+所有舊候選在邊界案例中保持不變；拒絕的批次沒有產出原文表。缺少真實輸入時明確略過。
+
+新增來源先在 `workplace/probe/catalog-runtime-ui-20261022/` 比較後才更新目前表。
+`before/` 保留四份舊來源產物與 6,040 筆舊譯表，`after-hall/` 保存新產物，
+`catalog-comparison.json` 記錄新增鍵、原始定位保護與 trace 雜湊。正式擷取 wrapper 已納入
+正常進城及訓練所觀測，重跑四份來源產物逐 byte 相同，譯表不變。
+
+本輪譯文新增七個介面鍵及 91 筆城鎮／海底短句與選項。牛精、多頭龍、雙頭怪、龍族、
+鯊魚人、大蝙蝠、大鱷魚及山怪沿用既有術語；沒有改寫怪物記錄或原版比較字串。
+STAND 兩處與後退或逃離相對，採「留在原地」；POUND 依上閂木門場景採「用力敲門」。
+店家稱呼 fine people 是客氣話，譯為「貴客」，不套用品質「精良」，以固定雜湊記錄一則校讀。
+
+現行譯表 SHA-256 為 `2f58ac656fd8cb04edd782ef9583c03af01c68d26c34ada9c17b3dc870e01914`。
+本輪 98 個新鍵不重複，舊 6,040 筆譯文逐筆未變，七段已擷取中文畫面的文字依賴也未變。
+新譯文尚未接入視窗；不把舊畫面收據當作新 98 筆的顯示證據。未合併仍有 2,250 個原始候選，
+含 2,249 個一般候選與 1 個名稱候選，仍不是漏譯數或完成比例。
+
 ## 相鄰劇情字串候選
 
 [passage_candidates.py](../../tools/passage_candidates.py) 先核對 ECL 與 catalog 的來源雜湊，
@@ -209,7 +260,7 @@ SARAKI 保留字形並翻出原文已有解釋；TRAKVALHISS DRAACKISS 未解，
 已逐組檢視 322 組候選，其中 284 組補上獨立繁中校讀稿，包含可讀段落、引語前導與帶動態主詞的
 片段。38 組的分支或上下文不足，理由與推論等級保存在 `passage-review/deferred.tsv`。
 例如相鄰代詞或升降選項可能屬不同分支，不能因位元組相鄰就當作同一敘述；未證實的分支假說
-保留待查，不丟棄原始字串，也不補造缺文。這批與既有字串內容有重疊，不與 6,040 筆加總。
+保留待查，不丟棄原始字串，也不補造缺文。這批與既有字串內容有重疊，不與目前譯表筆數加總。
 
 `translation_check.py --review-only` 只產生候選檢查及雙語稿，即使譯風已確認，也不讀寫既有
 `zh-TW.tsv`、不建立 `completed/`。`translation.sh check-passages` 將目前譯表掛為唯讀，
@@ -246,6 +297,8 @@ bash tools/translation.sh check prior-reviewed
 bash tools/translation.sh check story-caves
 bash tools/translation.sh check story-monsters
 bash tools/translation.sh check ui-effects-trade
+bash tools/translation.sh check ui-palanthas-observed
+bash tools/translation.sh check story-city-sea-choices
 bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
@@ -278,6 +331,7 @@ bash tools/translation.sh check manual-deity-corrections
 bash tools/translation.sh check term-corrections
 bash tools/translation.sh check current-validation
 bash tools/translation.sh test
+bash tools/translation.sh test-runtime-labels
 ```
 
 [translation_batches.py](../../tools/translation_batches.py) 依目前譯表生成後續批次。
@@ -294,4 +348,5 @@ bash tools/translation.sh test
 
 新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
 新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
-目前 6,040 筆以預設模式乾淨回驗，格式與術語結果不變；新模式沒有放寬名稱、數字或格式檢查。
+新增純校讀模式時的 6,040 筆已由預設模式回驗；本輪 6,138 筆全表另已回驗通過。
+新模式沒有放寬名稱、數字或格式檢查。

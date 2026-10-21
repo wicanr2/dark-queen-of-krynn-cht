@@ -5,7 +5,7 @@
 | 項目 | 現況與證據 |
 |---|---|
 | 目前重心 | 使用者指定先完成中文化，再做全量 HD。集中遊戲譯文、術語、提早攔截與正常路徑接入；攻略重繪及 HD 批次延後 |
-| 翻譯與術語 | 已合併 6,040 筆本機譯文；首批 145 筆譯風已確認。970 筆術語以《幽靈騎士》優先，回查其 266 筆人物、怪物與物品術語，0 差異。全表格式、字型及術語檢查通過，260 次句內歧義比對有校讀紀錄。本作新名依手冊補核，未見對照者標記待校讀，Shield 語境歧義保留。8,381 筆來源候選仍含雜訊，不能當完成度分母；未接入正式遊戲，見 [研究 005](docs/re/005-translation-catalog.md) |
+| 翻譯與術語 | 已合併 6,138 筆本機譯文；首批 145 筆譯風已確認。970 筆術語以《幽靈騎士》優先，回查其 266 筆人物、怪物與物品術語，0 差異。全表格式、字型及術語檢查通過，261 次句內歧義比對有校讀紀錄。本作新名依手冊補核，未見對照者標記待校讀，Shield 語境歧義保留。8,388 筆來源候選仍含雜訊，不能當完成度分母；新增 98 筆尚未接入視窗，見 [研究 005](docs/re/005-translation-catalog.md) |
 | 段落校讀 | 322 組相鄰候選已有 284 組獨立繁中校讀稿，含可讀段落、引語前導與動態主詞片段；38 組保留分支／上下文疑問。以純校讀模式檢查通過，18 則語境校讀覆蓋 19 次匹配，既有譯表雜湊不變。尚非正式顯示來源，不與 6,040 筆加總；入口見研究 005 |
 | 儲存庫 | [dark-queen-of-krynn-cht](https://github.com/wicanr2/dark-queen-of-krynn-cht)，PRIVATE，Issues 已啟用；主機 `gh` 回讀 |
 | 工作追蹤 | [#1 治理](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/1)、[#2 原始輸入](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)、[#3 執行基線](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3)、[#4 輸出掛勾](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)、[#5 手札與說明面板](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)、[#6 中文攻略](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)、[#7 繁中優先](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7)；狀態以遠端為準 |
@@ -23,6 +23,7 @@
 | 提早攔截 | 12 個角色選單字串在首字元前 345 道指令可取得。原型已沿一般 p／l／e 完成選單、讀取來源及取消返回；實際視窗細分 1,980 幀，過渡保留完整畫面，讀取來源無殘字，返回恢復 12 項中文。三個檢查點與無觀測組的原版狀態相同；非全遊戲結論，劇情分頁與正式存讀檔未驗，規格 [001](docs/spec/001-early-text.md) 維持 DRAFT |
 | 劇情入口 | [研究 004](docs/re/004-story-text.md) 的 `0B72:0311` 在首字元前 3,208 道指令取得完整首段。實際視窗已由現行 TSV 顯示中文，首段細分 950 幀，首張中文比原版首字元早 1,938 道指令；劇情 16／20px 比較圖已呈交，字級與正式節奏未定案 |
 | 劇情接續 | 正常 Return 流程已觀測並呈現進城七段，包含衛兵與羅拉娜的信；原始清除旗標為 1、1、1、0、0、1、0，接續段沒有遺失，三個連續視窗組的九處原版狀態與無觀測組相同。仍為 DRAFT，長段分頁、捲動與其他流程未驗。322 組靜態候選仍不視為已驗證訊息；見研究 004、005 |
+| 城內介面來源 | 正常流程補上 Palace 等七個實際大小寫的新鍵，28 個來源鍵已觀測。Hall 以一般 h 進入可訓練角色的管理選單，觀測／控制組十處狀態相同、未寫檔；此處譯「訓練所」。來源記為 RAM 位址，原始檔生成來源未知，見研究 005 |
 | 執行器 | 隔離 clone `workplace/dosgolem/`，來源 `/home/anr2/cht/dosgolem`，固定 `f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`，上游未改動 |
 | Go 工具鏈 | go1.24.13，`dosgolem-go-ebiten:1.24-r1`，image `sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581`；`bash tools/build-probe.sh` 重建 |
 | IDA | 9.4，既有 `ida-pro-9.4-idapython:py312-v1` 的非 root 最小匯出通過；只載入 resident 的資料庫不涵蓋動態載入區，不能把缺少 xref 當作無呼叫 |

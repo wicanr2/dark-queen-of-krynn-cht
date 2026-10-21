@@ -19,9 +19,9 @@ func storyCheck(err error) {
 }
 func main() {
 	if len(os.Args) < 3 || len(os.Args) > 4 {
-		panic("用法：story-probe state output [control|sequence|sequence-control|enter-sequence|enter-sequence-control]")
+		panic("用法：story-probe state output [control|sequence|sequence-control|enter-sequence|enter-sequence-control|hall-sequence|hall-sequence-control]")
 	}
-	observe, sequence, enter := true, false, false
+	observe, sequence, enter, hall := true, false, false, false
 	if len(os.Args) == 4 {
 		switch os.Args[3] {
 		case "control":
@@ -37,6 +37,15 @@ func main() {
 		case "enter-sequence-control":
 			sequence = true
 			enter = true
+			observe = false
+		case "hall-sequence":
+			sequence = true
+			enter = true
+			hall = true
+		case "hall-sequence-control":
+			sequence = true
+			enter = true
+			hall = true
 			observe = false
 		default:
 			panic("未知模式")
@@ -192,6 +201,11 @@ func main() {
 			}
 			storyCheck(o.Run(25000000))
 			capture(fmt.Sprintf("%s-%02d", label, i))
+		}
+		if hall {
+			storyCheck(o.TypeKeys("h"))
+			storyCheck(o.Run(50000000))
+			capture("hall")
 		}
 	}
 	ram := make([]byte, 1<<20)

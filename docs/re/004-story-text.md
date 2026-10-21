@@ -162,10 +162,10 @@
 
 ### 正式譯文衍生的 DRAFT 視窗
 
-[story_preview.py](../../tools/story_preview.py) 的 `--runtime-inputs` 模式從上表七段及目前 TSV
+[story_preview.py](../../tools/story_preview.py) 的 `--runtime-inputs` 模式從上表七段及本批當時的 TSV
 建立研究子集，逐字比對原文，沒有沿用最初首段試譯，也不在程式碼內嵌譯文。
 子集與字模位於觀測目錄，`runtime-inputs.json` 記錄原始觀測、原文、譯文及輸出的雜湊。
-現行譯表仍為 6,040 筆，SHA-256
+本批對拍所用譯表為 6,040 筆，SHA-256
 `1c28045904ecca685519a2204ab91c554f6cd18bc271a44b04c6a676d7ed4602`，未增加或改寫譯文。
 字模沿用已核對的 jf open 粉圓 2.1，字型雜湊見前節及規格 001。
 
@@ -206,7 +206,9 @@ python3 /tools/story_live_check.py /out \
   live-story-fine-en live-story-fine-20
 ```
 
-`/tools` 掛本專案工具唯讀，`/catalogs` 掛現行翻譯目錄唯讀，`/out` 掛既有研究輸出。
+`/tools` 掛本專案工具唯讀，`/catalogs` 掛這批收據當時的原文／譯文快照唯讀，`/out` 掛既有研究輸出。
+本輪原始快照已保存於 `workplace/probe/catalog-runtime-ui-20261022/before/`，見研究 005。
+目前譯表後續新增不回寫舊收據；若用新譯表重跑，須建立新的衍生輸入及收據。
 比較結果寫入連續 20px 組的 `comparison.json`，存在即停止。
 字級比較圖在 `live-story-20-r2/font-comparison.png`，左 16、右 20；四畫面抽樣在
 `live-story-sequence-20/route-contact.png`。圖含原版美術，只留本機。

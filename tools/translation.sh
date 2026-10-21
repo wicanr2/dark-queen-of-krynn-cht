@@ -19,12 +19,16 @@ case "${1:-}" in
     test -f "$WORK/input/dos/drkqueen/DISK2/MONCHA.GLB"
     test -f "$WORK/probe/early-observe/trace.json"
     test -f "$WORK/probe/story-observe/trace.json"
+    test -f "$WORK/probe/story-return-sequence-20261022/trace.json"
+    test -f "$WORK/probe/story-hall-20261022/trace.json"
     timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
       --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/input/dos/drkqueen:/orig:ro" \
       -v "$WORK/probe:/receipts:ro" -v "$WORK/translation:/out" \
       "$PIL_IMAGE" /tools/text_catalog.py /orig /out \
-      --trace /receipts/early-observe/trace.json --trace /receipts/story-observe/trace.json
+      --trace /receipts/early-observe/trace.json --trace /receipts/story-observe/trace.json \
+      --trace /receipts/story-return-sequence-20261022/trace.json \
+      --trace /receipts/story-hall-20261022/trace.json
     ;;
   terms|seed)
     test -f "$WORK/translation/catalog.json"
@@ -135,6 +139,15 @@ case "${1:-}" in
       /out/zh-TW.review.tsv /out --font /font/jf-openhuninn-2.1.ttf \
       --style-approved --review-only --glossary /input/glossary.tsv --batch-id passage-review
     ;;
+  test-runtime-labels)
+    test -f "$WORK/input/dos/drkqueen/DQK.EXE"
+    test -f "$WORK/probe/story-return-sequence-20261022/trace.json"
+    timeout 60s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+      --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/input/dos/drkqueen:/orig:ro" \
+      -v "$WORK/probe/story-return-sequence-20261022:/trace:ro" "$PIL_IMAGE" \
+      /tools/test_runtime_label_catalog.py /orig /trace/trace.json
+    ;;
   test)
     test -f "$DKK/font/jf-openhuninn-2.1.ttf"
     timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
@@ -142,5 +155,5 @@ case "${1:-}" in
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$DKK/font:/font:ro" \
       "$FONT_IMAGE" /tools/test_translation_guards.py /font/jf-openhuninn-2.1.ttf
     ;;
-  *) echo '用法：bash tools/translation.sh extract|terms|seed|batches|passages|check-passages|chain-fixture 新輸出名|check [批次名稱]|test' >&2; exit 2 ;;
+  *) echo '用法：bash tools/translation.sh extract|terms|seed|batches|passages|check-passages|chain-fixture 新輸出名|check [批次名稱]|test|test-runtime-labels' >&2; exit 2 ;;
 esac

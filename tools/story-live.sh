@@ -35,13 +35,13 @@ case "${1:-}" in
       -e GOPROXY=off -e GOMAXPROCS=2 -w /src --entrypoint /usr/local/go/bin/go \
       "$GO_IMAGE" build -o /out/story-sequence-probe /tools/story_text_probe.go
     ;;
-  probe|probe-control)
+  probe|probe-control|hall-probe|hall-probe-control)
     RUN_NAME="${2:-}"
     case "$RUN_NAME" in ''|*[!A-Za-z0-9_-]*) exit 2 ;; esac
     test ! -e "$PROBE/$RUN_NAME"
     test -f "$PROBE/story-sequence-probe"
     MODE=enter-sequence
-    if test "$1" = probe-control; then MODE=enter-sequence-control; fi
+    case "$1" in probe-control) MODE=enter-sequence-control ;; hall-probe) MODE=hall-sequence ;; hall-probe-control) MODE=hall-sequence-control ;; esac
     timeout 120s docker run --rm --init --network none --memory 1g --cpus 1 --pids-limit 64 \
       --user "$(id -u):$(id -g)" --label project=dark-queen-of-krynn-cht \
       -v "$ORIG:/orig:ro" -v "$PROBE:/out" -e GOMEMLIMIT=768MiB -e GOMAXPROCS=1 \
@@ -110,5 +110,5 @@ case "${1:-}" in
         cat /sys/fs/cgroup/memory.events > "/out/${DQK_RUN}/memory-events.txt"
         exit "$result"'
     ;;
-  *) echo '用法：bash tools/story-live.sh probe-build|probe 新名|probe-control 新名|prepare|build|en|16|20|fine-20|fine-en|sequence-20|sequence-16|sequence-en [全新輸出名]' >&2; exit 2 ;;
+  *) echo '用法：bash tools/story-live.sh probe-build|probe 新名|probe-control 新名|hall-probe 新名|hall-probe-control 新名|prepare|build|en|16|20|fine-20|fine-en|sequence-20|sequence-16|sequence-en [全新輸出名]' >&2; exit 2 ;;
 esac
