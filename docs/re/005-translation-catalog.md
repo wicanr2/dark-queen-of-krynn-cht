@@ -19,6 +19,10 @@
 本作手冊的「龍怪」保留為 Draconian 異譯；使用者補充對齊要求後，已修正首批三句相關譯文。
 本作新增的戴諾、克萊西亞已目視核對冒險手冊第 89 頁；凱爾高斯核對第 119 頁，
 手札 65 的「卡爾高斯」留作異譯。飛刀陣核對冒險手冊第 62 頁。
+另目視核對冒險手冊第 38、39、44、45、46、55 頁的 15 個新增怪物名稱，
+例如多眼怪、黑布丁、大甲蟲、綠火怪與氣胞眼怪；相關掃描雜湊保存在本機術語來源。
+第 63、78、80 頁補上還陽術、分解術、狂舞術及保護心智。
+本作 Delayed Blast Fireball 的拼字變體沿用既有「延時爆發火球」，手冊異譯不覆蓋前作。
 
 ## 輸入與擷取界限
 
@@ -57,11 +61,15 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 742 筆術語、原始來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 769 筆術語、原始來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
+| `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
+| `story-caves.tsv`、`story-monsters.tsv` | 本作洞穴劇情、對話與怪物事件共 131 筆新譯 |
+| `ui-effects-trade.tsv` | 204 筆狀態、交易、角色、存檔與戰鬥訊息新譯 |
+| `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
-| `completed/` | 依批次名及輸入雜湊保存已合併 TSV 與檢查收據，後續重分批不覆寫 |
+| `completed/` | 依批次名及輸入雜湊保存批次歷史與檢查收據；修訂前版本保留，現行值以 `zh-TW.tsv` 為準 |
 | `term-reviews.tsv` | 句內多義詞的校讀理由，固定原文與譯文雜湊；內容改變後自動失效 |
 
 [terminology_align.py](../../tools/terminology_align.py) 與
@@ -79,7 +87,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 
 首輪已檢查並合併 504 筆譯文：首批 145、名稱 323、休息與戰鬥訊息 36。
 後續另補 163 筆角色管理、商店、存讀檔、營地、戰鬥結果與神廟訊息，以及 2 個新增人物名稱鍵，
-累計 669 筆。這是譯文進度，不能稱為 669 個功能、全遊戲覆蓋率或可玩中文化完成。
+累計 669 筆。後續再補前作同文審閱 375、洞穴劇情 131、介面訊息 204、名稱與法術鍵 25，
+目前共 1,404 筆。這是譯文進度，不能稱為 1,404 個功能、全遊戲覆蓋率或可玩中文化完成。
+前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
+THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
 
 ## Docker 入口
@@ -96,6 +107,10 @@ bash tools/translation.sh check trial
 bash tools/translation.sh check names
 bash tools/translation.sh check ui-rest-combat
 bash tools/translation.sh check ui-management
+bash tools/translation.sh check prior-reviewed
+bash tools/translation.sh check story-caves
+bash tools/translation.sh check story-monsters
+bash tools/translation.sh check ui-effects-trade
 bash tools/translation.sh test
 ```
 
