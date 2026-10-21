@@ -35,7 +35,7 @@ text(254, 132, data["title"], 24, accent)
 text(254, 168, data["source"], 16, muted)
 text(254, 206, "文字閱讀", 20, accent)
 draw.rectangle((390, 198, 510, 232), outline="#777064")
-text(410, 206, "查看原頁", 20, muted)
+text(410, 206, "查看地圖", 20, muted)
 
 x, y, width, bottom = 254, 252, 650, 514
 line_height = 28
