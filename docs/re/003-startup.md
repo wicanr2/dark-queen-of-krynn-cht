@@ -127,3 +127,94 @@ IDA Pro 9.4 查詢只在 `workplace/ida/menu-lifecycle-20261022/dqk-query.i64` �
 
 重生入口：先 `bash tools/menu-lifecycle.sh build`，再以 `observe 新輸出名`、
 `control 另一新輸出名` 執行。輸出名必須全新，缺少原版、固定 clone 或正常快照即停止。
+
+## 2026-10-22：冷啟動的實際鍵盤操作入口
+
+新增 [interactive-menu.sh](../../tools/interactive-menu.sh) 作為 DRAFT 研究入口。
+它沿用前作的 Docker／X11 顯示方法，使用本作固定的 dosgolem、Go 1.24.13、Ebiten 2.9.9
+與既有 Go image。原始 EXE、資料及前作唯讀，暫存存檔與研究畫格只寫入本次全新輸出。
+本輪程式仍在 `tools/`，沒有把可丟棄原型轉成正式程式或發行包。
+
+### 實際操作前發現的離開邊界
+
+原版正常載入隊伍，在 306M 按 `b` 後，輸入函式於 `306065699` 返回索引 10。
+直到 329M 手札查驗畫面都沒有再進入 `1BB6:151F`／`1585` 的整批選單繪製。
+因此先前只等下一批繪製返回的原型，在這條新路徑會一直保留舊選單。
+既有 `p／l／e` 收據仍有效，沒有用它外推這次開始冒險的行為。
+
+已證實：下一個狀態區輸出於 `306352929` 進入已核對的 `1212:03A0`，
+格式為 `%s`，原始 Y／X 參數為 `8008／8068`。互動原型只在角色選單選擇 10 後，
+用這個已觀測入口清除舊中文及解除保留。這些數值是原始編碼參數，不當成螢幕像素。
+另一條正常空隊伍 `b` 路徑沒有有效選擇返回，沒有新文字，原型不能把它當成已切換畫面。
+
+| 原版唯讀觀測收據，均在 `workplace/probe/` | 範圍 | SHA-256 |
+|---|---|---|
+| `menu-adventure-boundaries-20261022/receipt.json` | 到手札查驗，五處狀態與無觀測組相同 | `52786e04aa880b76bae542c54f5f2abf88af8081907e81fd5bb397b8ed9713bc` |
+| `menu-empty-boundaries-20261022/receipt.json` | 空隊伍開始冒險，兩處狀態相同 | `284c08707575748fcc359d1f0a1920eb178765a162c2881220d59c1c0f1c146c` |
+
+控制組為同名目錄的 `menu-adventure-control-20261022/`、`menu-empty-control-20261022/`。
+`menu-lifecycle.sh observe／control 新名 adventure／begin-empty` 可重生，未回報未實作服務。
+新收據另存 `menu_header_hex`，保留原始全域資料，不猜測各旗標名稱。
+
+### 真正視窗輸入與原版重播
+
+[menu_live_inputs.py](../../tools/menu_live_inputs.py) 由目前 `en.tsv`、`zh-TW.tsv` 衍生十二項角色
+選單及 20px 圓體字模，舊原型只提供已觀測 key 集合，不沿用舊樣張的譯文。
+輸入在 `workplace/probe/interactive-menu-inputs-20261022/`，`inputs.json` 記錄兩份正式表、
+舊 key 集合、衍生輸出雜湊及正式 key 對照。`source-en.tsv`、`source-zh-TW.tsv` 保存整表快照，
+重驗時另核對目前十二項來源與譯文。其他批次新增不會使這十二項的歷史收據失效。
+原始英文仍在 guest 裡，只有 Draw 合成中文。
+
+`early_text_live.go -interactive -lifecycle` 從原始 MZ 入口冷啟動，不載入機器快照，
+沿 `START.BAT` 的 `SB220 SI7 RB330` 參數執行。Ebiten 接收真正視窗事件，再送原版 BIOS
+鍵盤佇列。沒有內建測試用按鍵腳本；一般預覽需由操作者使用原版字母快捷鍵。
+
+[x11_menu_driver.c](../../tools/x11_menu_driver.c) 在容器自己的 Xvfb 伺服器操作指定 PID 的視窗。
+它只送 X11 KeyPress／KeyRelease，等視窗回報已收到事件才放開，不直接呼叫 Oracle 或寫入
+遊戲狀態。另以 XGetImage 擷取可見視窗，驗證範圍不只包含 Ebiten 內部 GPU 讀回。
+最後送原生 `WM_DELETE_WINDOW` 關閉視窗；程式仍正常保存最終檢查點及收據。
+
+[interactive_replay.go](../../tools/interactive_replay.go) 從另一份原版冷啟動，以 GUI 收據記錄的
+實際虛擬步數重送每個按鍵，不安裝覆繪觀測。兩側使用相同固定 EXE、SDK 與參數。
+時鐘沿用 `dos.New` 執行前的 `Time{}`，基準為 `00:00:00.00`，再依虛擬指令的 PIT tick 推進；
+不是主機時間。遊戲 seed 位置未解，本次沒有改 seed 或驗證骰序。來源與條件保存在
+冒險組的 `clock-conditions.json`，不擴張成戰鬥亂數或硬體時序結論。
+
+| 實際 GUI 收據，均在 `workplace/probe/` | 一般操作 | 畫格／按鍵數 | 收據 SHA-256 |
+|---|---|---|---|
+| `interactive-menu-x11-roundtrip-r3-20261022/receipt.json` | 冷啟動、角色選單、讀取、取消返回、關閉視窗 | 235／10 | `228c0e9247e6f463e2e879daff6adecb0acb72e4917d7353e7a6b68cbd9eb3f9` |
+| `interactive-menu-x11-adventure-r3-20261022/receipt.json` | 冷啟動、讀入隊伍、開始冒險、查驗欄輸入後退格、關閉視窗 | 256／14 | `a393e281987dadb3a7b99e6bc0294678eba3e8ba2eed72197d6580c2c53e5e20` |
+
+兩組各自的無覆繪重播，暫存器、1 MiB RAM、原版色號、色盤、消耗按鍵與寫檔紀錄完全相同，
+未寫檔、沒有未實作服務。兩組輸入時間不同，不拿彼此的整機記憶體比較。
+取消返回組在 254M 的 RAM 為 `65775b5964b2cffbd7f03d9c14b942ca53afc172c8316576d25965a6bdb80c74`，
+冒險組在 272M 為 `1af147607a8619f7438ef1144aae6b7973099cd325cac242c829bb0ff0df05f3`。
+
+已證實：每幀 GPU 讀回等於合成輸入，保留畫格等於上一張完整畫面；沒有提交只建好部分標籤
+的角色選單。真實 X11 640×400 視窗擷取逐點等於近期提交。冒險組於 `256348970` 清除舊標籤，
+抽看前後畫格沒有露出原版角色按鈕文字，後續查驗畫面沒有中文殘字。兩組 OOM 計數皆為 0。
+字母輸入與 Backspace 通過，沒有提交查驗答案或修改原版判定。
+
+[check_interactive_menu.py](../../tools/check_interactive_menu.py) 驗證正式譯表依賴、全部畫格、
+視窗擷取及重播收據。兩組控制結果在各自的 `-control/comparison.json`，總檢查在冒險組
+`gui-verification.json`，邊界抽圖為 `begin-boundary-contact.png`；圖含原版素材，只留本機。
+
+重生入口如下，所有工作負載均由 Docker 執行，輸出名必須全新。
+
+```sh
+bash tools/interactive-menu.sh prepare
+bash tools/interactive-menu.sh build
+bash tools/interactive-menu.sh smoke 全新取消返回名
+bash tools/interactive-menu.sh smoke-adventure 全新冒險名
+bash tools/interactive-menu.sh replay 全新取消返回名
+bash tools/interactive-menu.sh replay 全新冒險名
+bash tools/interactive-menu.sh verify 全新取消返回名 全新冒險名
+```
+
+字模與資料已存在時略過 `prepare`；要改用新的輸入版本，透過 `DQK_MENU_INPUT_RUN` 指定新目錄名。
+一般鍵盤預覽使用 `bash tools/interactive-menu.sh preview 全新預覽名`，需主機 X11 DISPLAY
+與可讀的 XAUTHORITY；這個分支沿用前作 X11 方法，本輪只實測容器自有 Xvfb 的 GUI 路徑。
+預覽最長 10 分鐘、測試最長 3 分鐘，背景程序皆有 trap，沒有留下執行中容器。
+
+限制：仍是 DRAFT，僅十二項角色選單中文。其他按鈕路徑、滑鼠、IME、音訊、正式存讀檔、
+長段分頁與其餘遊戲中文尚未完成；劇情字級問題仍待選。沒有新增前作的作弊鍵或 HD 選項。

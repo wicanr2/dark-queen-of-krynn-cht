@@ -35,12 +35,13 @@ case "${1:-}" in
     test -f "$WORK/probe/menu-lifecycle-probe"
     OBSERVE=true
     if test "$1" = control; then OBSERVE=false; fi
+    ROUTE="${3:-roundtrip}"
     timeout 90s docker run --rm --init --network none --memory 1g --cpus 1 --pids-limit 64 \
       --label project=dark-queen-of-krynn-cht --user "$(id -u):$(id -g)" \
       -v "$WORK/input/dos/drkqueen:/orig:ro" -v "$WORK/probe/startup:/states:ro" \
       -v "$WORK/probe:/out" -e GOMEMLIMIT=768MiB -e GOMAXPROCS=1 \
       --entrypoint /out/menu-lifecycle-probe "$IMAGE" -state /states/239m.state \
-      -out "/out/$RUN_NAME" -observe="$OBSERVE"
+      -out "/out/$RUN_NAME" -observe="$OBSERVE" -route="$ROUTE"
     ;;
-  *) echo '用法：bash tools/menu-lifecycle.sh build|observe 新輸出名|control 新輸出名' >&2; exit 2 ;;
+  *) echo '用法：bash tools/menu-lifecycle.sh build|observe 新輸出名 [roundtrip|begin-empty|adventure]|control 新輸出名 [roundtrip|begin-empty|adventure]' >&2; exit 2 ;;
 esac

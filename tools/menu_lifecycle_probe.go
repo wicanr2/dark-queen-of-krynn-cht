@@ -25,7 +25,11 @@ func main() {
 	state := flag.String("state", "", "正常冷啟動的239M快照")
 	out := flag.String("out", "", "全新隔離研究目錄")
 	observe := flag.Bool("observe", true, "啟用唯讀觀測")
+	route := flag.String("route", "roundtrip", "roundtrip、begin-empty 或 adventure")
 	flag.Parse()
+	if *route != "roundtrip" && *route != "begin-empty" && *route != "adventure" {
+		panic("未知正常路徑")
+	}
 	if _, err := os.Stat(*out); !os.IsNotExist(err) {
 		panic("研究輸出必須是全新目錄")
 	}
@@ -72,6 +76,7 @@ func main() {
 					panic("選單表超出研究界限")
 				}
 				raw := o.Bytes(ptr, int(count)*32)
+				header := hex.EncodeToString(o.Bytes(oracle.Addr{Seg: r.DS, Off: 0xdac0}, 17))
 				phase := 0
 				if o.Steps() >= 260000000 {
 					phase = 1
@@ -79,7 +84,7 @@ func main() {
 				if o.Steps() >= 275000000 {
 					phase = 2
 				}
-				id := fmt.Sprintf("%d-%s-%s", phase, point.kind, hash(raw))
+				id := fmt.Sprintf("%d-%s-%s-%s", phase, point.kind, hash(raw), header)
 				if seenLifecycle[id] && !(point.kind == "input-return" && r.AX != 0xffff) {
 					return
 				}
@@ -88,7 +93,7 @@ func main() {
 					panic("選單生命週期事件超出研究界限")
 				}
 				lifecycle = append(lifecycle, map[string]any{"step": o.Steps(), "kind": point.kind, "regs": r, "stack": stack(),
-					"count": count, "table_pointer": ptr, "table_hex": hex.EncodeToString(raw), "oracle_runtime_ip": o.IP()})
+					"count": count, "table_pointer": ptr, "table_hex": hex.EncodeToString(raw), "menu_header_hex": header, "oracle_runtime_ip": o.IP()})
 			})
 		}
 		o.OnCall(anchor, func(_ *oracle.Oracle) {
@@ -157,12 +162,30 @@ func main() {
 	require(o.Run(5000000))
 	capture("character-menu")
 	require(o.Run(14000000))
-	require(o.TypeKeys("l"))
-	require(o.Run(15000000))
-	capture("load-source")
-	require(o.TypeKeys("e"))
-	require(o.Run(15000000))
-	capture("returned-menu")
+	if *route == "begin-empty" {
+		require(o.TypeKeys("b"))
+		require(o.Run(15000000))
+		capture("begin-empty")
+	} else {
+		require(o.TypeKeys("l"))
+		require(o.Run(15000000))
+		capture("load-source")
+		if *route == "roundtrip" {
+			require(o.TypeKeys("e"))
+			require(o.Run(15000000))
+			capture("returned-menu")
+		} else {
+			require(o.TypeKeys("t"))
+			require(o.Run(15000000))
+			capture("load-slots")
+			require(o.TypeKeys("a"))
+			require(o.Run(16000000))
+			capture("loaded-party")
+			require(o.TypeKeys("b"))
+			require(o.Run(23000000))
+			capture("copy-question")
+		}
+	}
 	addresses := make([]uint32, 0, len(writers))
 	for at := range writers {
 		addresses = append(addresses, at)
@@ -176,6 +199,7 @@ func main() {
 	require(err)
 	result := map[string]any{"prototype": true, "observe": *observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8",
 		"input_sha256": hash(exe), "initial_state_sha256": hash(stateBytes), "oracle_ida_base": o.ToIDA(oracle.Addr{}),
+		"route":         *route,
 		"address_space": "Oracle callback address with explicit base; runtime linear is separate; no automatic semantic naming",
 		"events":        events, "lifecycle": lifecycle, "video_writers": ordered, "checkpoints": checkpoints, "unimplemented": o.Unimplemented()}
 	data, err := json.MarshalIndent(result, "", "  ")

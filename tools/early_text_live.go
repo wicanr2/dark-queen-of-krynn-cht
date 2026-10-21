@@ -18,6 +18,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/wicanr2/dosgolem/oracle"
 )
 
@@ -77,6 +78,10 @@ type liveGame struct {
 	page          *storyPage
 	pages         []storyPage
 	sources       map[string]string
+	interactive   bool
+	inputs        []map[string]any
+	escapePending bool
+	escapeStep    uint64
 }
 
 func must(err error) {
@@ -148,6 +153,13 @@ func (g *liveGame) installLifecycle() {
 	}
 	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, func(_ *oracle.Oracle) {
 		if o.Regs().AX != 0xffff {
+			if g.interactive && len(g.active) == 0 {
+				return
+			}
+			if g.interactive && o.Regs().AX == 10 {
+				g.escapePending = true
+				g.escapeStep = o.Steps()
+			}
 			g.transition = true
 			log("selection-return")
 		}
@@ -168,6 +180,7 @@ func (g *liveGame) installLifecycle() {
 		}
 		if g.transition {
 			g.transition = false
+			g.escapePending = false
 			log("transition-render-return")
 		}
 	})
@@ -201,6 +214,29 @@ func (g *liveGame) installLifecycle() {
 func (g *liveGame) Update() error {
 	if g.finished {
 		return ebiten.Termination
+	}
+	if g.interactive {
+		if _, err := os.Stat(filepath.Join(g.out, "stop")); err == nil {
+			g.capture()
+			g.finished = true
+			return ebiten.Termination
+		}
+		for _, ch := range ebiten.AppendInputChars(nil) {
+			if ch < 32 || ch > 126 {
+				continue
+			}
+			value := string(ch)
+			must(g.o.TypeKeys(value))
+			g.inputs = append(g.inputs, map[string]any{"step": g.o.Steps(), "kind": "text", "value": value})
+		}
+		for key, name := range map[ebiten.Key]string{ebiten.KeyEnter: "Return", ebiten.KeyNumpadEnter: "Return", ebiten.KeyEscape: "Esc", ebiten.KeyBackspace: "Backspace", ebiten.KeyTab: "Tab", ebiten.KeyArrowUp: "Up", ebiten.KeyArrowDown: "Down", ebiten.KeyArrowLeft: "Left", ebiten.KeyArrowRight: "Right"} {
+			if inpututil.IsKeyJustPressed(key) {
+				must(g.o.SendKeys(name))
+				g.inputs = append(g.inputs, map[string]any{"step": g.o.Steps(), "kind": "named", "value": name})
+			}
+		}
+		must(g.o.Run(500000))
+		return nil
 	}
 	if g.o.Steps() >= g.limit() {
 		return nil
@@ -363,12 +399,25 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		panic("前端提交與合成畫格不同")
 	}
 	name := fmt.Sprintf("frame-%03d-%09d.png", len(g.frames), g.o.Steps())
-	f, err := os.Create(filepath.Join(g.out, name))
-	must(err)
-	im := &image.RGBA{Pix: readback, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
-	must(png.Encode(f, im))
-	must(f.Close())
+	if g.interactive {
+		name = "frame-" + composedHash + ".png"
+	}
+	if _, err := os.Stat(filepath.Join(g.out, name)); !g.interactive || os.IsNotExist(err) {
+		f, err := os.Create(filepath.Join(g.out, name))
+		must(err)
+		im := &image.RGBA{Pix: readback, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
+		must(png.Encode(f, im))
+		must(f.Close())
+	}
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
+	if g.interactive {
+		status, err := json.Marshal(map[string]any{"step": g.o.Steps(), "active": len(g.active), "held": held, "inputs": len(g.inputs), "keys_consumed": g.o.KeysConsumed(), "file": name})
+		must(err)
+		tmp := filepath.Join(g.out, "latest.tmp")
+		must(os.WriteFile(tmp, status, 0644))
+		must(os.Rename(tmp, filepath.Join(g.out, "latest.json")))
+		return
+	}
 	if len(g.frames)%200 == 0 {
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
@@ -402,6 +451,7 @@ func main() {
 	lifecycle := flag.Bool("lifecycle", false, "DRAFT：一般 p/l/e 選單往返及呈現交易")
 	story := flag.Bool("story", false, "DRAFT：正常首段劇情的字級原型")
 	storySequence := flag.Bool("story-sequence", false, "DRAFT：接續八次一般 Return，觀測七段已匹配文字")
+	interactive := flag.Bool("interactive", false, "DRAFT：冷啟動並接受實際視窗鍵盤事件；只翻譯角色選單")
 	sourceCatalog := flag.String("source-catalog", "", "劇情原文 TSV，與現行譯文依 key 核對")
 	flag.Parse()
 	if _, err := os.Stat(*out); !os.IsNotExist(err) {
@@ -416,9 +466,19 @@ func main() {
 	o, err := oracle.Load("/orig/DQK.EXE", "/orig")
 	must(err)
 	defer o.Close()
-	must(o.LoadStateFile(*state))
+	if *interactive {
+		if *state != "" || *story {
+			panic("互動原型只支援冷啟動角色選單")
+		}
+		o.SetCmdLine("SB220 SI7 RB330")
+	} else {
+		must(o.LoadStateFile(*state))
+	}
 	o.SetScratch(filepath.Join(*out, "scratch"))
 	expectedSteps := uint64(239000000)
+	if *interactive {
+		expectedSteps = 0
+	}
 	if *story {
 		expectedSteps = 329000000
 	}
@@ -432,6 +492,10 @@ func main() {
 	}
 	g := &liveGame{o: o, out: *out, translate: *translate, fine: *fine, catalog: map[string]string{}, active: map[[2]int]liveEvent{}}
 	g.lifecycle = *lifecycle
+	g.interactive = *interactive
+	if g.interactive && !g.lifecycle {
+		panic("互動原型需要生命週期觀測")
+	}
 	g.story = *story
 	g.storySequence = *storySequence
 	if g.storySequence && !g.story {
@@ -558,6 +622,12 @@ func main() {
 				source = append(source, c)
 			}
 			key := digest(source)
+			if g.interactive && g.escapePending && string(source) == "%s" && word(4) == 8008 && word(6) == 8068 {
+				g.active = map[[2]int]liveEvent{}
+				g.transition = false
+				g.escapePending = false
+				g.boundaries = append(g.boundaries, map[string]any{"kind": "begin-adventure-native-hud", "step": o.Steps(), "selection_step": g.escapeStep, "active": 0})
+			}
 			text, ok := g.catalog[key]
 			if !ok {
 				return
@@ -575,6 +645,9 @@ func main() {
 		ebiten.SetTPS(ebiten.SyncWithFPS)
 	}
 	must(ebiten.RunGame(g))
+	if g.interactive && len(g.checkpoints) == 0 {
+		g.capture()
+	}
 	ram := make([]byte, 1<<20)
 	for i := range ram {
 		ram[i] = o.Byte(oracle.Addr{Seg: uint16(i >> 4), Off: uint16(i & 15)})
@@ -583,6 +656,13 @@ func main() {
 		"source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "steps": o.Steps(), "regs": o.Regs(), "ram_sha256": digest(ram),
 		"indexed_sha256": digest(o.Indexed()), "palette": o.Palette(), "events": g.events, "frames": g.frames}
 	result["texture_uploads"] = g.uploads
+	if g.interactive {
+		result["scope"] = "DRAFT cold-boot interactive character-menu only; original keyboard; no complete localization claim"
+		result["cold_boot"] = true
+		result["inputs"] = g.inputs
+		result["checkpoints"] = g.checkpoints
+		result["unimplemented"] = o.Unimplemented()
+	}
 	if g.story {
 		result["scope"] = "DRAFT first normal story paragraph; font comparison only; no pagination/clear lifecycle"
 		if g.storySequence {
@@ -596,16 +676,22 @@ func main() {
 		must(err)
 		result["source_catalog_sha256"] = digest(data)
 	}
-	for key, path := range map[string]string{"initial_state_sha256": *state, "catalog_sha256": *catalogPath, "glyphs_sha256": *glyphPath} {
+	paths := map[string]string{"catalog_sha256": *catalogPath, "glyphs_sha256": *glyphPath}
+	if *state != "" {
+		paths["initial_state_sha256"] = *state
+	}
+	for key, path := range paths {
 		data, err := os.ReadFile(path)
 		must(err)
 		result[key] = digest(data)
 	}
 	if g.lifecycle {
-		if g.transition || g.renderDepth != 0 || len(g.paints) != 0 {
+		if !g.interactive && (g.transition || g.renderDepth != 0 || len(g.paints) != 0) {
 			panic("未完成的呈現交易")
 		}
-		result["scope"] = "DRAFT normal p/l/e menu roundtrip; twelve labels only; no story/scroll/save"
+		if !g.interactive {
+			result["scope"] = "DRAFT normal p/l/e menu roundtrip; twelve labels only; no story/scroll/save"
+		}
 		result["boundaries"] = g.boundaries
 		result["checkpoints"] = g.checkpoints
 		result["unimplemented"] = o.Unimplemented()
