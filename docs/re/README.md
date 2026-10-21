@@ -5,5 +5,6 @@
 
 | 研究 | 對應工作 |
 |---|---|
-| 原始輸入盤點，待完成後加入文件連結 | [#2](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2) |
-| dosgolem 正常啟動基線，待完成後加入文件連結 | [#3](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3) |
+| [001：遊戲與中文來源基線](001-input-baseline.md) | [#2](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2) |
+| [002：中文攻略來源與頁序](002-walkthrough-source.md) | [#6](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6) |
+| [003：dosgolem 正常冷啟動基線](003-startup.md) | [#3](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3) |

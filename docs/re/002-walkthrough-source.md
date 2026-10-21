@@ -1,0 +1,60 @@
+# 002：中文攻略來源
+
+日期：2026-10-21。工作：[#6](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)。
+使用者提供的目錄實際名稱是 `walkthrough/`。不更名；`walkthrought/` 是對話中的拼法。
+兩個名稱均已加入 `.gitignore`，原始掃描及全文不入 Git。
+
+## 已證實的來源與頁序
+
+| 來源 | 檔案 | 印刷頁碼 | 內容 |
+|---|---|---|---|
+| `軟體世界47期/` | `61.jpeg` 至 `68.jpeg`，8 張 | 60 至 67 | 《克萊恩黑暗之后》完全攻略上篇，署名 Steeler；含第 1 至 7 章 |
+| `軟體世界48期/` | `59.jpeg` 至 `73.jpeg`，15 張 | 58 至 72 | 同名攻略下篇，同樣署名 Steeler；從第 7 章後續到第 18 章深淵 |
+| `軟體世界48期/` | `43.jpeg`、`44.jpeg`，2 張 | 42、43 | 修改資料，含存檔欄位與數值表；與正常流程攻略分開分類 |
+
+以上共 25 張 JPEG，9,797,077 bytes。兩段攻略的印刷頁碼各自連續，章節標題從 1 延續至 18。
+這只證明已見掃描的頁序及章節覆蓋，不代表文字、地圖細節或原版流程已逐項核對。
+檔名比印刷頁碼多 1，引用時同時保存兩者，不能把檔名直接當頁碼。
+封面與冒險手冊的題名核對見 [001 輸入基線](001-input-baseline.md)。
+
+## 重現與收據
+
+以 [scan_inventory.py](../../tools/scan_inventory.py) 盤點唯讀來源，Pillow 11.3.0 產生接觸表。
+容器：`sc-cht-hdtools:pillow11.3.0-r1`，非 root、停用網路。
+
+- 逐檔路徑、bytes、SHA-256、尺寸與格式：`workplace/walkthrough/manifest.json`。
+- manifest SHA-256：`d71f1911083b28de6e767dda614cdb48aa0736d16073cb3806054d1b9ef4a426`。
+- 人工檢視：`workplace/walkthrough/sheet-1.jpg` 至 `sheet-3.jpg`，另檢視上篇首張原尺寸圖。
+- 上篇首張 SHA-256：`e465c3f6482e31954e91fcc62e45624346ae409f40c987a1bd2135e2e7f5e3d8`。
+- 下篇首張 SHA-256：`ed8ee5cafce155d80e7b9e4e25f9489f16556c0cbdfc766e921287b325b4a212`。
+- 下篇末張 SHA-256：`3008466b1d2d5c44ca994c18af4605b956db5b9d8826363104a7a8778d41b348`。
+
+## 使用界限
+
+- 可用於核對本作地名、人物、章節與事件順序。選用譯名仍須對照原文及兩部前作術語表。
+- 地圖上的位置、門與事件標記尚未與遊戲實際資料核對，暫不當作原版規則證據。
+- 修改資料只列來源，不把修改值套入遊戲、測試狀態或存檔。
+- 掃描含多欄細字與圖文混排。OCR 只能作草稿；必須保留頁碼、區塊位置及校對狀態。
+- 內建手札與說明面板已獲使用者確認。攻略面板、答案提示及地圖疊層尚待範圍定案。
+
+## OCR 工具與校對界限
+
+`tools/docker/ocr.Dockerfile` 與同目錄 `ocr-runtime-versions.txt` 固定 111 個套件版本，
+PaddleOCR 3.1.0、PaddleX 3.1.0、PaddlePaddle 3.1.1；`pip check` 通過。
+乾淨重建的 image ID 為 `sha256:5625e878af8cce84fff9a7f63248fa38e6ed38dbf32d1be59a60e74519842ee2`。
+實際使用 PP-OCRv5 mobile 偵測與辨識模型，單頁樣本無 OOM；較大的 server 模型曾觸及容器限制，
+不能把失敗執行當作辨識結果。
+
+入口是 [ocr-batch.sh](../../tools/ocr-batch.sh)，參數 `walkthrough` 處理本目錄，`manual` 處理
+已拆頁的手冊。來源、模型快取皆唯讀、停用網路、每次 2 GiB／2 CPU，外層有逾時。
+模型尚未下載時先以 [ocr_sample.py](../../tools/ocr_sample.py) 做一次明確允許網路的模型下載與
+單頁品質探針；原始掃描只在容器內辨識，沒有送到遠端 OCR 服務。
+
+批次輸出保存於 `workplace/paddle-walkthrough/`，包含：
+
+- `provenance.json`：工具、image、套件版本及逐模型檔案 SHA-256。
+- `manifest.json`：來源雜湊、進度、錯誤及輸出雜湊。
+- 每張掃描的 JSON：原始辨識文字、信心分數及對應多邊形位置，全部標為未校對。
+
+上篇首頁及手札第 1 則的單頁試驗已能辨識大部分文字，仍可見錯字、繁簡混用與多欄順序問題。
+這些草稿不能直接進正式 TSV 或閱讀面板。實際批次完成數由 manifest 回讀，不以檔案存在推定完成。

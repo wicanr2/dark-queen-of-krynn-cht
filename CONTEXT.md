@@ -5,11 +5,19 @@
 | 項目 | 現況與證據 |
 |---|---|
 | 儲存庫 | [dark-queen-of-krynn-cht](https://github.com/wicanr2/dark-queen-of-krynn-cht)，PRIVATE，Issues 已啟用；主機 `gh` 回讀 |
-| 工作追蹤 | [#1 治理](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/1)、[#2 原始輸入](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)、[#3 執行基線](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3)；狀態以遠端為準 |
+| 工作追蹤 | [#1 治理](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/1)、[#2 原始輸入](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)、[#3 執行基線](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3)、[#4 輸出掛勾](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)、[#5 手札與說明面板](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)、[#6 中文攻略](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)；狀態以遠端為準 |
 | 本機 Git | `main`，repo-local `wicanr2 <wicanr2@gmail.com>`，origin 指向本作私人庫 |
 | 工具 | Docker 與主機 gh 均已可用；先前 sandbox 阻塞已解除 |
-| 原始資料 | 遊戲 ZIP 與中文 RAR 已就位；內容、版本、頁序與雜湊正待 #2 盤點 |
-| 執行與中文化 | 尚無本作正常啟動或中文化收據 |
+| 原始資料 | ZIP 解出 53 個檔案；RAR 解出 119 個檔案，其中 117 張 JPG。逐檔雜湊在 `workplace/input/*-inventory.json` |
+| 中文攻略 | 實際目錄 `walkthrough/`；25 張 JPEG，含《軟體世界》47、48 期上下篇及兩頁修改資料。頁序與權利界限見 [研究 002](docs/re/002-walkthrough-source.md)，未完成文字校對與遊戲逐項核對 |
+| 原版 | `DQK.EXE` 1.1，版本字串檔案偏移 `0x687AB`；使用 TLB／GLB，檔頭 `HLIB`，非前作 FBOV／DAX |
+| 執行與中文化 | dosgolem 由真實冷啟動及一般按鍵已到角色管理選單，mode 13h；已定位繪製前字串，20px 繁中為 DRAFT 原型，尚未接入正式程式 |
+| 掃描文字 | 手冊拆出 212 頁。Tesseract 草稿不可用；PP-OCRv5 mobile 單頁可辨識多數文字，仍有錯字及繁簡混用。批次正在處理，進度由 `workplace/paddle-{walkthrough,manual}/manifest.json` 回讀；全部未校對，尚非正式手札來源 |
+| OCR 工具鏈 | `dqk-ocr:ppocr5-r1`，image `sha256:5625e878af8cce84fff9a7f63248fa38e6ed38dbf32d1be59a60e74519842ee2`，111 個套件固定版本並由乾淨來源重建；入口及界限見研究 002 |
+| 提早攔截 | 12 個角色選單字串在第一個字元繪製前 345 道指令可取得。實際視窗原子合成與原文組 guest 狀態相同；一般 27 幀、細分 560 幀已留存。背景建立與文字清除仍待驗證，規格 [001](docs/spec/001-early-text.md) 維持 DRAFT |
+| 執行器 | 隔離 clone `workplace/dosgolem/`，來源 `/home/anr2/cht/dosgolem`，固定 `f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`，上游未改動 |
+| Go 工具鏈 | go1.24.13，`dosgolem-go-ebiten:1.24-r1`，image `sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581`；`bash tools/build-probe.sh` 重建 |
+| IDA | 9.4，既有 `ida-pro-9.4-idapython:py312-v1` 的非 root 最小匯出通過；只載入 resident 的資料庫不涵蓋動態載入區，不能把缺少 xref 當作無呼叫 |
 | 授權 | 自有文件與工具採 [RRSAL-1.0](LICENSE)，原版與第三方內容依各自權利 |
 
 ## 有效決策
@@ -19,8 +27,11 @@
 | 2026-10-21 | 參考幽靈騎士與克萊恩英豪完成第三部曲，繁中優先；先建立協作入口 | 使用者指示 |
 | 2026-10-21 | 建立 GitHub 儲存庫，授權主機 gh | 使用者指示；PRIVATE 已回讀 |
 | 2026-10-21 | 開始實作，手札與說明書已準備 | 使用者指示；來源待盤點對應 |
+| 2026-10-21 | 比照前作內建手札與繁中說明面板，遊戲引用時顯示對應手札，原版規則與存檔判定保持原樣 | 使用者選擇；#5 |
+| 2026-10-21 | 文字須提早攔截，避免先顯示英文再閃爍覆繪中文；以連續畫格驗證 | 使用者新增要求；#4 |
+| 2026-10-21 | 角色管理選單採 20 像素圓體，維持原版按鈕位置；劇情視窗按實際行距另驗 | 使用者選擇；定版原型見規格 001 |
 
 ## 待定
 
 HD 風格、倍率、正式程式布局與平台範圍尚未定案。先完成輸入盤點與隔離啟動探針，
-不因前作已有功能就擴張本作範圍。手札與說明書先辨識來源及引用，全文接入方式另確認。
+不因前作已有功能就擴張本作範圍。手札與說明面板已確認列入，先辨識完整頁序與引用。
