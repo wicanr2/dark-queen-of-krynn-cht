@@ -4,6 +4,8 @@
 
 | 項目 | 現況與證據 |
 |---|---|
+| 目前重心 | 使用者指定先完成中文化，再做全量 HD。集中遊戲譯文、術語、提早攔截與正常路徑接入；攻略重繪及 HD 批次延後 |
+| 翻譯與術語 | 已合併並檢查 504 筆本機譯文；首批 145 筆譯風已確認。742 筆術語以《幽靈騎士》優先；Shield 語境歧義保留。8,381 筆來源候選仍含雜訊，不能當完成度分母；未接入正式遊戲，見 [研究 005](docs/re/005-translation-catalog.md) |
 | 儲存庫 | [dark-queen-of-krynn-cht](https://github.com/wicanr2/dark-queen-of-krynn-cht)，PRIVATE，Issues 已啟用；主機 `gh` 回讀 |
 | 工作追蹤 | [#1 治理](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/1)、[#2 原始輸入](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)、[#3 執行基線](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3)、[#4 輸出掛勾](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)、[#5 手札與說明面板](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)、[#6 中文攻略](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)；狀態以遠端為準 |
 | 本機 Git | `main`，repo-local `wicanr2 <wicanr2@gmail.com>`，origin 指向本作私人庫 |
@@ -36,6 +38,8 @@
 | 2026-10-21 | 角色管理選單採 20 像素圓體，維持原版按鈕位置；劇情視窗按實際行距另驗 | 使用者選擇；定版原型見規格 001 |
 | 2026-10-21 | 內建獨立、手動開啟的攻略閱讀頁，增加全文與地圖校對；原版規則與存檔判定不變 | 使用者選擇；#6 |
 | 2026-10-21 | 攻略地圖須重新繪製，正文重新排版；原始 PDF 與掃描只供校對，不直接嵌入充當閱讀頁 | 使用者補充；#6 |
+| 2026-10-21 | 先完成中文化，再做全量 HD；攻略地圖重繪延後 | 使用者指示與目前 Goal |
+| 2026-10-21 | 確認首批 145 筆試譯的自然、簡潔譯風；共通術語以前作優先，武器、怪物及跨代人物明確對齊《幽靈騎士》 | 使用者選擇及後續補充；#7 |
 
 ## 待定
 
