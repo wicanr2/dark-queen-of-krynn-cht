@@ -68,7 +68,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 950 筆術語、手冊對照、英文新譯來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 952 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
@@ -82,6 +82,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-palace-tombs-short.tsv`、`story-tower-citadel-short.tsv` | 王宮至黑水坡短句 218 筆，黑水坡至深淵短句 245 筆 |
 | `story-undersea-caves-short.tsv`、`story-hulder-caves-short.tsv` | 海底、希茲登與洞穴短句 184 筆，洞穴與哈德弗克森林短句 255 筆 |
 | `story-aurim-palace-short.tsv` | 新奧利姆、神廟、監獄及王宮短對話與提示 303 筆 |
+| `story-kristophan-hawkbluff-short.tsv`、`story-hawkbluff-blackwater-short.tsv` | 克理斯多芬、陵墓與鷹峽短句 328 筆，鷹峽與黑水坡短句 121 筆 |
 | `story-context-labels.tsv` | 蜥蜴人追逐場景的三個敘述／選單鍵，依來源位置校讀 |
 | `manual-name-corrections.tsv` | 11 個既有鍵的精確修訂，含手冊新核名稱與同場地點用語；不增加譯文數 |
 | `manual-deity-corrections.tsv` | 手冊第 124 頁核對後，校正一個既有喜得卡譯文鍵；不增加譯文數 |
@@ -108,10 +109,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 4,209 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+目前已檢查並合併 4,658 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
 森林、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 4,209 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 4,658 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -137,7 +138,7 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 4,209 筆，0 格式錯誤、0 未處理術語警示，170 則逐句校讀覆蓋 174 次匹配。
+完整譯表回驗為 4,658 筆，0 格式錯誤、0 未處理術語警示，175 則逐句校讀覆蓋 179 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -157,6 +158,14 @@ LIMENE、BILBARA、GEBENE、TOKTOKCHAKERI、WANTIL LIBENE 保留原詞形；只�
 不增加答案提示或自動回答。金額與手札編號按原文核對，不改付費、計數與任務判定。
 Mislaxia 拼字變體依同場 Mislaxa Talisman 翻譯，原文與物品識別值保留。
 VHLARR MAGNAR 暫留原字形並註明未解，不補造意思。缺少主詞、跨段引號與其他片段仍須完整組句。
+
+使用者再次要求對齊《幽靈騎士》後，回查其 `text/glossary.tsv` 中 266 筆人物、怪物及物品術語，
+本作同名同類別的選用譯名全部一致，前作兩份術語來源的 SHA-256 與來源紀錄相符。
+這是術語表對照，句內譯名另由完整譯表檢查與語境校讀把關，不代表所有場景已驗證。
+新批次將 Huge Bat 的敘述統一為「大蝙蝠」；普通複數 ruffians 採「惡徒」，
+不誤套前作手札 Ruffian「魯飛」。Iron Scale 依同場護符採「鐵製龍鱗」，不套防具「鱗甲」。
+新增 Mimic「擬態怪」、店招 Shariskis「夏里斯基」兩個英文新譯，均標記待全書校讀。
+前作全文表與本作手冊 OCR 未命中，不證明手冊沒有對照，也不據此推定遭遇結構或人物身分。
 
 ## 相鄰劇情字串候選
 
@@ -205,6 +214,8 @@ bash tools/translation.sh check story-context-labels
 bash tools/translation.sh check story-undersea-caves-short
 bash tools/translation.sh check story-hulder-caves-short
 bash tools/translation.sh check story-aurim-palace-short
+bash tools/translation.sh check story-kristophan-hawkbluff-short
+bash tools/translation.sh check story-hawkbluff-blackwater-short
 bash tools/translation.sh check manual-name-corrections
 bash tools/translation.sh check manual-deity-corrections
 bash tools/translation.sh check term-corrections
