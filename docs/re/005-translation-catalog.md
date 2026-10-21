@@ -68,7 +68,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 930 筆術語、手冊對照、英文新譯來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 950 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
@@ -78,7 +78,12 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-forest-thenol.tsv`、`ui-quests-magic.tsv` | 森林、西洛爾事件 252 筆及介面、任務、魔法短句 48 筆 |
 | `story-palace-kristophan.tsv` | 西洛爾王宮、克理斯多芬與陵墓劇情 178 筆 |
 | `story-hawkbluff-blackwater.tsv`、`story-citadel-finale.tsv` | 鷹峽與黑水坡 120 筆，地侏堡壘及部分結局 76 筆 |
+| `story-tower-abyss.tsv` | 地侏堡壘、火焰塔、深淵與結局敘述 165 筆 |
+| `story-palace-tombs-short.tsv`、`story-tower-citadel-short.tsv` | 王宮至黑水坡短句 218 筆，黑水坡至深淵短句 245 筆 |
+| `story-context-labels.tsv` | 蜥蜴人追逐場景的三個敘述／選單鍵，依來源位置校讀 |
 | `manual-name-corrections.tsv` | 11 個既有鍵的精確修訂，含手冊新核名稱與同場地點用語；不增加譯文數 |
+| `manual-deity-corrections.tsv` | 手冊第 124 頁核對後，校正一個既有喜得卡譯文鍵；不增加譯文數 |
+| `*-review-input.json` | 逐批校讀時固定的來源字串與原文表 SHA-256；不是正式顯示來源 |
 | `passage-candidates.json`、`passage-candidates.en.tsv` | 322 組靜態相鄰字串候選；獨立校讀輸入，未列入正式原文／譯文表 |
 | `term-corrections.tsv` | 已有譯文的精確鍵修訂，包括避難廳與不死怪物用語 |
 | `ui-effects-trade.tsv` | 204 筆狀態、交易、角色、存檔與戰鬥訊息新譯 |
@@ -101,13 +106,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-首輪已檢查並合併 504 筆譯文：首批 145、名稱 323、休息與戰鬥訊息 36。
-後續另補 163 筆角色管理、商店、存讀檔、營地、戰鬥結果與神廟訊息，以及 2 個新增人物名稱鍵，
-累計 669 筆。後續再補前作同文審閱 375、洞穴劇情 131、介面訊息 204、名稱與法術鍵 25，
-其後新增海底救援 201、旅行與救援短句 270、新名稱事件 42、海岸與哈德弗克事件 145、
-名稱鍵 66；其後補森林與西洛爾 252、介面與魔法短句 48、名稱鍵 31，再補王宮與克理斯多芬
-178、鷹峽與黑水坡 120、地侏堡壘與部分結局 76、名稱鍵 2，目前共 2,835 筆。
-這是譯文進度，不能稱為 2,835 個功能、全遊戲覆蓋率或可玩中文化完成。
+目前已檢查並合併 3,467 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+森林、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
+逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
+這是譯文進度，不能稱為 3,467 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -130,8 +132,22 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 不把它們全域換成 Draconian「龍人」，其他場景仍依原文與語境區分。
 珠寶商線索保留須輸入的 PASS、RELEASE 並附中文解釋，不改原版答案判定。
 地名另作人工抽查，修正本輪安塞隆、岩漿海的暫譯偏差；一般場所描述不套用前作房間專名。
-完整譯表回驗為 2,835 筆，0 格式錯誤、0 未處理術語警示，98 則逐句校讀覆蓋 102 次匹配。
+另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
+人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
+不能依較短的術語片段硬換。
+完整譯表回驗為 3,467 筆，0 格式錯誤、0 未處理術語警示，152 則逐句校讀覆蓋 156 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
+
+手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
+Gnomoi、Minoi 分別作「聰明地侏、小地侏」，「地侏」詞根沿用前作；手冊原作「地精」。
+國王完整姓名沿用第 110 頁，其他頁的簡稱留作來源異譯。Hiddukel 原先是本作英文暫譯，
+第 124 頁確認「喜得卡」後修正一個既有鍵。雷斯林、蓋加斯與法術名稱維持前作。
+赫倫比許諾格、普迪等未見完整手冊對照的本作名稱，仍標記待校讀。
+
+黑水坡談判另有三句 Dragonman／Dragonmen。ECL 區塊 33 的談判位於檔案偏移 `303687`，
+同場契約在 `304236` 明言雇用 Bakali 嚮導與戰士；按語境校正為蜥蜴人。
+獨立 DRAGONMAN 選單鍵只有區塊 33、34 兩個來源，分別屬上述追逐與成年試煉，亦採蜥蜴人。
+這是來源位置與文字語境的校讀，未宣稱已解出敵人結構或正常遭遇。
 
 ## 相鄰劇情字串候選
 
@@ -173,7 +189,12 @@ bash tools/translation.sh check ui-quests-magic
 bash tools/translation.sh check story-palace-kristophan
 bash tools/translation.sh check story-hawkbluff-blackwater
 bash tools/translation.sh check story-citadel-finale
+bash tools/translation.sh check story-tower-abyss
+bash tools/translation.sh check story-palace-tombs-short
+bash tools/translation.sh check story-tower-citadel-short
+bash tools/translation.sh check story-context-labels
 bash tools/translation.sh check manual-name-corrections
+bash tools/translation.sh check manual-deity-corrections
 bash tools/translation.sh check term-corrections
 bash tools/translation.sh check current-validation
 bash tools/translation.sh test
