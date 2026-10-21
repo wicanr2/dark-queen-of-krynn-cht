@@ -68,7 +68,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 909 筆術語、手冊對照、英文新譯來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 930 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
@@ -76,6 +76,9 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-undersea.tsv`、`story-travel-rescue.tsv` | 海底救援 201 筆及旅行、洞穴與救援短句 270 筆 |
 | `story-new-names.tsv`、`story-coast-hulder.tsv` | 新名稱相關事件 42 筆及海岸、哈德弗克事件 145 筆 |
 | `story-forest-thenol.tsv`、`ui-quests-magic.tsv` | 森林、西洛爾事件 252 筆及介面、任務、魔法短句 48 筆 |
+| `story-palace-kristophan.tsv` | 西洛爾王宮、克理斯多芬與陵墓劇情 178 筆 |
+| `story-hawkbluff-blackwater.tsv`、`story-citadel-finale.tsv` | 鷹峽與黑水坡 120 筆，地侏堡壘及部分結局 76 筆 |
+| `manual-name-corrections.tsv` | 11 個既有鍵的精確修訂，含手冊新核名稱與同場地點用語；不增加譯文數 |
 | `passage-candidates.json`、`passage-candidates.en.tsv` | 322 組靜態相鄰字串候選；獨立校讀輸入，未列入正式原文／譯文表 |
 | `term-corrections.tsv` | 已有譯文的精確鍵修訂，包括避難廳與不死怪物用語 |
 | `ui-effects-trade.tsv` | 204 筆狀態、交易、角色、存檔與戰鬥訊息新譯 |
@@ -102,8 +105,9 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 後續另補 163 筆角色管理、商店、存讀檔、營地、戰鬥結果與神廟訊息，以及 2 個新增人物名稱鍵，
 累計 669 筆。後續再補前作同文審閱 375、洞穴劇情 131、介面訊息 204、名稱與法術鍵 25，
 其後新增海底救援 201、旅行與救援短句 270、新名稱事件 42、海岸與哈德弗克事件 145、
-名稱鍵 66；本輪再補森林與西洛爾 252、介面與魔法短句 48、名稱鍵 31，目前共 2,459 筆。
-這是譯文進度，不能稱為 2,459 個功能、全遊戲覆蓋率或可玩中文化完成。
+名稱鍵 66；其後補森林與西洛爾 252、介面與魔法短句 48、名稱鍵 31，再補王宮與克理斯多芬
+178、鷹峽與黑水坡 120、地侏堡壘與部分結局 76、名稱鍵 2，目前共 2,835 筆。
+這是譯文進度，不能稱為 2,835 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -114,6 +118,20 @@ THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作�
 Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Dragon Scale 依森林事件中的
 鐵製龍鱗形護符譯為「鐵製龍鱗」，不誤列為龍的種類。本作新增而缺完整中英手冊對照的名稱
 仍標記待全書校讀，不宣稱已有前作或官方中譯。
+
+另目視核對手冊第 83 頁的克理斯多芬、查凱斯，第 92 頁的特里摩爾、波追那斯、寇沙，
+第 126 頁的黑水坡與阿默羅卡。Amrocar 及 Othlorx 原先是本作英文暫譯；找到手冊對照後，
+將本作暫譯「阿姆羅卡、奧斯洛克斯」校正為「阿默羅卡、歐斯羅克斯」，歷史批次與來源保留。
+安塞隆沿用《幽靈騎士》；岩漿海及火焰塔沿用先前核對的本作手冊第 110 頁。
+本作手冊異譯不覆蓋前作已定名。
+帕克蘭等未找到中英對照的新名稱，仍標記英文新譯、待全書校讀。
+
+查凱斯的成年試煉同場明言 Bakali，因此該場景五個鍵的 Dragonman／Dragonmen 譯為「蜥蜴人」。
+不把它們全域換成 Draconian「龍人」，其他場景仍依原文與語境區分。
+珠寶商線索保留須輸入的 PASS、RELEASE 並附中文解釋，不改原版答案判定。
+地名另作人工抽查，修正本輪安塞隆、岩漿海的暫譯偏差；一般場所描述不套用前作房間專名。
+完整譯表回驗為 2,835 筆，0 格式錯誤、0 未處理術語警示，98 則逐句校讀覆蓋 102 次匹配。
+這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 ## 相鄰劇情字串候選
 
@@ -152,6 +170,10 @@ bash tools/translation.sh check story-new-names
 bash tools/translation.sh check story-coast-hulder
 bash tools/translation.sh check story-forest-thenol
 bash tools/translation.sh check ui-quests-magic
+bash tools/translation.sh check story-palace-kristophan
+bash tools/translation.sh check story-hawkbluff-blackwater
+bash tools/translation.sh check story-citadel-finale
+bash tools/translation.sh check manual-name-corrections
 bash tools/translation.sh check term-corrections
 bash tools/translation.sh check current-validation
 bash tools/translation.sh test
