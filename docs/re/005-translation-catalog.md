@@ -58,7 +58,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
 | `glossary.tsv`、`terminology-provenance.json` | 前作優先的 742 筆術語、原始來源及歧義 |
-| `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對齊及本輪新增的 323 筆批次 |
+| `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
 | `completed/` | 依批次名及輸入雜湊保存已合併 TSV 與檢查收據，後續重分批不覆寫 |
@@ -77,8 +77,9 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 504 筆譯文：首批 145、名稱 323、休息與戰鬥訊息 36。
-這是譯文進度，不能稱為 504 個功能、全遊戲覆蓋率或可玩中文化完成。
+首輪已檢查並合併 504 筆譯文：首批 145、名稱 323、休息與戰鬥訊息 36。
+後續另補 163 筆角色管理、商店、存讀檔、營地、戰鬥結果與神廟訊息，以及 2 個新增人物名稱鍵，
+累計 669 筆。這是譯文進度，不能稱為 669 個功能、全遊戲覆蓋率或可玩中文化完成。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
 
 ## Docker 入口
@@ -94,6 +95,7 @@ bash tools/translation.sh batches
 bash tools/translation.sh check trial
 bash tools/translation.sh check names
 bash tools/translation.sh check ui-rest-combat
+bash tools/translation.sh check ui-management
 bash tools/translation.sh test
 ```
 

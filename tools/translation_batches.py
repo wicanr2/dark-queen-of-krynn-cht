@@ -28,7 +28,7 @@ def main():
     entries=json.loads((root/"catalog.json").read_text())["entries"]
     existing={row["key"] for row in read(root/"zh-TW.tsv")}
     known={row["key"]:row for row in read(root/"name-candidates.tsv")}
-    names=[(entry["key"],known[entry["key"]]["text"],"沿用已確認的前作術語；尚未驗證本作顯示")
+    names=[(entry["key"],known[entry["key"]]["text"],"依術語對照；來源見terminology-provenance.json，尚未驗證本作顯示")
         for entry in entries if entry["key"] in known and entry["key"] not in existing]
     write(root/"batch-names.tsv",["key","text","note"],names)
     pending=[entry for entry in entries if entry["key"] not in existing and entry["key"] not in known]
