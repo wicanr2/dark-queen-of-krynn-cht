@@ -2,6 +2,7 @@
 import csv
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from PIL import Image
@@ -25,6 +26,50 @@ def prepare(texts, observed, output):
     with (texts / "glossary.tsv").open(encoding="utf-8", newline="") as f:
         terms = list(csv.DictReader(f, delimiter="\t"))
     aliases, translations, headers, provenance = {}, {}, [], []
+    zh = catalog(texts / "zh-TW.tsv")
+    def glossary(source, categories):
+        found = [t for t in terms if t["en"].casefold() == source.casefold()
+                 and t["category"] in categories]
+        assert len(found) == 1, source
+        return found[0]
+
+    def formal(source):
+        found = [(k, zh[k]) for k, value in en.items() if value == source and k in zh]
+        assert found and len({v for _, v in found}) == 1, source
+        return found[0]
+
+    bindings = []
+    rows = []
+    # 明列已觀測變體的詞根與順序；不作任意字串替換或推導未知物品。
+    variants = {"Javelins": ("Javelin",), "Arrows": ("Arrow",),
+                "Cleric Scroll": ("Clerical Scroll",),
+                "Fine Long Bow": ("Fine", "Long Bow"),
+                "Cloak Of Prot": ("Of Prot", "Cloak"),
+                "Ring Of Prot": ("Ring of Protection",),
+                "Footman's Dragonlance": ("Footman's", "Dragonlance"),
+                "Potion of Giant Strength": ("Giant Strength", "Potion")}
+    def bind(pane, source, categories):
+        key = pane + "." + sha(source.encode())[:20]
+        if key in translations:
+            return key
+        roots = variants.get(source, (source,)) if pane == "inventory" else (source,)
+        origins, values = [], []
+        for root in roots:
+            found = [t for t in terms if t["en"].casefold() == root.casefold()
+                     and t["category"] in categories]
+            if found:
+                term = glossary(root, categories)
+                values.append(term["zh"])
+                origins.append({"glossary": term})
+            else:
+                k, value = formal(root)
+                values.append(value)
+                origins.append({"formal_key": k})
+        aliases[key], translations[key] = source, "".join(values)
+        assert len(translations[key]) * 16 <= len(source) * 16, source
+        bindings.append({"key": key, "source": source, "roots": origins,
+                         "method": "existing term" if roots == (source,) else "observed variant with explicit existing roots"})
+        return key
     for pane, folder, offset, category in (("inventory", "observe-items-r2", 0x4689, "ui"),
                                            ("grimoire", "observe-grimoire-r2", 0xA7C4, "spell")):
         receipt = json.loads((observed / folder / "receipt.json").read_text())
@@ -40,14 +85,40 @@ def prepare(texts, observed, output):
         aliases[key] = en[source_keys[0]] if source_keys else f["text"]
         headers.append({"Pane": pane, "Key": key, "Segment": f["segment"],
                         "Offset": offset, "SHA256": sha(aliases[key].encode())})
-        term = [t for t in terms if t["en"] == "Shield" and t["category"] == category]
-        assert len(term) == 1 and term[0]["project"] == "death_knight_of_krynn"
-        key = pane + ".shield"
-        aliases[key], translations[key] = term[0]["en"], term[0]["zh"]
         provenance.append({"pane": pane, "header_catalog_key": source_keys[0] if source_keys else None,
                            "header_source": "formal-en" if source_keys else "observed original RAM NUL format; not registered in main catalog",
-                           "header_occurrences": len(matches), "term": term[0],
+                           "header_occurrences": len(matches),
                            "receipt_sha256": sha((observed / folder / "receipt.json").read_bytes())})
+        # 只採原版列表交易內、完整 NUL 結尾的實際 %s 列。標題和角色名稱不參與。
+        observed_rows = sorted({w["vararg_1_candidate"]["text"] for w in receipt["wrappers"]
+                                if w["format"]["text"] == "%s" and w["vararg_1_candidate"]["nul_terminated"]
+                                and "\t" in w["vararg_1_candidate"]["text"]
+                                and any(p["step"] <= w["step"] <= p["return_instruction_step"]
+                                        for p in receipt["list_events"])})
+        for text in observed_rows:
+            spans = []
+            def span(start, source, categories):
+                assert text[start:start + len(source)] == source
+                spans.append({"Start": start, "Length": len(source), "Key": bind(pane, source, categories)})
+            if pane == "grimoire":
+                assert text.startswith("\t") and text.count("\t") == 1, repr(text)
+                span(1, text[1:], {"spell"})
+            else:
+                match = re.fullmatch(r" (Yes|No)\t( ?(?:[0-9]+ )?)(.+?)( \+[0-9]+)? ", text)
+                assert match, repr(text)
+                span(1, match[1], {"ui"})
+                start, name = match.start(3), match[3]
+                if name.startswith("Bracers AC "):
+                    assert re.fullmatch(r"Bracers AC [0-9]+", name)
+                    span(start, name.split(" AC ")[0], {"item"})
+                elif name.endswith(" Spells"):
+                    scroll = re.fullmatch(r"(.+ Scroll) ([0-9]+) (Spells)", name)
+                    assert scroll
+                    span(start, scroll[1], {"item"})
+                    span(start + scroll.start(3), scroll[3], {"ui"})
+                else:
+                    span(start, name, {"item", "ui"} if name == "Shield" else {"item"})
+            rows.append({"Pane": pane, "SHA256": sha(text.encode()), "Spans": spans})
     # 這些是 source key 的辨識值。runtime 只讀 TSV，不內嵌顯示字串。
     for key, value in (("answer.yes", "Yes"), ("answer.no", "No")):
         assert value in en.values()
@@ -86,19 +157,20 @@ def prepare(texts, observed, output):
     backgrounds.intersection_update(native_backgrounds)
     assert len(backgrounds) == 1
     output.mkdir()
-    for name, rows in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
-        (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in rows.items()))
-    config = {"Headers": headers, "Background": backgrounds.pop(),
+    for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
+        (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
+    config = {"Headers": headers, "Rows": rows, "Background": backgrounds.pop(),
               "fine_windows": [[672000000, 673000000], [681000000, 682000000],
                                [699000000, 700000000], [705000000, 706000000],
                                [738000000, 739000000], [741000000, 742000000], [744000000, 745000000]]}
     (output / "inputs.json").write_text(json.dumps(config, indent=2) + "\n")
-    (output / "provenance.json").write_text(json.dumps({"draft": True, "bindings": provenance,
+    (output / "provenance.json").write_text(json.dumps({"draft": True, "headers": provenance, "bindings": bindings,
+        "observed_rows": len(rows),
         "formal_en_sha256": sha((texts / "en.tsv").read_bytes()),
         "formal_zh_sha256": sha((texts / "zh-TW.tsv").read_bytes()),
         "glossary_sha256": sha((texts / "glossary.tsv").read_bytes()),
         "tool_sha256": sha(Path(__file__).read_bytes())}, ensure_ascii=False, indent=2) + "\n")
-    print("列表原型輸入：兩個標題來源、兩個繁中詞條；未改正式譯表")
+    print(f"列表原型輸入：{len(rows)} 種完整列、{len(translations)} 個顯示詞條；未改正式譯表")
 
 
 if __name__ == "__main__":

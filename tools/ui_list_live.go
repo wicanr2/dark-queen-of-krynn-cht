@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/wicanr2/dosgolem/oracle"
 )
@@ -30,11 +28,20 @@ type listHeader struct {
 }
 type listConfig struct {
 	Headers     []listHeader
+	Rows        []listRow
 	Background  byte
 	FineWindows [][2]uint64 `json:"fine_windows"`
 }
+type listSpan struct {
+	Start, Length int
+	Key           string
+}
+type listRow struct {
+	Pane, SHA256 string
+	Spans        []listSpan
+}
 type listWord struct {
-	X, Y                   int
+	X, Y, Width            int
 	Key                    string
 	Foreground, Background byte
 }
@@ -87,7 +94,7 @@ func (g *liveGame) listLog(kind string, detail any) int {
 }
 func (l *listState) erase(x, y, w, h int) {
 	for p, v := range l.words {
-		if v.X < x+w && v.X+48 > x && v.Y < y+h && v.Y+8 > y {
+		if v.X < x+w && v.X+v.Width > x && v.Y < y+h && v.Y+8 > y {
 			delete(l.words, p)
 		}
 	}
@@ -124,14 +131,24 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	if len(l.config.Headers) != 2 || len(l.request.Actions) == 0 || o.Steps() != l.request.Start {
 		panic("列表輸入不符")
 	}
-	for _, key := range []string{"inventory.shield", "grimoire.shield", "answer.yes", "answer.no", "format.string"} {
+	for _, key := range []string{"answer.yes", "answer.no", "format.string"} {
 		if l.sources[key] == "" {
 			panic("列表原文缺鍵")
 		}
 	}
-	for _, key := range []string{"inventory.shield", "grimoire.shield"} {
-		if g.catalog[key] == "" || len([]rune(g.catalog[key]))*16 > 96 {
-			panic("列表譯文缺鍵或超寬")
+	seenRows := map[string]bool{}
+	for _, row := range l.config.Rows {
+		id := row.Pane + ":" + row.SHA256
+		if seenRows[id] || len(row.SHA256) != 64 || len(row.Spans) == 0 || (row.Pane != "inventory" && row.Pane != "grimoire") {
+			panic("列表列綁定重複或無效")
+		}
+		seenRows[id] = true
+		end := 0
+		for _, span := range row.Spans {
+			if span.Start < end || span.Length <= 0 || len(l.sources[span.Key]) != span.Length || g.catalog[span.Key] == "" || len([]rune(g.catalog[span.Key]))*16 > span.Length*16 {
+				panic("列表譯文缺鍵、重疊或超寬")
+			}
+			end = span.Start + span.Length
 		}
 	}
 	last := l.request.Start
@@ -205,7 +222,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	})
 	// 使用 Machine 已有的視訊寫入 observer，包括 planar 路徑及同值寫入。
-	// 此固定 mode 13h 路徑須覆蓋每個舊字框的全部 384 個原生位元組後才解除保留。
+	// 此固定 mode 13h 路徑須覆蓋每個舊字框的全部原生像素後才解除保留。
 	o.OnVideoWriteEvent(func(hit oracle.VideoWriteEvent) {
 		if !l.clearPending && !l.awaitPageFlip {
 			return
@@ -242,7 +259,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		for _, p := range locations {
 			x, y := p%320, p/320
 			for _, w := range l.clearTargets {
-				if x >= w.X && x < w.X+48 && y >= w.Y && y < w.Y+8 {
+				if x >= w.X && x < w.X+w.Width && y >= w.Y && y < w.Y+8 {
 					l.clearCovered[p] = true
 				}
 			}
@@ -259,7 +276,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		if layout.DisplayStart != l.renderPage {
 			return nil
 		}
-		if l.clearPending && len(l.clearCovered) != len(l.clearTargets)*384 {
+		pixels := 0
+		for _, w := range l.clearTargets {
+			pixels += w.Width * 8
+		}
+		if l.clearPending && len(l.clearCovered) != pixels {
 			return nil
 		}
 		if l.clearPending {
@@ -285,13 +306,13 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		y0, x0, y1, x1, dy, dx := s[0], s[1], s[2], s[3], -s[4], -s[5]
 		next := map[[2]int]listWord{}
 		for _, w := range l.words {
-			if w.X < x1 && w.X+48 > x0 && w.Y < y1 && w.Y+8 > y0 {
-				if w.X < x0 || w.X+48 > x1 || w.Y < y0 || w.Y+8 > y1 {
+			if w.X < x1 && w.X+w.Width > x0 && w.Y < y1 && w.Y+8 > y0 {
+				if w.X < x0 || w.X+w.Width > x1 || w.Y < y0 || w.Y+8 > y1 {
 					continue
 				}
 				w.X += dx
 				w.Y += dy
-				if w.X < x0 || w.X+48 > x1 || w.Y < y0 || w.Y+8 > y1 {
+				if w.X < x0 || w.X+w.Width > x1 || w.Y < y0 || w.Y+8 > y1 {
 					continue
 				}
 			}
@@ -314,7 +335,6 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	})
 	o.OnCall(oracle.Addr{Seg: 0xb72, Off: 0x46}, func(_ *oracle.Oracle) {
-		r := o.Regs()
 		s := [10]uint16{}
 		for i := range s {
 			s[i] = o.StackWord(i)
@@ -341,33 +361,25 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			return
 		}
 		l.erase(col*8, row*8, len(text)*8, 8)
-		key := l.pane + ".shield"
-		en := l.sources[key]
-		if en == "" {
-			return
-		}
-		prefix := 0
-		matched := false
-		if l.pane == "inventory" {
-			parts := strings.Split(text, "\t")
-			if len(parts) == 2 && (strings.TrimSpace(parts[0]) == l.sources["answer.yes"] || strings.TrimSpace(parts[0]) == l.sources["answer.no"]) {
-				matched = regexp.MustCompile("^" + regexp.QuoteMeta(en) + `(?: \+[0-9]+)? $`).MatchString(parts[1])
-				prefix = len(parts[0]) + 1
+		sha := digest([]byte(text))
+		for _, binding := range l.config.Rows {
+			if binding.Pane != l.pane || binding.SHA256 != sha {
+				continue
 			}
-		} else if l.pane == "grimoire" {
-			matched = text == "\t"+en
-			prefix = 1
-		}
-		if !matched {
+			for _, span := range binding.Spans {
+				if span.Start+span.Length > len(text) || text[span.Start:span.Start+span.Length] != l.sources[span.Key] {
+					panic("列表詞框來源不符")
+				}
+				w := listWord{X: (col + span.Start) * 8, Y: row * 8, Width: span.Length * 8, Key: span.Key, Foreground: byte(s[4]), Background: l.config.Background}
+				if w.X < 0 || w.X+w.Width > 320 || w.Y < 0 || w.Y+8 > 200 {
+					panic("列表中文字框越界")
+				}
+				l.words[[2]int{w.X, w.Y}] = w
+			}
+			l.awaitGlyph = g.listLog("row-before-glyph", map[string]any{"source_sha256": sha, "spans": binding.Spans})
 			return
 		}
-		w := listWord{X: (col + prefix) * 8, Y: row * 8, Key: key, Foreground: byte(s[4]), Background: l.config.Background}
-		if w.X < 0 || w.X+48 > 320 || w.Y < 0 || w.Y+8 > 200 {
-			panic("列表中文字框越界")
-		}
-		l.words[[2]int{w.X, w.Y}] = w
-		l.awaitGlyph = g.listLog("word-before-glyph", map[string]any{"key": key, "source_sha256": digest([]byte(text))})
-		_ = r
+		g.listLog("unknown-row-original", map[string]any{"source_sha256": sha})
 	})
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0xc96}, func(_ *oracle.Oracle) {
 		if l.awaitGlyph >= 0 {
@@ -430,7 +442,7 @@ func (g *liveGame) composeList(px []byte) {
 		x, y := w.X*2, w.Y*2
 		bg, fg := pal[w.Background], pal[w.Foreground]
 		for yy := 0; yy < 16; yy++ {
-			for xx := 0; xx < 96; xx++ {
+			for xx := 0; xx < w.Width*2; xx++ {
 				copy(px[((y+yy)*640+x+xx)*4:][:3], bg[:])
 			}
 		}
@@ -465,7 +477,7 @@ func (g *liveGame) listReceipt(result map[string]any) {
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))
 		panic(fmt.Sprintf("列表呈現未完成：paint=%d fill=%d scroll=%d clear=%t", len(l.paints), len(l.fills), len(l.scrolls), l.clearPending))
 	}
-	result["scope"] = "DRAFT automatic title-field context, two Shield terms, normal snapshot/key routes; no whole-list/production/cold-boot claim"
+	result["scope"] = "DRAFT automatic title-field context and observed complete row bindings, normal snapshot/key routes; no all-game/production/cold-boot claim"
 	result["list_events"] = l.events
 	result["list_frames"] = l.frames
 	result["checkpoints"] = g.checkpoints
