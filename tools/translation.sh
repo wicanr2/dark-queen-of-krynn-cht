@@ -122,7 +122,7 @@ case "${1:-}" in
     test -f "$WORK/translation/en.tsv"
     test -f "$WORK/translation/glossary.tsv"
     test -f "$DKK/font/jf-openhuninn-2.1.ttf"
-    timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+    timeout 120s docker run --rm --init --label project=dark-queen-of-krynn-cht \
       --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/translation:/out" \
       -v "$DKK/font:/font:ro" "$FONT_IMAGE" /tools/translation_check.py \

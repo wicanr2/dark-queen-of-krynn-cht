@@ -30,6 +30,7 @@ type listConfig struct {
 	Headers     []listHeader
 	Rows        []listRow
 	Fields      []listField
+	Paragraphs  []listParagraph
 	Menus       map[string]string
 	PaneLists   []listPaneSource
 	RowCallers  []oracle.Addr
@@ -49,6 +50,8 @@ type listField struct {
 	Width                                  int
 	RawX, RawY                             uint16
 	Caller, UpperCaller                    oracle.Addr
+	UpperNative                            *[2]int
+	BackgroundOverride, Color              *byte
 }
 type listFieldWrapper struct {
 	Return paintReturn
@@ -70,6 +73,7 @@ type listWord struct {
 	Key                    string
 	Group                  string
 	Foreground, Background byte
+	Button                 bool `json:"Button,omitempty"`
 }
 type listTextEvent struct {
 	Step       uint64
@@ -107,6 +111,7 @@ type listState struct {
 	fieldWrapper           *listFieldWrapper
 	clockReturn            *paintReturn
 	clockKeys              map[string]bool
+	paragraphPaints        []paintReturn
 	trackListPage          bool
 	rowPagePending         bool
 }
@@ -181,7 +186,7 @@ func (l *listState) footerCompatible(signature string) bool {
 	}
 	expected, actual := 0, 0
 	for _, word := range l.words {
-		if word.Group == "footer" {
+		if word.Group == "footer" && word.Button {
 			actual++
 		}
 	}
@@ -195,7 +200,7 @@ func (l *listState) footerCompatible(signature string) bool {
 			width = field.Length * 8
 		}
 		word, ok := l.words[[2]int{int(field.RawX) + field.Start*8, int(field.RawY)}]
-		if !ok || word.Group != "footer" || word.Key != field.Key || word.Width != width || word.Background != l.config.Background {
+		if !ok || word.Group != "footer" || !word.Button || word.Key != field.Key || word.Width != width || word.Background != l.config.Background {
 			return false
 		}
 	}
@@ -249,6 +254,13 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	}
 	for _, f := range l.config.Fields {
+		if f.UpperNative != nil || f.BackgroundOverride != nil || f.Color != nil {
+			if f.UpperNative == nil || *f.UpperNative != ([2]int{56, 192}) || f.BackgroundOverride == nil || *f.BackgroundOverride != 7 ||
+				f.Color == nil || *f.Color != 0x70 || f.UpperCaller != (oracle.Addr{Seg: 0xCEB, Off: 0x4BD}) || f.Pane != "callsite" || f.Group != "footer" ||
+				f.RawX != 8032 || f.RawY != 189 || f.Width != 0 || !((f.Start == 0 && f.Length == 5) || (f.Start == 13 && f.Length == 12)) {
+				panic("未驗證的提示欄位幾何或顏色")
+			}
+		}
 		if f.SourcePattern != "" {
 			if f.SourcePattern != "clock-period" || f.Pane != "callsite" || f.Group != "body" || f.UpperCaller != (oracle.Addr{Seg: 0x205e, Off: 0x53c}) || f.RawX != 8104 || f.RawY != 8060 || f.Start != 0 || f.Length != 2 || f.Width != 0 {
 				panic("未知時間欄位契約")
@@ -326,6 +338,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			v[i] = int(int16(o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 6 + uint16(i*2)})))
 		}
 		x, y, w, h := v[1], v[0], v[3]-v[1], v[2]-v[0]
+		g.invalidateListParagraph(x, y, w, h, "native fill")
 		if len(l.paints) == 0 && x <= 8 && y <= 8 && x+w >= 312 && y+h >= 184 {
 			l.awaitPageFlip = true
 			l.renderPageKnown = false
@@ -611,6 +624,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		g.listLog("unknown-row-original", map[string]any{"source_sha256": sha})
 	})
 	g.installListFields()
+	g.installListParagraphs()
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0xc96}, func(_ *oracle.Oracle) {
 		for _, index := range l.awaitGlyphs {
 			l.events[index].FirstGlyph = o.Steps()
@@ -651,7 +665,7 @@ func (g *liveGame) installListFields() {
 			preserved := l.footerCompatible(signature)
 			if !preserved {
 				for p, w := range l.words {
-					if w.Group == "footer" {
+					if w.Group == "footer" && w.Button {
 						delete(l.words, p)
 					}
 				}
@@ -729,6 +743,9 @@ func (g *liveGame) installListFields() {
 				f.FormatSHA256 != digest([]byte(format)) || !matches {
 				continue
 			}
+			if f.Color != nil && byte(s[4]) != *f.Color {
+				continue
+			}
 			if f.Pane == "suffix" {
 				if len(l.fills) > 0 {
 					return
@@ -755,18 +772,28 @@ func (g *liveGame) installListFields() {
 			if start+f.Length > len(source) || source[start:start+f.Length] != l.sources[f.Key] {
 				panic("欄位詞框來源不符")
 			}
-			if f.Pane == "callsite" && (l.fieldWrapper.X != native(s[3]) || l.fieldWrapper.Y != native(s[2])) {
-				panic("欄位上下層座標不符")
+			if f.Pane == "callsite" {
+				expected := [2]int{native(s[3]), native(s[2])}
+				if f.UpperNative != nil {
+					expected = *f.UpperNative
+				}
+				if l.fieldWrapper.X != expected[0] || l.fieldWrapper.Y != expected[1] {
+					panic("欄位上下層座標不符")
+				}
 			}
 			width := f.Width
 			if width == 0 {
 				width = f.Length * 8
 			}
 			w := listWord{X: native(s[3]) + start*8, Y: native(s[2]), Width: width, Key: f.Key,
-				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background}
+				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background, Button: f.Pane == "menu"}
+			if f.BackgroundOverride != nil {
+				w.Background = *f.BackgroundOverride
+			}
 			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+8 > 200 {
 				panic("列表欄位越界")
 			}
+			g.invalidateListParagraph(w.X, w.Y, w.Width, 8, "field overwrite")
 			if f.Pane == "suffix" {
 				l.pendingHeader = &w
 				l.headerTransition = true
@@ -862,7 +889,7 @@ func (g *liveGame) composeList(px []byte) {
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil {
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))
@@ -874,5 +901,8 @@ func (g *liveGame) listReceipt(result map[string]any) {
 	result["checkpoints"] = g.checkpoints
 	result["unimplemented"] = g.o.Unimplemented()
 	result["final_words"] = l.snapshot()
+	result["button_ownership"] = true
+	result["paragraphs"] = g.pages
+	result["final_paragraph"] = g.page
 	result["video_write_layout_samples"] = l.videoSample
 }

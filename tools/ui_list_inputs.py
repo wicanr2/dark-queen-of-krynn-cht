@@ -20,7 +20,7 @@ def catalog(path):
     return result
 
 
-def prepare(texts, observed, output):
+def prepare(texts, observed, output, paragraph_trace=None):
     assert not output.exists()
     en = catalog(texts / "en.tsv")
     with (texts / "glossary.tsv").open(encoding="utf-8", newline="") as f:
@@ -179,6 +179,12 @@ def prepare(texts, observed, output):
         k, value = formal(source)
         menu_terms[source] = (value, k)
     fields, field_ids, field_provenance = [], set(), []
+    prompt_terms = {}
+    if paragraph_trace is not None:
+        key, target = formal("Press        to continue.")
+        left, right = target.split("        ")
+        assert left and right
+        prompt_terms = {"Press":(left,key), "to continue.":(right,key)}
     def field_key(source, categories=None, width=None):
         if categories == {"item"}:
             return bind("inventory", source, categories)
@@ -191,6 +197,9 @@ def prepare(texts, observed, output):
         elif source in menu_terms:
             translated, k = menu_terms[source]
             origin = {"formal_menu_key": k, "component": source}
+        elif source in prompt_terms:
+            translated, k = prompt_terms[source]
+            origin = {"formal_component_key":k,"component":source}
         elif categories and any(t["en"].casefold() == source.casefold() and t["category"] in categories for t in terms):
             term = glossary(source, categories)
             translated, origin = term["zh"], {"glossary": term}
@@ -435,6 +444,47 @@ def prepare(texts, observed, output):
             field_ids.add(encoded)
         callsite_sources.append({"folder":"observe-clock-city-r1", "step":c["step"], "wrapper_step":wrapper["step"],
                                  "caller":caller,"source":text,"binding":field})
+    paragraph_bindings, paragraph_provenance = [], []
+    paragraph_receipt = None
+    if paragraph_trace is not None:
+        paragraph_receipt = json.loads(paragraph_trace.read_text())
+        assert paragraph_receipt["observe"] and paragraph_receipt["exe_sha256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
+        assert paragraph_receipt["paragraphs"] and not paragraph_receipt["pending_paragraphs"]
+        identities = set()
+        for p in paragraph_receipt["paragraphs"]:
+            source, stack = p["source"], p["stack"]
+            assert source["nul_terminated"] and bytes.fromhex(source["hex"]).decode("ascii") == source["text"]
+            assert (source["segment"], source["offset"]) == (stack[10], stack[9])
+            assert p["step"] < p["first_glyph"] < p["return_step"]
+            key = "ecl." + sha(source["text"].encode())[:20]
+            assert en.get(key) == source["text"] and key in zh
+            assert p["native_box"] == [8,136,312,184] and p["foreground"] in (3,7) and p["background"] == 0 and p["clear"] in (0,1)
+            aliases[key], translations[key] = en[key], zh[key]
+            binding = {"Key":key,"SHA256":sha(source["text"].encode()),"Caller":p["caller"],"NativeBox":p["native_box"],
+                       "Foreground":p["foreground"],"Background":p["background"],"Clear":p["clear"]}
+            identity = json.dumps(binding,sort_keys=True)
+            if identity not in identities:
+                identities.add(identity); paragraph_bindings.append(binding)
+            paragraph_provenance.append({"step":p["step"],"first_glyph":p["first_glyph"],"return_step":p["return_step"],"binding":binding})
+        for call in paragraph_receipt["calls"]:
+            if call["wrapper_index"]<0:
+                continue
+            wrapper = paragraph_receipt["wrappers"][call["wrapper_index"]]
+            if wrapper["caller"] != {"Seg":0xCEB,"Off":0x4BD}:
+                continue
+            text = call["vararg_1_candidate"]["text"]
+            assert wrapper["format"]["text"] == text == "Press        to continue."
+            assert call["format"]["text"] == "%s" and call["vararg_1_candidate"]["nul_terminated"]
+            assert call["stack"][2:5] == [189,8032,0x70]
+            assert [(wrapper["stack"][n]&255)*8 for n in (2,3)] == [56,192]
+            for start,length in ((0,5),(13,12)):
+                field = {"Pane":"callsite","Group":"footer","Key":field_key(text[start:start+length]),"Start":start,"Length":length,
+                         "RawX":8032,"RawY":189,"Caller":call["caller"],"UpperCaller":wrapper["caller"],"UpperNative":[56,192],
+                         "BackgroundOverride":7,"Color":0x70,"FormatSHA256":sha(b"%s"),"SHA256":sha(text.encode())}
+                identity = json.dumps(field,sort_keys=True)
+                if identity not in field_ids:
+                    fields.append(field); field_ids.add(identity)
+                callsite_sources.append({"folder":str(paragraph_trace),"step":call["step"],"wrapper_step":wrapper["step"],"binding":field})
     output.mkdir()
     for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
@@ -461,6 +511,13 @@ def prepare(texts, observed, output):
         if wrapper["caller"] == {"Seg":0x205E,"Off":0x53C}:
             start = wrapper["step"] // 1000000 * 1000000
             windows.append([start,start+1000000])
+    if paragraph_receipt is not None:
+        # 以這條玩家路徑的完整段落繪製及操作入口取樣，不沿用其他路徑的閒置區間。
+        windows = [[a["at"], min(a["at"]+1000000,a["end"])] for a in paragraph_receipt["request"]["actions"]]
+        windows += [[p["step"]//2000*2000,(p["return_step"]+1999)//2000*2000] for p in paragraph_receipt["paragraphs"]]
+        # 提示在段落返回後才繪製，需另含同列 RETURN 按鈕的後續重畫。
+        windows += [[w["step"]//1000000*1000000, (w["step"]//1000000+1)*1000000]
+                    for w in paragraph_receipt["wrappers"] if w["caller"] == {"Seg":0xCEB,"Off":0x4BD}]
     merged = []
     for start, end in sorted(windows):
         if merged and start <= merged[-1][1]:
@@ -471,8 +528,10 @@ def prepare(texts, observed, output):
               "RowCallers": [{"Seg": seg, "Off": off} for seg, off in sorted(row_callers)],
               "Background": backgrounds.pop(),
               "fine_windows": merged}
+    if paragraph_receipt is not None:
+        config["Paragraphs"] = paragraph_bindings
     (output / "inputs.json").write_text(json.dumps(config, indent=2) + "\n")
-    (output / "provenance.json").write_text(json.dumps({"draft": True, "headers": provenance, "bindings": bindings,
+    result_provenance = {"draft": True, "headers": provenance, "bindings": bindings,
         "fields": field_provenance,
         "callsite_sources": callsite_sources,
         "menus": menu_provenance,
@@ -484,9 +543,13 @@ def prepare(texts, observed, output):
         "formal_en_sha256": sha((texts / "en.tsv").read_bytes()),
         "formal_zh_sha256": sha((texts / "zh-TW.tsv").read_bytes()),
         "glossary_sha256": sha((texts / "glossary.tsv").read_bytes()),
-        "tool_sha256": sha(Path(__file__).read_bytes())}, ensure_ascii=False, indent=2) + "\n")
+        "tool_sha256": sha(Path(__file__).read_bytes())}
+    if paragraph_trace is not None:
+        result_provenance["paragraph_trace_sha256"] = sha(paragraph_trace.read_bytes())
+        result_provenance["paragraph_bindings"] = paragraph_provenance
+    (output / "provenance.json").write_text(json.dumps(result_provenance, ensure_ascii=False, indent=2) + "\n")
     print(f"列表原型輸入：{len(rows)} 種完整列、{len(field_provenance)} 種標題提示與按鈕；未改正式譯表")
 
 
 if __name__ == "__main__":
-    prepare(*map(Path, sys.argv[1:4]))
+    prepare(*map(Path, sys.argv[1:]))

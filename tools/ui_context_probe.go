@@ -59,6 +59,7 @@ type call struct {
 	Candidate2 textSnapshot     `json:"vararg_2_candidate"`
 	Wrapper    int              `json:"wrapper_index"`
 	Menu       int              `json:"menu_index"`
+	Paragraph  int              `json:"paragraph_index"`
 	GlyphCalls []map[string]any `json:"glyph_calls,omitempty"`
 }
 type pendingCall struct {
@@ -140,6 +141,9 @@ func main() {
 	var wrappers []map[string]any
 	var menus []menuSourceSnapshot
 	var menuRefreshSources []map[string]any
+	var paragraphs []map[string]any
+	var paragraphPending []pendingCall
+	paragraphRegistered := map[oracle.Addr]bool{}
 	menuIndices := map[string]int{}
 	var listEvents []map[string]any
 	var scrollEvents []map[string]any
@@ -162,6 +166,38 @@ func main() {
 		panic("格式化入口不符")
 	}
 	if observe {
+		paragraphEntry := oracle.Addr{Seg: 0x0b72, Off: 0x0311}
+		if hex.EncodeToString(o.Bytes(paragraphEntry, 8)) != "558bec83ec025657" {
+			panic("段落入口 bytes 不符")
+		}
+		o.OnCall(paragraphEntry, func(_ *oracle.Oracle) {
+			if len(paragraphs) >= 128 {
+				panic("段落觀測超出界限")
+			}
+			r := o.Regs()
+			s := make([]uint16, 16)
+			for i := range s {
+				s[i] = o.StackWord(i)
+			}
+			target := o.Caller()
+			paragraphs = append(paragraphs, map[string]any{"step": o.Steps(), "regs": r, "stack": s, "caller": target,
+				"source": read(s[10], s[9]), "native_box": [4]int{int(byte(s[2])) * 8, int(byte(s[3])) * 8, (int(byte(s[4])) + 1) * 8, (int(byte(s[5])) + 1) * 8},
+				"foreground": byte(s[6]), "background": byte(s[7]), "clear": byte(s[8])})
+			paragraphPending = append(paragraphPending, pendingCall{len(paragraphs) - 1, target, r.SS, r.SP + 4})
+			if !paragraphRegistered[target] {
+				paragraphRegistered[target] = true
+				o.OnCall(target, func(_ *oracle.Oracle) {
+					if len(paragraphPending) == 0 {
+						return
+					}
+					p, r := paragraphPending[len(paragraphPending)-1], o.Regs()
+					if p.addr == target && p.ss == r.SS && p.sp == r.SP {
+						paragraphs[p.index]["return_step"] = o.Steps()
+						paragraphPending = paragraphPending[:len(paragraphPending)-1]
+					}
+				})
+			}
+		})
 		refresh := false
 		for _, point := range []struct {
 			addr  oracle.Addr
@@ -383,7 +419,11 @@ func main() {
 					}
 				}
 			}
-			calls = append(calls, call{Step: o.Steps(), Caller: target, SS: r.SS, SP: r.SP, Stack: s, Format: read(s[6], s[5]), Candidate1: read(s[8], s[7]), Candidate2: read(s[10], s[9]), Wrapper: wrapper, Menu: menu})
+			paragraph := -1
+			if len(paragraphPending) > 0 {
+				paragraph = paragraphPending[len(paragraphPending)-1].index
+			}
+			calls = append(calls, call{Step: o.Steps(), Caller: target, SS: r.SS, SP: r.SP, Stack: s, Format: read(s[6], s[5]), Candidate1: read(s[8], s[7]), Candidate2: read(s[10], s[9]), Wrapper: wrapper, Menu: menu, Paragraph: paragraph})
 			pending = append(pending, pendingCall{len(calls) - 1, target, r.SS, r.SP + 4})
 			if !registered[target] {
 				registered[target] = true
@@ -401,6 +441,12 @@ func main() {
 			}
 		})
 		o.OnCall(glyph, func(_ *oracle.Oracle) {
+			if len(paragraphPending) > 0 {
+				p := paragraphs[paragraphPending[len(paragraphPending)-1].index]
+				if _, found := p["first_glyph"]; !found {
+					p["first_glyph"] = o.Steps()
+				}
+			}
 			if len(pending) > 0 {
 				c := &calls[pending[len(pending)-1].index]
 				if c.Glyph == 0 {
@@ -452,6 +498,8 @@ func main() {
 			matches = append(matches, i)
 		}
 	}
-	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "menu_refresh_sources": menuRefreshSources, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
+	result := map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "menu_refresh_sources": menuRefreshSources, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."}
+	result["paragraphs"], result["pending_paragraphs"] = paragraphs, len(paragraphPending)
+	writeJSON(filepath.Join(out, "receipt.json"), result)
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
 }

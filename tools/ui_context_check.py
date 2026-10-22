@@ -25,6 +25,24 @@ def check(observed, control, output, role):
     assert a["source_commit"] == "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8"
     assert a["exe_sha256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
     assert a["pending_calls"] == b["pending_calls"] == 0, "觀測呼叫尚未封閉"
+    if "paragraphs" in a:
+        assert a["pending_paragraphs"] == b["pending_paragraphs"] == 0
+        assert not b["paragraphs"]
+        for i, paragraph in enumerate(a["paragraphs"] or []):
+            s, source, regs = paragraph["stack"], paragraph["source"], paragraph["regs"]
+            assert (regs["CS"], regs["IP"]) == (0xB72, 0x311)
+            assert source["nul_terminated"] and bytes.fromhex(source["hex"]).decode("ascii") == source["text"]
+            assert (source["segment"], source["offset"]) == (s[10], s[9])
+            assert source["offset"]+len(source["text"])+1 <= 65536
+            assert source["segment"]*16+source["offset"]+len(source["text"])+1 <= 0xA0000
+            assert paragraph["caller"] == {"Seg":s[1], "Off":s[0]}
+            assert paragraph["native_box"] == [(s[2]&255)*8,(s[3]&255)*8,((s[4]&255)+1)*8,((s[5]&255)+1)*8]
+            assert [paragraph[k] for k in ("foreground","background","clear")] == [s[n]&255 for n in (6,7,8)]
+            calls = [c for c in a["calls"] if c.get("paragraph_index",-1)==i]
+            assert calls and all(paragraph["step"] < c["step"] < c["return_step"] < paragraph["return_step"] for c in calls)
+            assert all(c["format"]["text"] == "%c" and c["caller"] == {"Seg":0xB72,"Off":0x2E3} for c in calls)
+            assert bytes(c["stack"][7]&255 for c in calls).decode("ascii") == source["text"]
+            assert paragraph["first_glyph"] == calls[0]["first_glyph"] > paragraph["step"]
     if "fill_events" in a:
         assert a["pending_fills"] == b["pending_fills"] == 0, "填色要求尚未封閉"
         assert not b["fill_events"]

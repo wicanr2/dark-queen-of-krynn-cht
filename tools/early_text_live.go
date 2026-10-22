@@ -474,7 +474,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
 	if g.list != nil {
-		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage})
+		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage, "paragraph": g.page})
 	}
 	if g.camp {
 		pal := g.o.Palette()

@@ -13,16 +13,18 @@ test "$(stat -c %u:%g "$PROBE")" = "$(id -u):$(id -g)"
 case "${1:-}" in
   prepare)
     INPUT="${2:?需指定全新輸入目錄}"
+    PARAGRAPHS="${3:-}"
     relative "$INPUT"
     test ! -e "$PROBE/$INPUT"
     test -d "$(dirname "$PROBE/$INPUT")"
     test -d "$ROOT/workplace/translation"
     test -d "$PROBE/pane-render-20261022"
     test -f "$FONT/jf-openhuninn-2.1.ttf"
+    if [[ -n "$PARAGRAPHS" ]]; then relative "$PARAGRAPHS"; test -f "$PROBE/$PARAGRAPHS"; fi
     timeout 30s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 512m --cpus 1 --pids-limit 64 \
       -v "$ROOT/tools:/tools:ro" -v "$ROOT/workplace/translation:/text:ro" -v "$PROBE:/probe" -v "$FONT:/font:ro" \
       --entrypoint bash "$PIL_IMAGE" -c \
-      'set -e; python3 /tools/ui_list_inputs.py /text /probe/pane-render-20261022 "/probe/$1"; python3 /tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "/probe/$1/zh-TW.tsv" "/probe/$1/glyphs-16.json" 16' -- "$INPUT"
+      'set -e; if test -n "$2"; then python3 /tools/ui_list_inputs.py /text /probe/pane-render-20261022 "/probe/$1" "/probe/$2"; else python3 /tools/ui_list_inputs.py /text /probe/pane-render-20261022 "/probe/$1"; fi; python3 /tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "/probe/$1/zh-TW.tsv" "/probe/$1/glyphs-16.json" 16' -- "$INPUT" "$PARAGRAPHS"
     ;;
   build)
     test -d "$ROOT/workplace/dosgolem"
@@ -34,7 +36,7 @@ case "${1:-}" in
       --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOPROXY=off -e GOMAXPROCS=2 \
       -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro \
       -v "$PROBE/gocache:/gocache" -v "$PROBE:/out" -w /src --entrypoint bash "$GO_IMAGE" \
-      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go /tools/ui_menu_source.go'
+      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_menu_source.go'
     ;;
   en|zh)
     STATE="${2:?快照}"; REQUEST="${3:?一般按鍵請求}"; INPUT="${4:?輸入目錄}"; RESULT="${5:?全新輸出}"; FINE="${6:-false}"
@@ -78,5 +80,5 @@ case "${1:-}" in
       --entrypoint python3 "$PIL_IMAGE" /tools/ui_list_live_check.py \
       "/probe/$EN" "/probe/$ZH" "/probe/$INPUT" "/probe/$CONTROL" "/probe/$OBS" "/out/$(basename "$RESULT")"
     ;;
-  *) printf '%s\n' '用法：ui-list-live.sh prepare INPUT | build | en|zh STATE REQUEST INPUT RESULT [true|false] | verify EN ZH INPUT CONTROL OBS RESULT' >&2; exit 2 ;;
+  *) printf '%s\n' '用法：ui-list-live.sh prepare INPUT [PARAGRAPH_TRACE] | build | en|zh STATE REQUEST INPUT RESULT [true|false] | verify EN ZH INPUT CONTROL OBS RESULT' >&2; exit 2 ;;
 esac

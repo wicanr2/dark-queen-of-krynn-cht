@@ -30,6 +30,38 @@ def check(en_run, zh_run, inputs, control, observed, output):
     zh = catalog(inputs / "zh-TW.tsv")
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
+    typed_buttons = bool(b.get("button_ownership"))
+    assert bool(a.get("button_ownership")) == typed_buttons
+    if config.get("Paragraphs"):
+        assert typed_buttons
+    native_paragraphs = trace.get("paragraphs") or []
+    paragraph_by_step = {p["step"]:p for p in native_paragraphs}
+    def paragraph_bindings(p):
+        source = p["source"]["text"]
+        return [f for f in config.get("Paragraphs",[]) if f["SHA256"] == sha(source.encode()) and en[f["Key"]] == source
+                and f["Caller"] == p["caller"] and f["NativeBox"] == p["native_box"]
+                and [f[k] for k in ("Foreground","Background","Clear")] == [p[k] for k in ("foreground","background","clear")]]
+    paragraph_entries = [e for e in b["list_events"] if e["Kind"] == "paragraph-before-glyph"]
+    paragraph_fallbacks = [e for e in b["list_events"] if e["Kind"] == "unknown-paragraph-original"]
+    if config.get("Paragraphs"):
+        assert {e["Step"] for e in paragraph_entries+paragraph_fallbacks} == set(paragraph_by_step)
+        assert len(paragraph_entries)+len(paragraph_fallbacks) == len(native_paragraphs)
+    else:
+        assert not paragraph_entries and not paragraph_fallbacks
+    for e in paragraph_entries:
+        p = paragraph_by_step[e["Step"]]
+        assert len(paragraph_bindings(p)) == 1
+        assert p["source"]["nul_terminated"] and bytes.fromhex(p["source"]["hex"]).decode("ascii") == p["source"]["text"]
+        assert (p["source"]["segment"],p["source"]["offset"]) == (p["stack"][10],p["stack"][9])
+        assert e["Step"] < e["first_glyph"] == p["first_glyph"] < p["return_step"]
+        assert e["detail"]["caller"] == p["caller"]
+        assert e["detail"]["source_pointer"] == {"Seg":p["source"]["segment"],"Off":p["source"]["offset"]}
+    paragraph_returns = [e for e in b["list_events"] if e["Kind"] == "paragraph-return"]
+    assert len(paragraph_returns) == len(paragraph_entries)
+    for entry, returned in zip(paragraph_entries,paragraph_returns):
+        p = paragraph_by_step[entry["Step"]]
+        assert returned["Step"] == p["return_step"]
+        assert returned["detail"] == {"caller":p["caller"],"ss":p["regs"]["SS"],"sp":(p["regs"]["SP"]+4)&65535}
     def field_start(field, text):
         if not field.get("SourcePattern"):
             return field["Start"] if sha(text.encode()) == field["SHA256"] else None
@@ -184,11 +216,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
     calls_by_step = {c["step"]: c for c in trace["calls"]}
     field_by_id = {}
     verified_field_widths = set()
+    verified_field_backgrounds = set()
     for e in fields:
         c = calls_by_step[e["Step"]]
         source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
         matches = [f for f in config["Fields"] if f["Key"] == e["detail"]["key"] and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
                    and f["Caller"] == c["caller"] and field_start(f, source["text"]) is not None
+                   and ("Color" not in f or f["Color"] == (c["stack"][4]&255))
                    and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                    and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite", "menu"))
                    and (f["Pane"] != "menu" or f["MenuSignature"] == menu_signature(c))
@@ -206,8 +240,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if f["Pane"] == "callsite":
             wrapper = trace["wrappers"][c["wrapper_index"]]
             assert wrapper["step"] < c["step"] and wrapper["format"]["text"] == source["text"]
-            assert (wrapper["stack"][2]&255)*8 == native(c["stack"][3])
-            assert (wrapper["stack"][3]&255)*8 == native(c["stack"][2])
+            expected_upper = f.get("UpperNative",[native(c["stack"][3]),native(c["stack"][2])])
+            assert [(wrapper["stack"][n]&255)*8 for n in (2,3)] == expected_upper
+        background = f.get("BackgroundOverride",config["Background"])
+        if "BackgroundOverride" in f:
+            assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x4BD} and f["UpperNative"] == [56,192]
+            assert c["stack"][2:5] == [189,8032,0x70] and f["Color"] == 0x70 and background == 7
+            assert source["text"] == "Press        to continue." and (start,f["Length"]) in ((0,5),(13,12))
+            checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
+            original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
+            foreground=tuple(checkpoint["palette"][0]);bg=tuple(checkpoint["palette"][7])
+            left=64+start*8
+            assert set(original.crop((left,189,left+f["Length"]*8,197)).getdata())=={foreground,bg}
+            verified_field_backgrounds.add((f["Key"],background))
         width = f.get("Width", f["Length"]*8)
         if "Width" in f:
             # 唯一已量測擴框是 AC／HP 的欄間及面板留白，不准任意擴框。
@@ -218,14 +263,16 @@ def check(en_run, zh_run, inputs, control, observed, output):
             original = Image.open(observed / (checkpoint["label"] + ".png")).convert("RGB")
             foreground = tuple(checkpoint["palette"][c["stack"][4] & 15])
             assert original.size == (320, 200)
-            background = tuple(checkpoint["palette"][config["Background"]])
-            assert set(original.crop((264, 16, 312, 24)).getdata()) == {foreground, background}
+            background_rgb = tuple(checkpoint["palette"][config["Background"]])
+            assert set(original.crop((264, 16, 312, 24)).getdata()) == {foreground, background_rgb}
             ink = {x for x in range(264, 312) if any(original.getpixel((x, y)) == foreground for y in range(16, 24))}
             assert ink and ink <= set(range(264, 280)) | set(range(288, 304))
             assert ink & set(range(264, 280)) and ink & set(range(288, 304))
         word = {"X": native(c["stack"][3])+start*8, "Y": native(c["stack"][2]), "Width": width,
                 "Key": f["Key"], "Group": f["Group"], "Foreground": c["stack"][4] & 15,
-                "Background": config["Background"]}
+                "Background": background}
+        if typed_buttons and f["Pane"] == "menu":
+            word["Button"] = True
         assert e["detail"]["word"] == word
         verified_field_widths.add((f["Key"], width))
         identity = e["Step"], f["Key"]
@@ -245,6 +292,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         in_list = any(start <= c["step"] < end for start, end in intervals)
         expected_keys = {f["Key"] for f in config["Fields"] if f["Pane"] != "suffix" and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
                and f["Caller"] == c["caller"] and field_start(f, source["text"]) is not None
+               and ("Color" not in f or f["Color"] == (c["stack"][4]&255))
                and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                and ((f["Pane"] == "callsite" and c["wrapper_index"] >= 0
                      and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])
@@ -271,6 +319,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
 
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
     words, pending_suffix, model, row_positions = {}, None, [], set()
+    page, page_history = None, []
     clear_baselines = []
     wrappers_by_step = {w["step"]: w for w in trace["wrappers"]}
     def intersects(w, rect):
@@ -283,7 +332,49 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 row_positions.discard(pos)
     for e in b["list_events"]:
         kind = e["Kind"]
-        if kind in ("pane-invalidate", "clear-write-baseline"):
+        if kind == "paragraph-before-glyph":
+            p = paragraph_by_step[e["Step"]]
+            binding = paragraph_bindings(p)[0]
+            components = [binding["Key"]]
+            box = [v*2 for v in p["native_box"]]
+            bg = p["background"] or 8
+            if not p["clear"]:
+                assert page is not None and page["Box"] == box and page["Foreground"] == p["foreground"] and page["Background"] == bg
+                components = page["Components"]+components
+            text = "".join(zh[key] for key in components)
+            # 本輪三個實際短句與接續稿都只需一行；不以同一份斷行程式自證長段正確。
+            assert len(text)*glyphs["size"] <= box[2]-box[0]
+            expected_page = {"step":p["step"],"Key":binding["Key"],"Source":p["source"]["text"],"Text":text,"Box":box,
+                             "Foreground":p["foreground"],"Background":bg,"Lines":[text],"Clear":p["clear"],"Components":components}
+            assert e["detail"]["page"] == expected_page
+            page = expected_page
+            page_history.append(page)
+            x,y,right,bottom = p["native_box"]
+            erase((x,y,right-x,bottom-y))
+        elif kind == "unknown-paragraph-original":
+            p = paragraph_by_step[e["Step"]]
+            assert e["detail"]["caller"] == p["caller"]
+            bindings_here = paragraph_bindings(p)
+            if bindings_here:
+                assert not p["clear"] and page is None
+                assert e["detail"]["reason"] == "missing compatible predecessor"
+            else:
+                assert e["detail"]["reason"] == "source or context mismatch"
+            page = None
+        elif kind == "paragraph-invalidated":
+            assert page is not None
+            rect = e["detail"]["native_rect"]
+            x,y,width,height = rect
+            left,top,right,bottom = [v//2 for v in page["Box"]]
+            assert x<right and x+width>left and y<bottom and y+height>top
+            assert not any(p["step"]<=e["Step"]<=p["return_step"] for p in native_paragraphs)
+            if e["detail"]["reason"] == "native fill":
+                assert any(f["step"]<=e["Step"]<=f["return_instruction_step"] and f["native_rect"]==rect for f in trace["fill_events"])
+            else:
+                assert e["detail"]["reason"] == "field overwrite"
+                assert any(step==e["Step"] and [event["detail"]["word"][k] for k in ("X","Y","Width")]+[8]==rect for (step,key),event in field_by_id.items())
+            page = None
+        elif kind in ("pane-invalidate", "clear-write-baseline"):
             targets = sorted((w for w in words.values() if w["Group"] != "footer"), key=lambda w:(w["Y"],w["X"]))
             if kind == "clear-write-baseline":
                 assert targets and e["detail"]["targets"] == targets
@@ -304,11 +395,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 signature = native_refresh["menu_snapshot"]["Signature"] if native_refresh["valid"] else ""
                 expected = {(f["RawX"]+f["Start"]*8, f["RawY"], f.get("Width", f["Length"]*8), f["Key"])
                             for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == signature}
-                before = {(w["X"], w["Y"], w["Width"], w["Key"]) for w in words.values() if w["Group"] == "footer"}
+                before = {(w["X"], w["Y"], w["Width"], w["Key"]) for w in words.values() if w["Group"] == "footer" and (not typed_buttons or w.get("Button"))}
                 preserved = bool(expected) and signature in config["Menus"] and before == expected
                 assert e["detail"] == {"menu_signature": signature, "preserved": preserved}
             if not preserved:
-                words = {pos: w for pos, w in words.items() if w["Group"] != "footer"}
+                words = {pos: w for pos, w in words.items() if w["Group"] != "footer" or (typed_buttons and not w.get("Button"))}
         elif kind == "native-fill":
             assert any(f["step"] <= e["Step"] <= f["return_instruction_step"]
                        and f["native_rect"] == e["detail"] for f in trace["fill_events"])
@@ -364,7 +455,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         row_positions.intersection_update(words)
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
-        model.append((e["Step"], expected_words, sorted(row_positions)))
+        model.append((e["Step"], expected_words, sorted(row_positions), page))
+    for actual in (a,b):
+        assert (actual.get("paragraphs") or []) == page_history
+        assert actual.get("final_paragraph") == (model[-1][3] if model else None)
     # 法術書的退出會返回魔法選單。終點若仍有已辨識選單，應保留該選單的完整中文。
     final_button = next(c for c in reversed(trace["calls"]) if c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE})
     final_signature = menu_signature(final_button)
@@ -381,8 +475,27 @@ def check(en_run, zh_run, inputs, control, observed, output):
             if signature not in config["Menus"]:
                 continue
             expected_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == signature}
-            actual_keys = {w["Key"] for w in layouts[checkpoint["step"]]["words"] or [] if w["Group"] == "footer" and w["Key"] in menu_field_keys}
+            actual_keys = {w["Key"] for w in layouts[checkpoint["step"]]["words"] or [] if w["Group"] == "footer" and (w.get("Button") if typed_buttons else w["Key"] in menu_field_keys)}
             assert actual_keys == expected_keys, ("checkpoint footer incomplete", checkpoint["label"], expected_keys-actual_keys, actual_keys-expected_keys)
+        # 原版仍保留的提示必須留在穩定畫面，不能因模型也把它清掉而通過。
+        for checkpoint in actual["checkpoints"]:
+            for f in config["Fields"]:
+                if "UpperNative" not in f:
+                    continue
+                candidates=[event for (step,key),event in field_by_id.items() if step<checkpoint["step"] and key==f["Key"]]
+                if not candidates:
+                    continue
+                event=candidates[-1]; word=event["detail"]["word"]
+                x,y,width,height=word["X"],word["Y"],word["Width"],8
+                start=calls_by_step[event["Step"]]["return_step"]
+                changed=any(start<fill["step"]<checkpoint["step"] and intersects(word,fill["native_rect"]) for fill in trace["fill_events"])
+                for call in trace["calls"]:
+                    if not start<call["step"]<checkpoint["step"]:
+                        continue
+                    text=call["vararg_1_candidate"]["text"] if call["format"]["text"]=="%s" else call["format"]["text"]
+                    changed=changed or intersects(word,(native(call["stack"][3]),native(call["stack"][2]),max(1,len(text))*8,8))
+                if not changed:
+                    assert word in (layouts[checkpoint["step"]]["words"] or []), ("missing retained prompt",checkpoint["label"],f["Key"])
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
     assert len(cleared) == len(clear_baselines) > 0
     for event, (start, targets) in zip(cleared, clear_baselines):
@@ -406,18 +519,36 @@ def check(en_run, zh_run, inputs, control, observed, output):
         verified_pngs.add((str(folder), name))
         return data
 
-    def compose(source, words, palette):
+    def compose(source, words, palette, page):
         px = bytearray(source)
         rectangles = []
+        if page is not None:
+            x,y,right,bottom = page["Box"]
+            assert [x,y,right,bottom] == [16,272,624,368]
+            width,height = right-x,bottom-y
+            rectangles.append((x,y,width,height))
+            fg,bg = palette[page["Foreground"]],palette[page["Background"]]
+            row = bytes([*bg,255])*width
+            for yy in range(y,bottom):
+                at=(yy*640+x)*4;px[at:at+width*4]=row
+            assert len(page["Lines"])*glyphs["height"] <= height
+            for line,text in enumerate(page["Lines"]):
+                assert len(text)*glyphs["size"] <= width
+                for col,ch in enumerate(text):
+                    for off,value in enumerate(alpha[ch]):
+                        if value:
+                            yy,xx=divmod(off,glyphs["size"])
+                            at=((y+line*glyphs["height"]+yy)*640+x+col*glyphs["size"]+xx)*4
+                            for channel in range(3):px[at+channel]=(fg[channel]*value+px[at+channel]*(255-value)+127)//255
         for w in words or []:
             x, y = w["X"] * 2, w["Y"] * 2
             width = w["Width"] * 2
             assert (w["Width"] == len(en[w["Key"]])*8 or (w["Key"], w["Width"]) in verified_field_widths)
-            assert w["Background"] == config["Background"]
+            assert w["Background"] == config["Background"] or (w["Key"],w["Background"]) in verified_field_backgrounds
             assert 0 <= x < x + width <= 640 and 0 <= y < y + 16 <= 400
             assert len(zh[w["Key"]]) * 16 <= width
-            assert all(x + width <= xx or xx + ww <= x or y + 16 <= yy or yy + 16 <= y for xx, yy, ww in rectangles)
-            rectangles.append((x, y, width))
+            assert all(x + width <= xx or xx + ww <= x or y + 16 <= yy or yy + hh <= y for xx, yy, ww, hh in rectangles)
+            rectangles.append((x, y, width, 16))
             fg, bg = palette[w["Foreground"]], palette[w["Background"]]
             row = bytes([*bg, 255]) * width
             for yy in range(y, y + 16):
@@ -439,10 +570,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         while model_index + 1 < len(model) and model[model_index + 1][0] <= frame["step"]:
             model_index += 1
         assert (state["words"] or []) == (model[model_index][1] if model_index >= 0 else []), frame["step"]
+        expected_page = model[model_index][3] if model_index >= 0 else None
+        assert state.get("paragraph") == expected_page, ("paragraph frame lifetime",frame["step"])
         original = originals[frame["step"]]
         if any(start <= frame["step"] < end for start, end in clock_intervals):
             assert frame["held"], ("clock transaction exposed", frame["step"])
         native_state = native_layouts[frame["step"]]
+        assert native_state.get("paragraph") == state.get("paragraph")
         for field in ("display_start", "render_page", "palette"):
             assert state[field] == native_state[field]
         if frame["held"]:
@@ -456,9 +590,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for start, end, (x, y, width, height) in actor_headers:
                 if start <= frame["step"] < end:
                     assert all(w["X"]+w["Width"] <= x or x+width <= w["X"] or w["Y"]+8 <= y or y+height <= w["Y"] for w in state["words"] or [])
-            key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]))
+            key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]),json.dumps(state.get("paragraph"),sort_keys=True))
             if key not in cache:
-                cache[key] = compose(pixels(en_run, original), state["words"], state["palette"])
+                cache[key] = compose(pixels(en_run, original), state["words"], state["palette"],state.get("paragraph"))
             expected_hash = cache[key]
             if state["words"]:
                 translated_frames += 1
@@ -483,6 +617,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "preserved_actor_headers": len(actor_headers),
               "field_events": len(fields), "field_keys": sorted({e["detail"]["key"] for e in fields}),
               "clock_transactions": len(clock_intervals),
+              "typed_button_ownership":typed_buttons,
+              "paragraph_events":len(paragraph_entries),"paragraph_original_fallbacks":len(paragraph_fallbacks),
+              "paragraph_joins":sum(not p["Clear"] for p in page_history),
+              "paragraph_invalidations":sum(e["Kind"]=="paragraph-invalidated" for e in b["list_events"]),
               "compatible_footer_refreshes": sum(e["Kind"] == "footer-render-entry" and bool((e.get("detail") or {}).get("preserved")) for e in b["list_events"]),
               "fine_window_count": len(config["fine_windows"]),
               "callsite_field_events": sum(1 for e in fields if any(f["Pane"] == "callsite" and f["Key"] == e["detail"]["key"] for f in config["Fields"])),
