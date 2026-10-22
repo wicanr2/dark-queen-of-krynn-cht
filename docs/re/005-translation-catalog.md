@@ -70,7 +70,7 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `catalog.json`、`events.tsv`、`receipt.json` | 原始檔偏移、區塊、來源雜湊、觀測等級與工具／輸出雜湊 |
 | `zh-TW.tsv` | 已通過批次檢查的目前譯文，`key`、`text`；尚未正式接入遊戲 |
 | `trial.zh-TW.tsv`、`trial-review.md` | 使用者確認譯風的 145 筆首批與雙語稿 |
-| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 970 筆術語、手冊對照、英文新譯來源及歧義 |
+| `glossary.tsv`、`terminology-provenance.json` | 前作優先的 971 筆術語、手冊對照、英文新譯來源及歧義 |
 | `name-candidates.tsv`、`batch-names.tsv` | 單獨名稱對照與當批輸入，已合併批次及狀態由 `completed/` 與譯表回查 |
 | `prior-candidates.tsv`、`prior-provenance.json` | 前作原文完全一致或僅大小寫不同的 886 筆待核對候選 |
 | `prior-reviewed.tsv` | 從其餘前作候選逐筆審閱後保留的 375 筆；17 筆語境不明者未合併 |
@@ -121,6 +121,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-city-luminari-clauses.tsv` | 城內、神廟、門鎖及魯明那里燈塔片段 168 筆，含 165 個新鍵及 3 處舊譯修正 |
 | `city-luminari-clauses-review-input.json`、`story-city-luminari-clauses-before.tsv` | 本批全部來源定位、原版與譯表雜湊、允許修正鍵及合併前 6,723 筆快照；保留十八個未合併候選及理由 |
 | `city-luminari-clauses-term-reviews-before.tsv`、`story-city-luminari-clauses-comparison.json` | 舊 265 則校讀快照、新舊差分、十八個候選未合併、既有校讀 bytes 保留及前作術語對照 |
+| `story-palace-kristophan-clauses.tsv` | 王宮、克理斯多芬與陵墓片段 213 筆，含 205 個新鍵及 8 個舊鍵修正 |
+| `palace-kristophan-clauses-review-input.json`、`story-palace-kristophan-clauses-before.tsv` | 全部來源、猴形動物及店家等語境、推論等級、三十二個未合併候選及合併前 6,888 筆快照 |
+| `palace-kristophan-clauses-glossary-before.tsv`、`palace-kristophan-clauses-glossary-additions-before.tsv`、`palace-kristophan-clauses-term-reviews-before.tsv` | 舊 970 筆術語、原本 additions 及 267 則校讀的快照，不改歷史輸入 |
+| `story-palace-kristophan-clauses-comparison.json` | 新舊譯文、八個修正鍵、URCHIN 六鍵一致性、舊術語保留、前作共通術語及未合併候選檢查 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
@@ -140,10 +144,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 6,888 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+目前已檢查並合併 7,093 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
 森林、菲斯特隆實驗室、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 6,888 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 7,093 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -169,7 +173,7 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 6,888 筆，0 格式錯誤、0 未處理術語警示，267 則逐句校讀覆蓋 273 次匹配。
+完整譯表回驗為 7,093 筆，0 格式錯誤、0 未處理術語警示，271 則逐句校讀覆蓋 277 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -440,7 +444,7 @@ Pash 與 Ildamar 未找到已核對中譯；本輪查前作文字與本作 OCR �
 不因出現在寶藏附近就定成鋼幣。THE 冠詞、短識別值及夾雜指令樣式的破碎切片也未猜譯。
 
 先純校讀至零錯誤、零未處理術語警示，且目前譯表雜湊未變，再依已確認譯風合併。
-目前共 6,888 筆，SHA-256：
+該批合併後共 6,888 筆，SHA-256：
 `164e28fbe20f322a7ddb0e690f7f983ff1fd1a7e648e1cb0bce59af48ad57248`。
 全表格式、實際字型及術語檢查通過，267 則校讀覆蓋 273 次匹配；前作 266 筆共通人物、
 怪物與物品術語對照零差異。差分收據為 `story-city-luminari-clauses-comparison.json`。
@@ -450,6 +454,55 @@ Pash 與 Ildamar 未找到已核對中譯；本輪查前作文字與本作 OCR �
 既有營地十項目前文字依賴與畫格／存檔收據回驗通過，歷史畫格沒有修改。
 本批未接入新畫面，正式組句、分頁、其他選單、手札、戰鬥與中文讀檔仍未完成。
 劇情與營地最終字級未定案，沒有開始 HD。
+
+## 2026-10-22：王宮、克理斯多芬與陵墓片段及 URCHIN 語境修正
+
+`story-palace-kristophan-clauses.tsv` 共 213 筆，新增 205 個鍵，另修正 8 個舊鍵。
+主要來源為 ECL 區塊 20 至 27，涵蓋王宮守衛、制服、通行、門鎖、銅鑼、商販、競技場、
+艾夏拉、圖書館、占卜、鑰匙、幽靈及擬態怪。共用片段的其他來源也完整保留，
+不將它們當成已驗證的執行分支或正常玩家輸出。
+
+### URCHIN 的描述譯名
+
+舊四句把 URCHIN 譯成「小乞兒」，與同場文字不合。`ecl.553a46062973ce716c38`，
+ECL 檔案偏移 `192761`，描述商販身上爬滿猴子般的小動物；選項 URCHIN 在 `192822`。
+其他來源寫牠爬上肩頭、搶走蘋果、擠進鐵欄。六個鍵共同支持「猴形小獸」這個描述譯名，
+推論等級為強推論。沒有宣稱已驗證動態圖像、物種、NPC 或 MONCHA 記錄對應，
+也不冒充手冊既有中譯。前作文字查詢未找到同詞對照。
+
+本次加入 `other` 類別，術語由 970 增至 971 筆；舊 970 筆的每個欄位保持不變。
+兩個新鍵與四個舊鍵都用「猴形小獸」，差分收據逐一核對；目前段落候選原文沒有 URCHIN，
+獨立段落校讀稿也沒有殘留「小乞兒」。歷史快照保留，未全域替換其他語境或重寫舊批次。
+
+### 其他文字與語境
+
+牛頭人、幽靈及擬態怪沿用現有術語。衣著講究的 bull 依同場牛頭人店主與牛頭人婦女文字，
+作雄性牛頭人描述，保留強推論，不推定新的遭遇種類。
+金色、生鏽與心形鑰匙對照同場敘述；法術仍用前作「踢開術」。
+競技場的今日休館與暴動關閉兩種告示分開翻譯，沒有合併分支。
+
+另外四個舊鍵修正動態銜接：DOES 與後段提問配合；艾夏拉摟住角色後接續動作，移除重複
+代詞；UP／DOWN 改採「上／下」，可接樓梯命令及兩處火焰平台方向。所有原始判定不變。
+八個舊鍵之外的 6,880 筆譯文逐筆相同，合併前 6,888 筆另存快照。
+
+新增四則固定原文與譯文雜湊的語境校讀：銅鑼吊鍊不是鎖甲；飲料的 belt 是喝一口，
+不是腰帶；鋼製門的 steel 是材質；咒罵龍的話採一般「龍」，正式龍種譯名不變。
+舊 267 則校讀 bytes 完整保留並另存快照，沒有放寬檢查器。
+
+三十二個候選保留未合併，完整 entries 及理由見本批輸入。GLADE 是否指特定地點短名、
+HER 的賓格／所有格語境、開發者除錯訊息及破碎切片未猜補。原文表、catalog 與 ECL
+雜湊保持不變。相鄰語序校讀不代替完整訊息、清除或分頁的動態驗證。
+
+本批先純校讀至零錯誤、零未處理術語警示，再依已確認譯風合併。
+目前共 7,093 筆，SHA-256：
+`be9ca7389f75705dc18b554359c8a5a6e848284d2b9d4c254d927727795e567c`。
+全表格式、實際字型及術語檢查通過，271 則校讀覆蓋 277 次匹配；前作 266 筆人物、怪物與
+物品術語對照零差異。差分收據為 `story-palace-kristophan-clauses-comparison.json`。
+剩餘 1,314 個一般候選仍含雜訊、保留字形及切片，不作漏譯分母。
+
+營地十項目前文字依賴與畫格／存檔收據回驗通過，歷史畫格未改。
+新譯尚未接入新畫面，正式組句、分頁、其他選單、手札、戰鬥與中文讀檔仍未完成。
+劇情與營地最終字級待定，未開始 HD。
 
 ## 相鄰劇情字串候選
 
@@ -511,6 +564,7 @@ bash tools/translation.sh check story-sea-lighthouse-clauses
 bash tools/translation.sh check story-fastillion-lighthouse-clauses
 bash tools/translation.sh check story-hulder-forest-clauses
 bash tools/translation.sh check story-city-luminari-clauses
+bash tools/translation.sh check story-palace-kristophan-clauses
 bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
@@ -560,5 +614,5 @@ bash tools/translation.sh test-runtime-labels
 
 新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
 新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
-新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 6,888 筆全表另已回驗通過。
+新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 7,093 筆全表另已回驗通過。
 新模式沒有放寬名稱、數字或格式檢查。
