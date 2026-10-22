@@ -118,7 +118,8 @@ def prepare(texts, observed, output):
                     span(start + scroll.start(3), scroll[3], {"ui"})
                 else:
                     span(start, name, {"item", "ui"} if name == "Shield" else {"item"})
-            rows.append({"Pane": pane, "SHA256": sha(text.encode()), "Spans": spans})
+            rows.append({"Pane": pane, "SHA256": sha(text.encode()), "Spans": spans,
+                         "Foregrounds": [7, 11]})
     # 這些是 source key 的辨識值。runtime 只讀 TSV，不內嵌顯示字串。
     for key, value in (("answer.yes", "Yes"), ("answer.no", "No")):
         assert value in en.values()
@@ -223,9 +224,10 @@ def prepare(texts, observed, output):
         ("Items", "Spells", "Trade", "Drop", "Exit"): "status",
         ("Rdy", "Use", "Trade", "Drop", "Halve", "Join", "Exit"): "inventory",
         ("Cast", "Memorize", "Scribe", "Display", "Rest", "Exit"): "magic",
-        ("Memorize", "Exit"): "grimoire"}
+        ("Memorize", "Exit"): "grimoire", ("Exit",): "effects"}
     menus, menu_provenance = {}, []
-    for pane, folder in (("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1")):
+    for pane, folder in (("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1"),
+                         ("effects", "observe-effects-r1")):
         receipt = json.loads((observed / folder / "receipt.json").read_text())
         known_menus = {}
         for index, menu in enumerate(receipt["menus"]):
@@ -239,11 +241,11 @@ def prepare(texts, observed, output):
                       and f["native_rect"][0] <= 8 and f["native_rect"][1] <= 8
                       and f["native_rect"][0] + f["native_rect"][2] >= 312
                       and f["native_rect"][1] + f["native_rect"][3] >= 184]
-        h = next(h for h in headers if h["Pane"] == pane)
+        h = next((h for h in headers if h["Pane"] == pane), None)
         title_indices = {i for i, w in enumerate(receipt["wrappers"])
-                         if (w["format"]["segment"], w["format"]["offset"], sha(w["format"]["text"].encode()))
+                         if h and (w["format"]["segment"], w["format"]["offset"], sha(w["format"]["text"].encode()))
                          == (h["Segment"], h["Offset"], h["SHA256"]) and w["stack"][3] & 255 == 1}
-        assert title_indices
+        assert title_indices or pane == "effects"
         intervals = [(receipt["wrappers"][i]["step"], next(f for f in full_fills if f > receipt["wrappers"][i]["step"])) for i in title_indices]
         suffix_indices = {i - 1 for i in title_indices}
         for i in suffix_indices:
@@ -295,6 +297,23 @@ def prepare(texts, observed, output):
                 if identity not in field_ids:
                     fields.append(field)
                     field_ids.add(identity)
+    effects = json.loads((observed / "observe-effects-r1/receipt.json").read_text())
+    first = effects["list_events"][0]
+    assert menus[first["menu_snapshot"]["Signature"]] == "effects"
+    contexts = [{"Pane": "effects", "RowFillPage": True, "DescriptorSHA256": sha(bytes.fromhex(first["descriptor_before_hex"])),
+                 "MenuSignature": first["menu_snapshot"]["Signature"],
+                 "Caller": {"Seg": first["stack"][1], "Off": first["stack"][0]}}]
+    effect_sources = {en[key].strip(): key for key in ("ui.07259b8cfb9f6862dd7d", "ui.1325da320d8d79b3c1ca", "ui.fbcb3b194ad0afcbb789")}
+    # 姓名同樣經過列表函式，但原版標成紅色；只取已觀測的一般／反白效果列。
+    actual = {w["vararg_1_candidate"]["text"] for w in effects["wrappers"]
+              if w["format"]["text"] == "%s" and w["vararg_1_candidate"]["nul_terminated"]
+              and w["vararg_1_candidate"]["text"].strip() in effect_sources and w["stack"][4] & 255 in (7, 11)}
+    assert len(actual) == len(effect_sources)
+    for text in sorted(actual):
+        assert text.startswith(" ") and not text.endswith(" ")
+        key = field_key(text[1:])
+        rows.append({"Pane": "effects", "SHA256": sha(text.encode()), "Foregrounds": [7, 11],
+                     "Spans": [{"Start": 1, "Length": len(text)-1, "Key": key}]})
     # 狀態及計數在列表標題之前印出。只接已觀測的上層專屬呼叫者，
     # 再由同一個尚未返回的 wrapper 核對完整來源、座標及下層印字。
     status_callers = {0x46, 0x6E, 0xA8, 0xD3, 0x10D, 0x147, 0x2F0, 0x309,
@@ -348,15 +367,28 @@ def prepare(texts, observed, output):
     output.mkdir()
     for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
-    config = {"Headers": headers, "Rows": rows, "Fields": fields, "Menus": menus, "Background": backgrounds.pop(),
+    row_hashes = {row["SHA256"] for row in rows}
+    row_callers = set()
+    for folder in ("observe-menus-items-r1", "observe-menus-grimoire-r1", "observe-effects-r1"):
+        original = json.loads((observed / folder / "receipt.json").read_text())
+        row_callers.update((w["caller"]["Seg"], w["caller"]["Off"]) for w in original["wrappers"]
+                           if w["format"]["text"] == "%s" and w["vararg_1_candidate"]["nul_terminated"]
+                           and sha(w["vararg_1_candidate"]["text"].encode()) in row_hashes
+                           and w["stack"][4] & 255 in (7, 11))
+    assert row_callers and all(seg == 0xC15 for seg, _ in row_callers)
+    config = {"Headers": headers, "Rows": rows, "Fields": fields, "Menus": menus, "PaneLists": contexts,
+              "RowCallers": [{"Seg": seg, "Off": off} for seg, off in sorted(row_callers)],
+              "Background": backgrounds.pop(),
               "fine_windows": [[666000000, 667000000], [672000000, 673000000], [681000000, 682000000],
-                               [699000000, 700000000], [705000000, 706000000],
+                               [690000000, 691000000], [699000000, 700000000], [705000000, 706000000],
+                               [717000000, 718000000], [720000000, 721000000], [727000000, 728000000],
                                [738000000, 739000000], [741000000, 742000000], [744000000, 745000000]]}
     (output / "inputs.json").write_text(json.dumps(config, indent=2) + "\n")
     (output / "provenance.json").write_text(json.dumps({"draft": True, "headers": provenance, "bindings": bindings,
         "fields": field_provenance,
         "callsite_sources": callsite_sources,
         "menus": menu_provenance,
+        "effects_receipt_sha256": sha((observed / "observe-effects-r1/receipt.json").read_bytes()),
         "reviewed_fields_sha256": sha((texts / "ui-list-chrome-reviewed.tsv").read_bytes()),
         "observed_rows": len(rows),
         "formal_en_sha256": sha((texts / "en.tsv").read_bytes()),

@@ -276,6 +276,9 @@ func main() {
 				panic("列表回呼超出研究範圍")
 			}
 			listEvents = append(listEvents, map[string]any{"step": o.Steps(), "stack": s, "regs": r, "descriptor_pointer": ptr, "descriptor_before_hex": hex.EncodeToString(data), "callback": cb, "callback_bytes_hex": hex.EncodeToString(o.Bytes(cb, 64))})
+			if menu, ok := readMenuSource(o); ok {
+				listEvents[len(listEvents)-1]["menu_snapshot"] = menu
+			}
 			listStack = append(listStack, listPending{len(listEvents) - 1, r.SS, r.SP, ptr})
 		})
 		o.OnCall(listReturn, func(_ *oracle.Oracle) {

@@ -1134,6 +1134,114 @@ Docker 重播及比較仍走 `bash tools/ui-context.sh run …`、`check …`。
 Display 實際顯示全隊目前的魔法效果，包含無效果、恐懼免疫及穿戴魔法斗篷三種文字。
 這是已證實的正常玩家入口，尚未接入中文；下一步依此語境校正 Display 短譯並接效果頁。
 
+## 2026-10-22：魔法效果頁與列表反白修正
+
+### 譯文與正常入口
+
+Magic／Display 顯示全隊現有效果，沿原版的十次 Down、Exit 返回魔法選單，再 Exit 回營地。
+已觀測三種訊息，沿用既有「無法術效果、免疫恐懼、穿著魔法斗篷」，玩家姓名保留原版。
+Display 原沿前作「顯示法術」，本次只將正式選單鍵 `ui.f64329361c6f8f6f7884` 校正為「顯示效果」。
+前作原譯及 UI 術語來源保留，沒有全域改寫其他 Display 字串或修改前作。
+
+私有四筆校讀批次 `ui-magic-effects-observed.tsv` 合併後，正式譯表仍為 7,728 筆，
+與 `pre-effects-zh-TW.tsv` 比較只有上述一鍵改變。全表格式、字型及術語回驗通過，
+298 次句內校讀匹配仍適用；原文、catalog 及 971 筆術語不變。
+譯表新 SHA-256 為 `449a289db1e2213d8ad6582fb1fe6f89d971ec9a2e67d5293b165f000ea5ba43`。
+
+### 效果頁語境與姓名保護
+
+效果頁沒有標題，不能把共用列表回呼或單獨 Exit 按鈕當成效果分類器。
+原版 `0C15:0055` 的呼叫端 `0C15:0ADE`、24-byte 描述資料及當時完整按鈕表共同提供語境。
+本輪描述資料 SHA-256 為 `a368407ed205f744ab9e7aa968059c0a2f82fb4671f3c9ba510d07dbbc4733a1`，
+按鈕表指紋為 `26528c2fbf961821f685b4c9a5941ec653ffb4238854686697e1b9eb23375cd3`。
+以上均為本作正常路徑的執行期 `segment:offset` 或原始 bytes 雜湊，不是 IDA 線性位址。
+
+`ui_context_probe.go` 在列表入口新增唯讀整表快照，供來源及語境獨立核對。
+三種效果列只接受原版一般／反白色別 7、11，紅色姓名標頭 12 保持原版。
+原文前置空白不覆蓋，中文從下一個字格開始；逐幀檢查六個姓名矩形不與中文詞框相交。
+效果來源以 TSV 的穩定鍵取得，不把中文寫回原始列表或效果判定。
+
+### 舊反白結論的勘誤
+
+舊原型只在整批列表交易內處理列文字，漏接 `0C15:0C3A／0C78` 的單列重畫。
+舊法術書收據在 698M 步仍把 Bless 標為反白色 11、Cure Light Wounds 標為一般色 7，
+但原版印字已將兩者改為 7、11。舊比較器也只列舉整批交易內的印字，
+因此像素合成檢查通過，只能證明符合那份不完整的詞框模型，不能證明反白正確。
+先前「反白通過」的敘述限縮於此，本節保留舊證據並記錄修正。
+
+現在整批、捲動補列及單列重畫都在首字元前更新詞框及顏色。
+呼叫端由已知來源的全部原版印字收集，包含 `0C15:01CE` 的捲動補列，
+以及 `0C15:042C／0460／0C3A／0C78`。比較器先辨識已知來源，再要求呼叫端已登錄，
+不跳過尚未登錄的已知列。初版手列四個呼叫端漏掉補列，已改正，未列為成功驗收。
+此修正僅改呈現層，不變更選取、法術效果或物品狀態。
+
+### 效果列表的繪製頁
+
+效果頁的整頁清除先寫頁 0，但其列表在頁 `0x4000` 繪製。
+不能把前一次整頁清除的目標頁當成所有列表的繪製頁。
+本輪沿既有 Mode X 視訊觀測橋接，從列表第一個實際填色寫入辨識目標頁：
+原點 `(8,32)`、pitch 80、第一個頁內寫入偏移 18946，
+`18946 - 32×80 - 8÷4 = 16384`，即 `0x4000`。
+比較器核對原版填色區間、原點、偏移公式及每幀實際可見頁，沒有取消頁面檢查。
+整頁清除的既有流程不變，沒有修改 VGA 或硬體驅動程式。
+
+### 有效重播與檢查
+
+下列路徑都由正常旅店快照開始，使用一般按鍵。各組原文與繁中逐幀讀回，
+再與無觀測控制組核對原版狀態。全部維持 16px DRAFT，不是正式字級決定。
+
+| 路徑 | 成對畫格 | 原版狀態 | 單列重畫 | 內容清除 | 有效比較 |
+|---|---|---|---|---|---|
+| 全隊效果、十次 Down、返回魔法及營地 | 4,618 | 16 | 11 | 1 | `effects-check-r4.json` |
+| 法術書反白、捲動、返回魔法及營地 | 6,156 | 22 | 16 | 1 | `effects-grimoire-check-r2.json` |
+| 首名角色背包、兩次 Down、返回角色頁及營地 | 3,070 | 6 | 4 | 3 | `effects-items-check-r2.json` |
+
+合計 13,844 組畫格、44 個原版狀態及 68 次列文字接入，其中 31 次為單列重畫，另有 122 次欄位事件。
+2,092 個過渡幀保留完整上一畫面，全部非保留幀符合原版背景與允許詞框的合成結果。
+六個姓名標頭保持原版像素。三條終點均無中文殘字，未寫遊戲存檔，沒有未實作服務。
+效果流程的 Down 只觸發反白及空列選取，沒有原生捲動；八次捲動仍由法術書路徑覆蓋。
+
+九種本輪變造及七種既有列表變造全部被拒絕，沒有成功收據。
+包含遺失單列、舊顏色、紅色姓名被翻譯、錯誤描述資料、錯誤繪製頁、首字元後才接入、
+露出英文、漏登捲動補列呼叫端，以及法術書反白遺失。清除檢查改從原版填色與獨立詞框
+模型計算當次舊詞框，不再假定所有背包流程都有六次清除；仍核對實際覆蓋與可見頁。
+
+私有產物都位於 `workplace/probe/pane-render-20261022/`：
+
+| 產物 | 用途 |
+|---|---|
+| `effects-evidence.json`、`effects_evidence.py` | 本輪唯一收據索引、來源、工具、產物及重建執行檔雜湊 |
+| `effects-roundtrip-request.json`、`items-highlight-request.json` | 新增的一般按鍵請求；法術書沿用 `magic-grimoire-roundtrip-request.json` |
+| `observe-effects-r1/`、`control-effects-r1/` | 效果原版觀測及無觀測控制組 |
+| `observe-items-highlight-r1/`、`control-items-highlight-r1/` | 首名角色背包原版觀測及控制組 |
+| `observe-magic-roundtrip-r1/`、`control-magic-roundtrip-r1/` | 前輪法術書原版來源，執行檔沿原收據固定 |
+| `effects-inputs-r2/`、`ui_list_inputs-effects-r2.py` | 效果及背包實測輸入與當時生成器，含四個呼叫端；這兩條實測未呼叫捲動補列 |
+| `effects-inputs-r3/` | 法術書實測輸入，含五個呼叫端；現行生成器產出此範圍 |
+| `effects-en-r2/`、`effects-zh-r2/` | 效果實際 GPU 畫格及收據 |
+| `effects-grimoire-en-r3/`、`effects-grimoire-zh-r3/` | 含捲動補列的法術書實際 GPU 畫格及收據 |
+| `effects-items-en-r1/`、`effects-items-zh-r1/` | 背包反白實際 GPU 畫格及收據 |
+| `effects-guard-check-r1.json`、`effects_guards.py` | 九種本輪變造 |
+| `effects-list-guard-check-r1.json`、`effects_list_guard.py` | 七種既有列表變造回驗 |
+| `ui-list-live-effects`、`ui-context-probe-effects` | 實測執行檔；從現行來源重建後雜湊相同 |
+
+兩版輸入只差 `RowCallers` 中是否有捲動補列；TSV、字模及其他組態相同。
+檢查按各路徑的實際輸入雜湊核對，未用新版組態替換舊收據。
+尚未辨識列表繪製頁的早期擷取、漏掉補列的法術書擷取，以及舊比較器輸出都排除。
+正式譯表修正與全表回驗見 `workplace/translation/ui-magic-effects-observed-check.json`、
+`current-validation-check.json`；批次、校讀及改前快照也由本輪索引列出。
+
+重建沿用 `bash tools/ui-context.sh build` 及 `bash tools/ui-list-live.sh build`。
+新輸入例如由 `bash tools/ui-list-live.sh prepare pane-render-20261022/effects-inputs-new` 產生，
+名稱須使用工具允許的英文字母、數字與連字號。原版觀測來源需已存在，缺檔即停止。
+執行與檢查的參數見 [ui-list-live.sh](../../tools/ui-list-live.sh)，各路徑的快照、請求與輸入
+對應由 `effects-evidence.json` 固定，不重新命名既有畫格冒充新跑。
+
+工具鏈沿用 Go 1.24.13、Ebiten 2.9.9、既有固定 ID 的 Go 與 Pillow 11.3.0 image。
+擷取使用 2GiB、2 CPU、128 PID、600 秒外層逾時及 1GiB Go 軟上限，全部非 root、離線、
+完成後刪除容器。沒有修改 SDK、前作或 dosgolem 上游。
+本輪沒有新增冷啟動、X11、裝備操作、施法、中文存讀檔、戰鬥、手札或正式入口驗收。
+下一步接續既有營地底列與此原型的正常往返，再補尚未接入的介面。
+
 ## 相鄰劇情字串候選
 
 [passage_candidates.py](../../tools/passage_candidates.py) 先核對 ECL 與 catalog 的來源雜湊，

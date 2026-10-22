@@ -31,8 +31,15 @@ type listConfig struct {
 	Rows        []listRow
 	Fields      []listField
 	Menus       map[string]string
+	PaneLists   []listPaneSource
+	RowCallers  []oracle.Addr
 	Background  byte
 	FineWindows [][2]uint64 `json:"fine_windows"`
+}
+type listPaneSource struct {
+	RowFillPage                           bool
+	Pane, DescriptorSHA256, MenuSignature string
+	Caller                                oracle.Addr
 }
 type listField struct {
 	Pane, Group, Key, SHA256, FormatSHA256 string
@@ -54,6 +61,7 @@ type listSpan struct {
 type listRow struct {
 	Pane, SHA256 string
 	Spans        []listSpan
+	Foregrounds  []byte
 }
 type listWord struct {
 	X, Y, Width            int
@@ -95,6 +103,8 @@ type listState struct {
 	headerReturn           *paintReturn
 	footerTransition       bool
 	fieldWrapper           *listFieldWrapper
+	trackListPage          bool
+	rowPagePending         bool
 }
 
 func (l *listState) snapshot() []listWord {
@@ -162,7 +172,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	seenRows := map[string]bool{}
 	for _, row := range l.config.Rows {
 		id := row.Pane + ":" + row.SHA256
-		if seenRows[id] || len(row.SHA256) != 64 || len(row.Spans) == 0 || (row.Pane != "inventory" && row.Pane != "grimoire") {
+		if seenRows[id] || len(row.SHA256) != 64 || len(row.Spans) == 0 || len(row.Foregrounds) == 0 || (row.Pane != "inventory" && row.Pane != "grimoire" && row.Pane != "effects") {
 			panic("列表列綁定重複或無效")
 		}
 		seenRows[id] = true
@@ -224,7 +234,26 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 		*stack = (*stack)[:len(*stack)-1]
 	}
-	o.OnCall(oracle.Addr{Seg: 0xc15, Off: 0x55}, func(_ *oracle.Oracle) { entry(&l.paints, oracle.Addr{}); g.listLog("list-entry", nil) })
+	o.OnCall(oracle.Addr{Seg: 0xc15, Off: 0x55}, func(_ *oracle.Oracle) {
+		ptr := oracle.Addr{Seg: o.StackWord(6), Off: o.StackWord(5)}
+		if uint32(ptr.Off)+24 > 0x10000 || uint32(ptr.Seg)*16+uint32(ptr.Off)+24 > 0xa0000 {
+			panic("列表來源指標越界")
+		}
+		descriptor := digest(o.Bytes(ptr, 24))
+		for _, source := range l.config.PaneLists {
+			if source.Caller != o.Caller() || source.DescriptorSHA256 != descriptor {
+				continue
+			}
+			menu, ok := readMenuSource(o)
+			if ok && menu.Signature == source.MenuSignature {
+				l.pane = source.Pane
+				l.trackListPage = source.RowFillPage
+				g.listLog("list-context", map[string]any{"descriptor_sha256": descriptor, "menu_signature": menu.Signature, "caller": o.Caller()})
+			}
+		}
+		entry(&l.paints, oracle.Addr{})
+		g.listLog("list-entry", nil)
+	})
 	o.OnCall(oracle.Addr{Seg: 0xc15, Off: 0x508}, func(_ *oracle.Oracle) { ret(&l.paints); g.listLog("list-return", nil) })
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x78}, func(_ *oracle.Oracle) { entry(&l.fills, oracle.Addr{}) })
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x6db}, func(_ *oracle.Oracle) { ret(&l.fills) })
@@ -262,8 +291,17 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			l.headerTransition = false
 			l.headerReturn = nil
 			l.pane = ""
+			l.trackListPage, l.rowPagePending = false, false
 			g.listLog("pane-invalidate", [4]int{x, y, w, h})
 		} else {
+			if l.trackListPage && len(l.paints) > 0 && w > 0 && h > 0 {
+				if l.clearPending || l.awaitPageFlip {
+					panic("列表繪製頁尚未脫離整頁清除")
+				}
+				l.renderOrigin = [2]int{x, y}
+				l.rowPagePending, l.trackListPage = true, false
+				g.listLog("list-page-baseline", [4]int{x, y, w, h})
+			}
 			l.erase(x, y, w, h)
 			g.listLog("native-fill", [4]int{x, y, w, h})
 		}
@@ -271,6 +309,17 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	// 使用 Machine 已有的視訊寫入 observer，包括 planar 路徑及同值寫入。
 	// 此固定 mode 13h 路徑須覆蓋每個舊字框的全部原生像素後才解除保留。
 	o.OnVideoWriteEvent(func(hit oracle.VideoWriteEvent) {
+		if l.rowPagePending {
+			if !hit.Unchained || hit.Mode != 0x13 || hit.Pitch != 80 || hit.LineCompare < 400 || hit.MapMask != 15 || l.renderOrigin[0]%4 != 0 {
+				panic("未驗證的列表填色頁寫入")
+			}
+			l.renderPage = (hit.Offset - uint32(l.renderOrigin[1]*hit.Pitch+l.renderOrigin[0]/4)) & 0xffff
+			if l.renderPage != 0 && l.renderPage != 0x4000 {
+				panic("未驗證的列表顯存頁")
+			}
+			l.renderPageKnown, l.rowPagePending = true, false
+			g.listLog("list-render-page", map[string]any{"target_page": l.renderPage, "visible_page": hit.DisplayStart, "first_write_offset": hit.Offset, "origin": l.renderOrigin})
+		}
 		if !l.clearPending && !l.awaitPageFlip {
 			return
 		}
@@ -442,7 +491,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			}
 			g.listLog("title-field", map[string]any{"source_sha256": digest([]byte(format)), "pointer": [2]uint16{s[7], s[6]}})
 		}
-		if len(l.paints) == 0 || l.pane == "" || format != l.sources["format.string"] {
+		rowCaller := false
+		for _, caller := range l.config.RowCallers {
+			rowCaller = rowCaller || caller == o.Caller()
+		}
+		if !rowCaller || l.pane == "" || format != l.sources["format.string"] {
 			return
 		}
 		text, ok := listString(o, s[9], s[8])
@@ -455,6 +508,13 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			if binding.Pane != l.pane || binding.SHA256 != sha {
 				continue
 			}
+			allowed := false
+			for _, foreground := range binding.Foregrounds {
+				allowed = allowed || foreground == byte(s[4])
+			}
+			if !allowed {
+				continue
+			}
 			for _, span := range binding.Spans {
 				if span.Start+span.Length > len(text) || text[span.Start:span.Start+span.Length] != l.sources[span.Key] {
 					panic("列表詞框來源不符")
@@ -465,7 +525,8 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				}
 				l.words[[2]int{w.X, w.Y}] = w
 			}
-			l.awaitGlyph = g.listLog("row-before-glyph", map[string]any{"source_sha256": sha, "spans": binding.Spans})
+			l.awaitGlyph = g.listLog("row-before-glyph", map[string]any{"source_sha256": sha, "spans": binding.Spans,
+				"caller": o.Caller(), "foreground": byte(s[4]), "within_list": len(l.paints) > 0})
 			return
 		}
 		g.listLog("unknown-row-original", map[string]any{"source_sha256": sha})
@@ -697,7 +758,7 @@ func (g *liveGame) composeList(px []byte) {
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || l.menuDepth != 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil {
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || l.menuDepth != 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))

@@ -31,7 +31,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     config = read(inputs / "inputs.json")
     # 從原版整表 bytes 獨立重建按鈕順序、文字指標、座標及指紋。
     native = lambda value: value if value < 400 else (value - 8000) * 2
-    for menu in trace["menus"]:
+    for menu in [*trace["menus"], *(e["menu_snapshot"] for e in trace["list_events"] if "menu_snapshot" in e)]:
         raw = bytes.fromhex(menu["RawHex"])
         assert len(raw) == menu["Count"] * 32
         indices = [i for i in range(menu["Count"]) if struct.unpack_from("<HH", raw, i*32) == (0x8E, 0xCEB)]
@@ -84,19 +84,68 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert a["list_events"] == b["list_events"]
     accepted = [e for e in b["list_events"] if e["Kind"] == "row-before-glyph"]
     bindings = {(row["Pane"], row["SHA256"]): row for row in config["Rows"]}
-    wrappers, pane = {}, None
-    for i, wrapper in enumerate(trace["wrappers"]):
+    wrappers, pane = {}, ""
+    timeline = []
+    for fill in trace["fill_events"]:
+        x, y, w, h = fill["native_rect"]
+        if not fill["within_list"] and x <= 8 and y <= 8 and x+w >= 312 and y+h >= 184:
+            timeline.append((fill["step"], ""))
+    for wrapper in trace["wrappers"]:
         if wrapper["stack"][3] & 255 == 1:
-            pane = None
-            for h in config["Headers"]:
-                f = wrapper["format"]
-                if (f["segment"], f["offset"], sha(f["text"].encode())) == (h["Segment"], h["Offset"], h["SHA256"]):
-                    pane = h["Pane"]
+            found = [h["Pane"] for h in config["Headers"] if wrapper["format"]["segment"] == h["Segment"]
+                     and wrapper["format"]["offset"] == h["Offset"] and sha(wrapper["format"]["text"].encode()) == h["SHA256"]]
+            timeline.append((wrapper["step"], found[0] if found else ""))
+    contexts = []
+    for original in trace["list_events"]:
+        for source in config["PaneLists"]:
+            if source["DescriptorSHA256"] == sha(bytes.fromhex(original["descriptor_before_hex"])) \
+                    and source["Caller"] == {"Seg": original["stack"][1], "Off": original["stack"][0]} \
+                    and source["MenuSignature"] == original.get("menu_snapshot", {}).get("Signature"):
+                contexts.append((original["step"], source))
+                timeline.append((original["step"], source["Pane"]))
+    hits = [e for e in b["list_events"] if e["Kind"] == "list-context"]
+    assert len(hits) == len(contexts)
+    for event, (step, source) in zip(hits, contexts):
+        assert event["Step"] == step and event["Pane"] == source["Pane"]
+        assert event["detail"] == {"descriptor_sha256": source["DescriptorSHA256"], "menu_signature": source["MenuSignature"], "caller": source["Caller"]}
+    baselines = [e for e in b["list_events"] if e["Kind"] == "list-page-baseline"]
+    pages = [e for e in b["list_events"] if e["Kind"] == "list-render-page"]
+    assert len(baselines) == len(pages) == sum(s["RowFillPage"] for _, s in contexts)
+    for baseline, page in zip(baselines, pages):
+        fill = next(f for f in trace["fill_events"] if f["step"] <= baseline["Step"] <= f["return_instruction_step"]
+                    and f["native_rect"] == baseline["detail"] and f["within_list"])
+        assert baseline["Step"] < page["Step"] <= fill["return_instruction_step"]
+        x, y, width, height = fill["native_rect"]
+        assert width > 0 and height > 0 and x % 4 == 0
+        assert page["detail"]["origin"] == [x, y]
+        assert page["detail"]["target_page"] == (page["detail"]["first_write_offset"] - y*80-x//4) & 65535
+        assert page["detail"]["target_page"] in (0, 16384)
+    timeline.sort()
+    actor_headers = []
+    for step, source in contexts:
+        if source["Pane"] != "effects":
+            continue
+        listing = next(e for e in trace["list_events"] if e["step"] == step)
+        end = next(f["step"] for f in trace["fill_events"] if f["step"] > listing["return_instruction_step"]
+                   and f["native_rect"] == [8, 8, 304, 176])
+        for wrapper in trace["wrappers"]:
+            if listing["step"] <= wrapper["step"] <= listing["return_instruction_step"] and wrapper["stack"][4] & 255 == 12:
+                text = wrapper["vararg_1_candidate"]["text"]
+                actor_headers.append((step, end, ((wrapper["stack"][2]&255)*8, (wrapper["stack"][3]&255)*8, len(text)*8, 8)))
+    cursor = 0
+    for i, wrapper in enumerate(trace["wrappers"]):
+        while cursor < len(timeline) and timeline[cursor][0] <= wrapper["step"]:
+            pane = timeline[cursor][1]
+            cursor += 1
+        if wrapper["format"]["text"] != "%s":
+            continue
         source = wrapper["vararg_1_candidate"]["text"]
         row = bindings.get((pane, sha(source.encode())))
         within_list = any(p["step"] <= wrapper["step"] <= p["return_instruction_step"] for p in trace["list_events"])
         if wrapper["format"]["text"] == "%s" and within_list and "\t" in source:
             assert row is not None, (pane, source)
+        if row and wrapper["stack"][4] & 255 in row["Foregrounds"]:
+            assert wrapper["caller"] in config["RowCallers"], ("unregistered known-row caller", wrapper["caller"], source)
             wrappers[i] = row
     expected = [c for c in trace["calls"] if c["wrapper_index"] in wrappers]
     assert len(accepted) == len(expected) > 0
@@ -107,6 +156,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         binding = wrappers[original["wrapper_index"]]
         assert event["Pane"] == binding["Pane"]
         assert event["detail"]["spans"] == binding["Spans"]
+        assert event["detail"]["caller"] == wrapper["caller"]
+        assert event["detail"]["foreground"] == wrapper["stack"][4] & 255
+        assert event["detail"]["within_list"] == any(p["step"] <= wrapper["step"] <= p["return_instruction_step"] for p in trace["list_events"])
         for span in binding["Spans"]:
             wanted = {"X": ((wrapper["stack"][2] & 255) + span["Start"]) * 8,
                       "Y": (wrapper["stack"][3] & 255) * 8, "Width": span["Length"] * 8,
@@ -169,6 +221,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
 
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
     words, pending_suffix, model, row_positions = {}, None, [], set()
+    clear_baselines = []
     wrappers_by_step = {w["step"]: w for w in trace["wrappers"]}
     def intersects(w, rect):
         x, y, width, height = rect
@@ -181,6 +234,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
     for e in b["list_events"]:
         kind = e["Kind"]
         if kind in ("pane-invalidate", "clear-write-baseline"):
+            targets = sorted((w for w in words.values() if w["Group"] != "footer"), key=lambda w:(w["Y"],w["X"]))
+            if kind == "clear-write-baseline":
+                assert targets and e["detail"]["targets"] == targets
+                assert any(f["step"] <= e["Step"] <= f["return_instruction_step"] and not f["within_list"]
+                           and f["native_rect"][0] <= 8 and f["native_rect"][1] <= 8
+                           and f["native_rect"][0]+f["native_rect"][2] >= 312 and f["native_rect"][1]+f["native_rect"][3] >= 184 for f in trace["fill_events"])
+                clear_baselines.append((e["Step"], targets))
+            else:
+                assert not targets, ("missing clear baseline", e["Step"])
             words = {pos: w for pos, w in words.items() if w["Group"] == "footer"}
             pending_suffix = None
         elif kind == "footer-render-entry":
@@ -250,8 +312,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert all(w["Group"] == "footer" for w in actual["final_words"] or [])
         assert {w["Key"] for w in actual["final_words"] or []} == final_keys
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
-    assert len(cleared) == len([e for e in b["list_events"] if e["Kind"] == "clear-write-baseline"])
-    assert len(cleared) >= (6 if accepted[0]["Pane"] == "inventory" else 1)
+    assert len(cleared) == len(clear_baselines) > 0
+    for event, (start, targets) in zip(cleared, clear_baselines):
+        assert start < event["Step"] and event["detail"]["targets"] == targets
     assert all(e["detail"]["pixels"] == sum(w["Width"] * 8 for w in e["detail"]["targets"]) for e in cleared)
     assert all(e["detail"]["target_page"] == e["detail"]["visible_page"] for e in cleared)
     originals = {}
@@ -315,6 +378,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
             # 此契約來自上層列表列；下層靜態標題／提示不共用列表的填色頁生命週期。
             if model_index >= 0 and model[model_index][2]:
                 assert state["display_start"] == state["render_page"]
+            for start, end, (x, y, width, height) in actor_headers:
+                if start <= frame["step"] < end:
+                    assert all(w["X"]+w["Width"] <= x or x+width <= w["X"] or w["Y"]+8 <= y or y+height <= w["Y"] for w in state["words"] or [])
             key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]))
             if key not in cache:
                 cache[key] = compose(pixels(en_run, original), state["words"], state["palette"])
@@ -336,6 +402,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "translated_frames": translated_frames, "original_checkpoints_equal": len(b["checkpoints"]),
               "observed_unique_rows": len({e["detail"]["source_sha256"] for e in accepted}),
               "row_events": len(accepted), "clear_transactions": len(cleared),
+              "single_row_events": sum(not e["detail"]["within_list"] for e in accepted),
+              "list_context_events": len(contexts),
+              "list_page_rebases": len(pages),
+              "preserved_actor_headers": len(actor_headers),
               "field_events": len(fields), "field_keys": sorted({e["detail"]["key"] for e in fields}),
               "callsite_field_events": sum(1 for e in fields if any(f["Pane"] == "callsite" and f["Key"] == e["detail"]["key"] for f in config["Fields"])),
               "menu_field_events": sum(bool(e["detail"]["menu_signature"]) for e in fields),
