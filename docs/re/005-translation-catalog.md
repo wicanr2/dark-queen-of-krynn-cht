@@ -125,6 +125,11 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `palace-kristophan-clauses-review-input.json`、`story-palace-kristophan-clauses-before.tsv` | 全部來源、猴形動物及店家等語境、推論等級、三十二個未合併候選及合併前 6,888 筆快照 |
 | `palace-kristophan-clauses-glossary-before.tsv`、`palace-kristophan-clauses-glossary-additions-before.tsv`、`palace-kristophan-clauses-term-reviews-before.tsv` | 舊 970 筆術語、原本 additions 及 267 則校讀的快照，不改歷史輸入 |
 | `story-palace-kristophan-clauses-comparison.json` | 新舊譯文、八個修正鍵、URCHIN 六鍵一致性、舊術語保留、前作共通術語及未合併候選檢查 |
+| `story-hawkbluff-blackwater-clauses.tsv` | 鷹峽、通行證與黑水坡片段 229 筆新譯 |
+| `story-hawkbluff-blackwater-clauses-review-input.json`、`story-hawkbluff-blackwater-clauses-before.tsv` | 原始來源、同場語境、推論等級、44 個保留候選及合併前 7,093 筆快照 |
+| `story-hawkbluff-blackwater-clauses-pure-check.json`、`story-hawkbluff-blackwater-clauses-term-reviews-before.tsv` | 純校讀通過收據及舊 271 則語境校讀快照 |
+| `story-hawkbluff-blackwater-clauses-comparison.json` | 新增鍵、全數舊譯未變、原始輸入與術語雜湊、前作 266 筆共通術語檢查 |
+| `issue7-hawkbluff-clauses-before.txt`、`issue7-hawkbluff-clauses-body.txt`、`issue7-hawkbluff-clauses-comment.txt` | 遠端 #7 本批更新前內文、更新稿與進度留言 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
@@ -144,10 +149,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 7,093 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+目前已檢查並合併 7,322 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
 森林、菲斯特隆實驗室、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 7,093 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 7,322 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -166,14 +171,14 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 本作手冊異譯不覆蓋前作已定名。
 帕克蘭等未找到中英對照的新名稱，仍標記英文新譯、待全書校讀。
 
-查凱斯的成年試煉同場明言 Bakali，因此該場景五個鍵的 Dragonman／Dragonmen 譯為「蜥蜴人」。
+查凱斯的成年試煉同場明言 Bakali。ECL 區塊 34 的九個已譯鍵將 Dragonman／Dragonmen 譯為「蜥蜴人」。
 不把它們全域換成 Draconian「龍人」，其他場景仍依原文與語境區分。
 珠寶商線索保留須輸入的 PASS、RELEASE 並附中文解釋，不改原版答案判定。
 地名另作人工抽查，修正本輪安塞隆、岩漿海的暫譯偏差；一般場所描述不套用前作房間專名。
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 7,093 筆，0 格式錯誤、0 未處理術語警示，271 則逐句校讀覆蓋 277 次匹配。
+完整譯表回驗為 7,322 筆，0 格式錯誤、0 未處理術語警示，279 則逐句校讀覆蓋 285 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -504,6 +509,42 @@ HER 的賓格／所有格語境、開發者除錯訊息及破碎切片未猜補�
 新譯尚未接入新畫面，正式組句、分頁、其他選單、手札、戰鬥與中文讀檔仍未完成。
 劇情與營地最終字級待定，未開始 HD。
 
+## 2026-10-22：鷹峽、通行證與黑水坡片段補譯
+
+`story-hawkbluff-blackwater-clauses.tsv` 新增 229 個鍵，主要來自 ECL 區塊 28 至 35，
+包含陵墓收尾、鷹峽守衛、暗門、監牢、喜斯神殿、珠寶商、蜥蜴人議會與巨龍衝突。
+每鍵保留全部來源及原始定位；同鍵出現多次不增加翻譯筆數。
+合併前 7,093 筆快照逐筆比較一致，沒有修改任何舊譯。
+
+巫妖與既有怪物、武器及人物仍沿用《幽靈騎士》術語，查凱斯、波橘克、特里摩爾、
+波追那斯及阿默羅卡依現有核對來源。查凱斯同場新增一個 DRAGONMAN 片段作「蜥蜴人」，
+同場成年試煉明言 Bakali，屬靜態語境的強推論；不全域更動 Draconian「龍人」。
+包含 NAAMIL 部族的新長句仍保留待查，不補造手冊譯名。
+
+通行證八種帶空白的詞根，以及六個獨立名稱保留英文提示，例如鑰匙孔、燈籠及羽毛筆。
+PASS、RELEASE 附中文意思與英文，保留原版輸入所需線索。沒有改動答案比較或原版資料，
+也未宣稱已動態驗證珠寶商的所有輸入分支。另一個跨場景的 SWORD 鍵仍待查，
+不把通行證或特定武器名稱全域套用。
+
+新增八則固定原文與譯文雜湊的語境校讀：龍穴、個體或群龍的敘事，以及龍鱗道具。
+後者不是裝備鱗甲。旅店老闆直接對齊既有術語，沒有建立豁免。
+舊 271 則校讀的原始位元組完整保留；術語表 971 筆及檢查器未變。
+
+四十四個候選保留未合併，每項來源與理由在本批輸入。交易數量、價格與受詞須重排，
+不能只把 FOR 等片段定成一個中文詞；短識別字、開發者除錯訊息及破碎切片也未猜補。
+手札第 2 則的動態主詞片段另做語序校讀，但完整執行組句與分頁仍待驗。
+
+本批先純校讀，確認原譯表雜湊未變，且零錯誤、零未處理術語警示後才合併。
+合併後共 7,322 筆，SHA-256：
+`0d2fb6cbd7c2355059fa4029d9c2c09b94a61e8adb2fefe1f060b1e2e23196d8`。
+全表格式、實際字型及術語檢查通過，279 則校讀覆蓋 285 次匹配；前作 266 筆人物、怪物與
+物品術語對照零差異。原始 ECL、catalog 及原文表未變，差分收據見本節同名 comparison。
+重分批後剩 1,085 個一般候選，仍含雜訊、保留字形及切片，不作漏譯分母。
+
+營地十項現行文字依賴與既有畫格、狀態及存檔收據回驗通過，歷史畫格未改。
+新譯尚未接入新畫面，正式組句、分頁、其他選單、手札、戰鬥與中文讀檔仍未完成。
+劇情與營地最終字級待定，沒有開始 HD。
+
 ## 相鄰劇情字串候選
 
 [passage_candidates.py](../../tools/passage_candidates.py) 先核對 ECL 與 catalog 的來源雜湊，
@@ -565,6 +606,7 @@ bash tools/translation.sh check story-fastillion-lighthouse-clauses
 bash tools/translation.sh check story-hulder-forest-clauses
 bash tools/translation.sh check story-city-luminari-clauses
 bash tools/translation.sh check story-palace-kristophan-clauses
+bash tools/translation.sh check story-hawkbluff-blackwater-clauses
 bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
@@ -614,5 +656,5 @@ bash tools/translation.sh test-runtime-labels
 
 新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
 新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
-新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 7,093 筆全表另已回驗通過。
+新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 7,322 筆全表另已回驗通過。
 新模式沒有放寬名稱、數字或格式檢查。
