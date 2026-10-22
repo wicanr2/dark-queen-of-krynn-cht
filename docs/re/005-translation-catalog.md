@@ -129,6 +129,11 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-hawkbluff-blackwater-clauses-review-input.json`、`story-hawkbluff-blackwater-clauses-before.tsv` | 原始來源、同場語境、推論等級、44 個保留候選及合併前 7,093 筆快照 |
 | `story-hawkbluff-blackwater-clauses-pure-check.json`、`story-hawkbluff-blackwater-clauses-term-reviews-before.tsv` | 純校讀通過收據及舊 271 則語境校讀快照 |
 | `story-hawkbluff-blackwater-clauses-comparison.json` | 新增鍵、全數舊譯未變、原始輸入與術語雜湊、前作 266 筆共通術語檢查 |
+| `story-baior-rebuilding-clauses.tsv` | 拜依歐爾、造船廠與焰息片段 314 筆，含 312 個新鍵及 2 個舊鍵修正 |
+| `story-baior-rebuilding-clauses-review-input.json`、`story-baior-rebuilding-clauses-before.tsv` | 全部來源、相鄰語境、推論等級、四個未合併候選及合併前 7,322 筆快照 |
+| `story-baior-rebuilding-clauses-pure-check.json`、`story-baior-rebuilding-clauses-term-reviews-before.tsv` | 純校讀通過收據及舊 279 則語境校讀快照 |
+| `story-baior-rebuilding-clauses-comparison.json` | 新舊差分、兩個允許修改鍵、輸入與術語雜湊及前作 266 筆共通術語檢查 |
+| `issue7-baior-clauses-before.txt`、`issue7-baior-clauses-body.txt`、`issue7-baior-clauses-comment.txt` | 遠端 #7 本批更新前內文、更新稿與進度留言 |
 | `issue7-hawkbluff-clauses-before.txt`、`issue7-hawkbluff-clauses-body.txt`、`issue7-hawkbluff-clauses-comment.txt` | 遠端 #7 本批更新前內文、更新稿與進度留言 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
@@ -149,10 +154,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 7,322 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+目前已檢查並合併 7,634 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
 森林、菲斯特隆實驗室、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 7,322 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 7,634 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -178,7 +183,7 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 7,322 筆，0 格式錯誤、0 未處理術語警示，279 則逐句校讀覆蓋 285 次匹配。
+完整譯表回驗為 7,634 筆，0 格式錯誤、0 未處理術語警示，289 則逐句校讀覆蓋 295 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -545,6 +550,39 @@ PASS、RELEASE 附中文意思與英文，保留原版輸入所需線索。沒�
 新譯尚未接入新畫面，正式組句、分頁、其他選單、手札、戰鬥與中文讀檔仍未完成。
 劇情與營地最終字級待定，沒有開始 HD。
 
+## 2026-10-22：拜依歐爾、造船廠與焰息片段補譯
+
+`story-baior-rebuilding-clauses.tsv` 共 314 筆，新增 312 個鍵，修正 2 個舊鍵。
+來源為 ECL 區塊 36、37，包含鯊魚人巡邏、村民、造船廠、安希拉、圖書館、反抗、
+重建與焰息的對話。保留原始頭尾空白、來源定位及全部相鄰鍵，中文按敘事語序校讀。
+四個短識別值或混入疑似指令的破碎切片未猜補，完整條目及理由見本批輸入。
+
+珍妮佛沿用《幽靈騎士》已校讀字形，不據此認定為同一角色。安希拉、拜依歐爾及
+阿迪那那出沿用現有手冊對照；歐雷格、漢姆漢德、艾瑞克．史壯邦德與焰息仍為英文新譯，
+待全書校讀。鯊魚人的裝束與扮裝情節不被當成新物種證據；武器與怪物術語表未改。
+
+兩個舊鍵依唯一來源的前後文修正：長老代表團由安希拉帶領，補回領隊關係；
+HOW 後的 DO YOU RESPOND 改為「回應？」，與前段共同構成「你們會如何回應？」。
+不再誤作是否題。其他舊 7,320 筆逐筆未變，合併前 7,322 筆另存快照。
+原文 THE IS STUCK 缺少名詞，依同場鎖住的暗門、強行開門、撬鎖及踢開術選項，
+中文補作「門卡住了」，明列強推論。沒有改原始英文或原版程式。
+
+新增十則固定原文與譯文雜湊的語境校讀：九處個體或群體的龍不套角色類名「龍族」；
+旅店主人稱讚來客的 fine folk 採「貴客」，不套物品品質「精良」。
+拆行的姓氏、護手與安希拉姓名已連讀核對，沒有新增名稱豁免。
+舊 279 則校讀的原始位元組完整保留，術語表仍為 971 筆，檢查器未改。
+
+先純校讀至零錯誤、零未處理術語警示，確認現行譯表雜湊不變後才合併。
+目前共 7,634 筆，SHA-256：
+`aaa78153b7e3665103051ff6e89a0d45562fedfbdb7c6dfcfb1924c5a23b7941`。
+全表格式、實際字型及術語檢查通過，289 則校讀覆蓋 295 次匹配；前作 266 筆人物、怪物與
+物品術語對照零差異。原始 ECL、catalog、原文表及術語表未變，差分收據見本批 comparison。
+重分批後剩 773 個一般候選，仍含雜訊、識別字及切片，不作漏譯分母。
+
+本批是靜態組句校讀，未增加正常玩家畫面或分頁證據。營地現行十項依賴與既有畫格、
+狀態及存檔收據另回驗；正式組句、分頁、其他選單、手札、戰鬥與中文讀檔仍待完成。
+劇情與營地最終字級待定，沒有開始 HD。
+
 ## 相鄰劇情字串候選
 
 [passage_candidates.py](../../tools/passage_candidates.py) 先核對 ECL 與 catalog 的來源雜湊，
@@ -607,6 +645,7 @@ bash tools/translation.sh check story-hulder-forest-clauses
 bash tools/translation.sh check story-city-luminari-clauses
 bash tools/translation.sh check story-palace-kristophan-clauses
 bash tools/translation.sh check story-hawkbluff-blackwater-clauses
+bash tools/translation.sh check story-baior-rebuilding-clauses
 bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
@@ -656,5 +695,5 @@ bash tools/translation.sh test-runtime-labels
 
 新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
 新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
-新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 7,322 筆全表另已回驗通過。
+新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 7,634 筆全表另已回驗通過。
 新模式沒有放寬名稱、數字或格式檢查。
