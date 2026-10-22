@@ -29,8 +29,14 @@ type listHeader struct {
 type listConfig struct {
 	Headers     []listHeader
 	Rows        []listRow
+	Fields      []listField
 	Background  byte
 	FineWindows [][2]uint64 `json:"fine_windows"`
+}
+type listField struct {
+	Pane, Group, Key, SHA256, FormatSHA256 string
+	RawX, RawY                             uint16
+	Caller                                 oracle.Addr
 }
 type listSpan struct {
 	Start, Length int
@@ -43,6 +49,7 @@ type listRow struct {
 type listWord struct {
 	X, Y, Width            int
 	Key                    string
+	Group                  string
 	Foreground, Background byte
 }
 type listTextEvent struct {
@@ -72,6 +79,12 @@ type listState struct {
 	renderOrigin           [2]int
 	action                 int
 	sent                   bool
+	menuDepth              int
+	buttons                []paintReturn
+	pendingHeader          *listWord
+	headerTransition       bool
+	headerReturn           *paintReturn
+	footerTransition       bool
 }
 
 func (l *listState) snapshot() []listWord {
@@ -128,7 +141,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	b, e = os.ReadFile(requestPath)
 	must(e)
 	must(json.Unmarshal(b, &l.request))
-	if len(l.config.Headers) != 2 || len(l.request.Actions) == 0 || o.Steps() != l.request.Start {
+	if len(l.config.Headers) != 2 || len(l.config.Rows) == 0 || len(l.config.Fields) == 0 || len(l.request.Actions) == 0 || o.Steps() != l.request.Start {
 		panic("列表輸入不符")
 	}
 	for _, key := range []string{"answer.yes", "answer.no", "format.string"} {
@@ -161,6 +174,13 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	for _, h := range l.config.Headers {
 		if digest([]byte(l.sources[h.Key])) != h.SHA256 {
 			panic("標題來源不符")
+		}
+	}
+	for _, f := range l.config.Fields {
+		if digest([]byte(l.sources[f.Key])) != f.SHA256 || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key])) > len(l.sources[f.Key]) ||
+			(f.Group != "header" && f.Group != "body" && f.Group != "footer") ||
+			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix") {
+			panic("列表欄位綁定無效")
 		}
 	}
 	for _, p := range []struct {
@@ -207,13 +227,28 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			l.awaitPageFlip = true
 			l.renderPageKnown = false
 			l.renderOrigin = [2]int{x, y}
-			if len(l.words) > 0 {
-				l.clearTargets = l.snapshot()
+			l.clearTargets = nil
+			for p, word := range l.words {
+				if word.Group != "footer" {
+					l.clearTargets = append(l.clearTargets, word)
+					delete(l.words, p)
+				}
+			}
+			// 固定順序才能與控制組逐事件比較。
+			sort.Slice(l.clearTargets, func(i, j int) bool {
+				if l.clearTargets[i].Y != l.clearTargets[j].Y {
+					return l.clearTargets[i].Y < l.clearTargets[j].Y
+				}
+				return l.clearTargets[i].X < l.clearTargets[j].X
+			})
+			if len(l.clearTargets) > 0 {
 				l.clearCovered = map[int]bool{}
 				l.clearPending = true
 				g.listLog("clear-write-baseline", map[string]any{"targets": l.clearTargets})
 			}
-			l.words = map[[2]int]listWord{}
+			l.pendingHeader = nil
+			l.headerTransition = false
+			l.headerReturn = nil
 			l.pane = ""
 			g.listLog("pane-invalidate", [4]int{x, y, w, h})
 		} else {
@@ -304,6 +339,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			s[i] = (int(o.StackWord(2+i)) - 8000) * 2
 		}
 		y0, x0, y1, x1, dy, dx := s[0], s[1], s[2], s[3], -s[4], -s[5]
+		// 參數是裁切區。來源及目的都必須留在此區，不能把整個區域搬到區外。
 		next := map[[2]int]listWord{}
 		for _, w := range l.words {
 			if w.X < x1 && w.X+w.Width > x0 && w.Y < y1 && w.Y+8 > y0 {
@@ -334,6 +370,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			})
 		}
 	})
+	headerRegistered := map[oracle.Addr]bool{}
 	o.OnCall(oracle.Addr{Seg: 0xb72, Off: 0x46}, func(_ *oracle.Oracle) {
 		s := [10]uint16{}
 		for i := range s {
@@ -345,10 +382,31 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 		col, row := int(byte(s[2])), int(byte(s[3]))
 		if row == 1 {
+			hadSuffix := l.pendingHeader != nil
 			l.pane = ""
 			for _, h := range l.config.Headers {
 				if s[7] == h.Segment && s[6] == h.Offset && digest([]byte(format)) == h.SHA256 {
 					l.pane = h.Pane
+				}
+			}
+			if l.pane != "" && l.pendingHeader != nil {
+				w := *l.pendingHeader
+				l.words[[2]int{w.X, w.Y}] = w
+				g.listLog("title-suffix-attached", map[string]any{"key": w.Key})
+			}
+			l.pendingHeader = nil
+			if hadSuffix {
+				r, at := o.Regs(), o.Caller()
+				l.headerReturn = &paintReturn{at, r.SS, r.SP + 4}
+				if !headerRegistered[at] {
+					headerRegistered[at] = true
+					o.OnCall(at, func(_ *oracle.Oracle) {
+						r, p := o.Regs(), l.headerReturn
+						if p != nil && p.Addr == at && p.SS == r.SS && p.SP == r.SP {
+							l.headerTransition, l.headerReturn = false, nil
+							g.listLog("title-render-return", nil)
+						}
+					})
 				}
 			}
 			g.listLog("title-field", map[string]any{"source_sha256": digest([]byte(format)), "pointer": [2]uint16{s[7], s[6]}})
@@ -370,7 +428,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				if span.Start+span.Length > len(text) || text[span.Start:span.Start+span.Length] != l.sources[span.Key] {
 					panic("列表詞框來源不符")
 				}
-				w := listWord{X: (col + span.Start) * 8, Y: row * 8, Width: span.Length * 8, Key: span.Key, Foreground: byte(s[4]), Background: l.config.Background}
+				w := listWord{X: (col + span.Start) * 8, Y: row * 8, Width: span.Length * 8, Key: span.Key, Group: "body", Foreground: byte(s[4]), Background: l.config.Background}
 				if w.X < 0 || w.X+w.Width > 320 || w.Y < 0 || w.Y+8 > 200 {
 					panic("列表中文字框越界")
 				}
@@ -381,10 +439,131 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 		g.listLog("unknown-row-original", map[string]any{"source_sha256": sha})
 	})
+	g.installListFields()
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0xc96}, func(_ *oracle.Oracle) {
 		if l.awaitGlyph >= 0 {
 			l.events[l.awaitGlyph].FirstGlyph = o.Steps()
 			l.awaitGlyph = -1
+		}
+	})
+}
+func (g *liveGame) installListFields() {
+	l, o := g.list, g.o
+	for _, point := range []struct {
+		a     oracle.Addr
+		bytes string
+	}{
+		{oracle.Addr{Seg: 0x0ceb, Off: 0x008e}, "558bec83ec085657c45e0626f6471c20"},
+		{oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, "558bec83ec0456803ec2da00751833c0"},
+		{oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, "cb558bec56803ecfda00750e1eb811a2"},
+		{oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, "cb558bec83ec085657168d46fe50168d"},
+	} {
+		if hex.EncodeToString(o.Bytes(point.a, len(point.bytes)/2)) != point.bytes {
+			panic("列表底列入口 bytes 不符")
+		}
+	}
+	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, func(_ *oracle.Oracle) {
+		l.menuDepth++
+		if l.footerTransition {
+			for p, w := range l.words {
+				if w.Group == "footer" {
+					delete(l.words, p)
+				}
+			}
+			g.listLog("footer-render-entry", nil)
+		}
+	})
+	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, func(_ *oracle.Oracle) {
+		l.menuDepth--
+		if l.menuDepth < 0 {
+			panic("列表底列返回不成對")
+		}
+		if l.footerTransition {
+			l.footerTransition = false
+			g.listLog("footer-render-return", nil)
+		}
+	})
+	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, func(_ *oracle.Oracle) {
+		if o.Regs().AX != 0xffff {
+			for _, w := range l.words {
+				if w.Group == "footer" {
+					l.footerTransition = true
+					g.listLog("footer-selection-return", nil)
+					break
+				}
+			}
+		}
+	})
+	registered := map[oracle.Addr]bool{}
+	o.OnCall(oracle.Addr{Seg: 0x0ceb, Off: 0x008e}, func(_ *oracle.Oracle) {
+		if o.StackWord(4) != 1 {
+			return
+		}
+		r, at := o.Regs(), o.Caller()
+		l.buttons = append(l.buttons, paintReturn{at, r.SS, r.SP + 4})
+		if registered[at] {
+			return
+		}
+		registered[at] = true
+		o.OnCall(at, func(_ *oracle.Oracle) {
+			if len(l.buttons) == 0 {
+				return
+			}
+			p, r := l.buttons[len(l.buttons)-1], o.Regs()
+			if p.Addr == at && p.SS == r.SS && p.SP == r.SP {
+				l.buttons = l.buttons[:len(l.buttons)-1]
+			}
+		})
+	})
+	o.OnCall(oracle.Addr{Seg: 0x1212, Off: 0x03a0}, func(_ *oracle.Oracle) {
+		var s [9]uint16
+		for i := range s {
+			s[i] = o.StackWord(i)
+		}
+		format, ok := listString(o, s[6], s[5])
+		if !ok {
+			return
+		}
+		source := format
+		if format == l.sources["format.string"] {
+			source, ok = listString(o, s[8], s[7])
+			if !ok {
+				return
+			}
+		}
+		for _, f := range l.config.Fields {
+			if f.RawX != s[3] || f.RawY != s[2] || f.Caller != o.Caller() ||
+				f.FormatSHA256 != digest([]byte(format)) || f.SHA256 != digest([]byte(source)) {
+				continue
+			}
+			if f.Pane == "suffix" {
+				if len(l.fills) > 0 {
+					return
+				}
+			} else if f.Pane != l.pane {
+				continue
+			}
+			native := func(v uint16) int {
+				if v < 400 {
+					return int(v)
+				}
+				return (int(v) - 8000) * 2
+			}
+			w := listWord{X: native(s[3]), Y: native(s[2]), Width: len(source) * 8, Key: f.Key,
+				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background}
+			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+8 > 200 {
+				panic("列表欄位越界")
+			}
+			if f.Pane == "suffix" {
+				l.pendingHeader = &w
+				l.headerTransition = true
+			} else {
+				l.erase(w.X, w.Y, w.Width, 8)
+				l.words[[2]int{w.X, w.Y}] = w
+			}
+			l.awaitGlyph = g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": f.SHA256,
+				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix"})
+			return
 		}
 	})
 }
@@ -471,7 +650,7 @@ func (g *liveGame) composeList(px []byte) {
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip {
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || l.menuDepth != 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))

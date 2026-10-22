@@ -46,7 +46,7 @@ case "${1:-}" in
     PARENT="$(dirname "$PROBE/$RESULT")"; test -d "$PARENT"
     test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
     TRANSLATE=false; [[ "$1" = en ]] || TRANSLATE=true
-    timeout --kill-after=10s 300s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 128 \
+    timeout --kill-after=10s 600s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 128 \
       --label project=dark-queen-of-krynn-cht -e GOMEMLIMIT=384MiB -e LIST_STATE="$STATE" -e LIST_REQUEST="$REQUEST" \
       -e LIST_INPUT="$INPUT" -e LIST_RESULT="$(basename "$RESULT")" -e LIST_TRANSLATE="$TRANSLATE" -e LIST_FINE="$FINE" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" --entrypoint bash "$GO_IMAGE" -c '

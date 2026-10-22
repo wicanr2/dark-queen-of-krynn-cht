@@ -437,7 +437,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
 	if g.list != nil {
-		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip)
+		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || g.list.menuDepth > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition)
 	}
 	if held {
 		if len(g.lastPixels) == 0 {

@@ -45,6 +45,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert a["list_events"] == b["list_events"]
     accepted = [e for e in b["list_events"] if e["Kind"] == "row-before-glyph"]
     bindings = {(row["Pane"], row["SHA256"]): row for row in config["Rows"]}
+    list_keys = {span["Key"] for row in config["Rows"] for span in row["Spans"]}
     wrappers, pane = {}, None
     for i, wrapper in enumerate(trace["wrappers"]):
         if wrapper["stack"][3] & 255 == 1:
@@ -71,15 +72,125 @@ def check(en_run, zh_run, inputs, control, observed, output):
         for span in binding["Spans"]:
             wanted = {"X": ((wrapper["stack"][2] & 255) + span["Start"]) * 8,
                       "Y": (wrapper["stack"][3] & 255) * 8, "Width": span["Length"] * 8,
-                      "Key": span["Key"], "Foreground": wrapper["stack"][4] & 255,
+                      "Key": span["Key"], "Group": "body", "Foreground": wrapper["stack"][4] & 255,
                       "Background": config["Background"]}
             assert wanted in event["Words"]
     assert {e["detail"]["source_sha256"] for e in accepted} == {row["SHA256"] for row in wrappers.values()}
+    # 由原版下層印字事件核對欄位，不以原型自行宣稱的文字框作為來源。
+    native = lambda value: value if value < 400 else (value - 8000) * 2
+    fields = [e for e in b["list_events"] if e["Kind"] == "field-before-glyph"]
+    calls_by_step = {c["step"]: c for c in trace["calls"]}
+    field_by_step = {}
+    for e in fields:
+        c = calls_by_step[e["Step"]]
+        source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
+        matches = [f for f in config["Fields"] if f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
+                   and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
+                   and f["FormatSHA256"] == sha(c["format"]["text"].encode())
+                   and (f["Pane"] == e["Pane"] or f["Pane"] == "suffix")]
+        assert len(matches) == 1
+        f = matches[0]
+        assert e["Step"] < e["first_glyph"] == c["first_glyph"]
+        assert e["detail"]["source_sha256"] == f["SHA256"]
+        assert e["detail"]["deferred"] == (f["Pane"] == "suffix")
+        word = {"X": native(c["stack"][3]), "Y": native(c["stack"][2]), "Width": len(source["text"])*8,
+                "Key": f["Key"], "Group": f["Group"], "Foreground": c["stack"][4] & 15,
+                "Background": config["Background"]}
+        assert e["detail"]["word"] == word
+        field_by_step[e["Step"]] = e
+    # 所有已辨識列表內的靜態標題、提示及按鈕均須接入。所有格候選另驗 attach。
+    title_wrappers = [w for w in trace["wrappers"] if any(
+        w["format"]["segment"] == h["Segment"] and w["format"]["offset"] == h["Offset"]
+        and w["stack"][3] & 255 == 1 for h in config["Headers"])]
+    full_fills = [f["step"] for f in trace["fill_events"] if not f["within_list"]
+                  and f["native_rect"][0] <= 8 and f["native_rect"][1] <= 8
+                  and f["native_rect"][0] + f["native_rect"][2] >= 312
+                  and f["native_rect"][1] + f["native_rect"][3] >= 184]
+    intervals = [(w["step"], next(s for s in full_fills if s > w["step"])) for w in title_wrappers]
+    for c in trace["calls"]:
+        if not any(start <= c["step"] < end for start, end in intervals):
+            continue
+        source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
+        if any(f["Pane"] != "suffix" and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
+               and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
+               and f["FormatSHA256"] == sha(c["format"]["text"].encode()) for f in config["Fields"]):
+            assert c["step"] in field_by_step
+    assert len([e for e in b["list_events"] if e["Kind"] == "title-suffix-attached"]) == len(title_wrappers)
+
+    # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
+    words, pending_suffix, model = {}, None, []
+    wrappers_by_step = {w["step"]: w for w in trace["wrappers"]}
+    def intersects(w, rect):
+        x, y, width, height = rect
+        return w["X"] < x + width and w["X"] + w["Width"] > x and w["Y"] < y + height and w["Y"] + 8 > y
+    def erase(rect):
+        for pos, w in list(words.items()):
+            if intersects(w, rect):
+                del words[pos]
+    for e in b["list_events"]:
+        kind = e["Kind"]
+        if kind in ("pane-invalidate", "clear-write-baseline"):
+            words = {pos: w for pos, w in words.items() if w["Group"] == "footer"}
+            pending_suffix = None
+        elif kind == "footer-render-entry":
+            words = {pos: w for pos, w in words.items() if w["Group"] != "footer"}
+        elif kind == "native-fill":
+            assert any(f["step"] <= e["Step"] <= f["return_instruction_step"]
+                       and f["native_rect"] == e["detail"] for f in trace["fill_events"])
+            erase(e["detail"])
+        elif kind in ("row-before-glyph", "unknown-row-original"):
+            w = wrappers_by_step[e["Step"]]
+            source = w["vararg_1_candidate"]["text"]
+            x, y = (w["stack"][2] & 255)*8, (w["stack"][3] & 255)*8
+            erase((x, y, len(source)*8, 8))
+            if kind == "row-before-glyph":
+                for span in bindings[(e["Pane"], sha(source.encode()))]["Spans"]:
+                    word = {"X": x + span["Start"]*8, "Y": y, "Width": span["Length"]*8,
+                            "Key": span["Key"], "Group": "body", "Foreground": w["stack"][4]&255,
+                            "Background": config["Background"]}
+                    words[(word["X"], word["Y"])] = word
+        elif kind == "field-before-glyph":
+            w = field_by_step[e["Step"]]["detail"]["word"]
+            if e["detail"]["deferred"]:
+                pending_suffix = w
+            else:
+                erase((w["X"], w["Y"], w["Width"], 8))
+                words[(w["X"], w["Y"])] = w
+        elif kind == "title-suffix-attached":
+            assert pending_suffix and pending_suffix["Key"] == e["detail"]["key"]
+            words[(pending_suffix["X"], pending_suffix["Y"])] = pending_suffix
+            pending_suffix = None
+        elif kind == "native-scroll":
+            original = next(s for s in trace["scroll_events"] if s["step"] == e["Step"])
+            s = [(v - 8000)*2 for v in original["stack"][2:8]]
+            x, y, width, height = s[1], s[0], s[3]-s[1], s[2]-s[0]
+            dx, dy = -s[5], -s[4]
+            assert e["detail"] == {"delta": [dx, dy], "rect": [x, y, width, height]}
+            # 原始參數給裁切區；實際來源是裁切區與反向平移區的交集。
+            sx, sy = max(x, x-dx), max(y, y-dy)
+            sw, sh = min(x+width, x+width-dx)-sx, min(y+height, y+height-dy)-sy
+            source, destination = (sx,sy,sw,sh), (sx+dx,sy+dy,sw,sh)
+            before = (observed / original["indexed_before"]).read_bytes()
+            after = (observed / original["indexed_after"]).read_bytes()
+            assert all(before[(sy+row)*320+sx:(sy+row)*320+sx+sw] ==
+                       after[(sy+dy+row)*320+sx+dx:(sy+dy+row)*320+sx+dx+sw] for row in range(sh))
+            moved = []
+            for w in words.values():
+                if intersects(w, source):
+                    assert sx <= w["X"] and w["X"]+w["Width"] <= sx+sw and sy <= w["Y"] and w["Y"]+8 <= sy+sh
+                    moved.append({**w, "X": w["X"]+dx, "Y": w["Y"]+dy})
+            erase((x,y,width,height))
+            for w in moved:
+                words[(w["X"], w["Y"])] = w
+        expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
+        assert (e["Words"] or []) == expected_words, (kind, e["Step"])
+        model.append((e["Step"], expected_words))
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
     assert len(cleared) == (6 if accepted[0]["Pane"] == "inventory" else 1)
     assert all(e["detail"]["pixels"] == sum(w["Width"] * 8 for w in e["detail"]["targets"]) for e in cleared)
     assert all(e["detail"]["target_page"] == e["detail"]["visible_page"] for e in cleared)
     originals = {}
+    native_layouts = {s["step"]: s for s in a["list_frames"]}
     for frame in a["frames"]:
         assert not frame["held"]
         originals[frame["step"]] = frame
@@ -120,17 +231,24 @@ def check(en_run, zh_run, inputs, control, observed, output):
                             px[at + channel] = (fg[channel] * value + px[at + channel] * (255 - value) + 127) // 255
         return sha(px)
 
-    previous, held, translated_frames = None, 0, 0
+    previous, held, translated_frames, model_index = None, 0, 0, -1
     assert len(b["frames"]) == len(b["list_frames"])
     for frame, state in zip(b["frames"], b["list_frames"]):
         assert frame["step"] == state["step"] and frame["step"] in originals
+        while model_index + 1 < len(model) and model[model_index + 1][0] <= frame["step"]:
+            model_index += 1
+        assert (state["words"] or []) == (model[model_index][1] if model_index >= 0 else []), frame["step"]
         original = originals[frame["step"]]
+        native_state = native_layouts[frame["step"]]
+        for field in ("display_start", "render_page", "palette"):
+            assert state[field] == native_state[field]
         if frame["held"]:
             assert previous is not None
             expected_hash = previous
             held += 1
         else:
-            if state["words"]:
+            # 此契約來自上層列表列；下層靜態標題／提示不共用列表的填色頁生命週期。
+            if any(w["Key"] in list_keys for w in state["words"] or []):
                 assert state["display_start"] == state["render_page"]
             key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]))
             if key not in cache:
@@ -153,6 +271,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "translated_frames": translated_frames, "original_checkpoints_equal": len(b["checkpoints"]),
               "observed_unique_rows": len({e["detail"]["source_sha256"] for e in accepted}),
               "row_events": len(accepted), "clear_transactions": len(cleared),
+              "field_events": len(fields), "field_keys": sorted({e["detail"]["key"] for e in fields}),
+              "field_lifetime_model_equal": True,
+              "fine_windows_verified": True,
               "all_submitted_pixels_equal_expected": True,
               "en_receipt_sha256": sha((en_run / "receipt.json").read_bytes()),
               "zh_receipt_sha256": sha((zh_run / "receipt.json").read_bytes()),
