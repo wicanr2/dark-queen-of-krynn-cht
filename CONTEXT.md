@@ -5,8 +5,8 @@
 | 項目 | 現況與證據 |
 |---|---|
 | 目前重心 | 使用者指定先完成中文化，再做全量 HD。集中遊戲譯文、術語、提早攔截與正常路徑接入；攻略重繪及 HD 批次延後 |
-| 翻譯與術語 | 已合併 6,630 筆本機譯文；首批 145 筆譯風已確認。970 筆術語以《幽靈騎士》優先，既有 266 筆人物、怪物與物品術語對照一致。全表格式、字型及術語檢查通過，265 則校讀覆蓋 271 次句內歧義匹配。最新新增菲斯特隆實驗室及燈塔敘述 204 筆，另修正兩處舊敘述銜接，尚未接入新畫面。營地十項已有視窗原型，槽位 A 至 J 保留字母。本作新名、Shield、跨語境 OTHER 與完整組句仍待校讀或驗證。8,407 筆來源候選含雜訊及識別字，不能當完成度分母，見 [研究 005](docs/re/005-translation-catalog.md#2026-10-22菲斯特隆實驗室與燈塔敘述片段) |
-| 段落校讀 | 322 組相鄰候選已有 284 組獨立繁中校讀稿，含可讀段落、引語前導與動態主詞片段；38 組保留分支／上下文疑問。以純校讀模式檢查通過，18 則語境校讀覆蓋 19 次匹配，當時譯表雜湊不變。尚非正式顯示來源，不與目前 6,426 筆加總；入口見研究 005 |
+| 翻譯與術語 | 已合併 6,723 筆本機譯文；首批 145 筆譯風已確認。970 筆術語以《幽靈騎士》優先，既有 266 筆人物、怪物與物品術語對照一致。全表格式、字型及術語檢查通過，265 則校讀覆蓋 271 次句內歧義匹配。最新新增森林與哈德弗克片段 93 筆，另修正劇情 JOIN 的同文誤套及一處受詞遺漏，尚未接入新畫面。營地十項已有視窗原型，槽位 A 至 J 保留字母。本作新名、Shield、跨語境 OTHER 與完整組句仍待校讀或驗證。8,407 筆來源候選含雜訊及識別字，不能當完成度分母，見 [研究 005](docs/re/005-translation-catalog.md#2026-10-22森林哈德弗克與眾樹之母的片段) |
+| 段落校讀 | 322 組相鄰候選已有 284 組獨立繁中校讀稿，含可讀段落、引語前導與動態主詞片段；38 組保留分支／上下文疑問。以純校讀模式檢查通過，18 則語境校讀覆蓋 19 次匹配，當時譯表雜湊不變。尚非正式顯示來源，不與目前 6,723 筆加總；入口見研究 005 |
 | 儲存庫 | [dark-queen-of-krynn-cht](https://github.com/wicanr2/dark-queen-of-krynn-cht)，PRIVATE，Issues 已啟用；主機 `gh` 回讀 |
 | 工作追蹤 | [#1 治理](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/1)、[#2 原始輸入](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)、[#3 執行基線](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3)、[#4 輸出掛勾](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)、[#5 手札與說明面板](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)、[#6 中文攻略](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)、[#7 繁中優先](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7)；狀態以遠端為準 |
 | 本機 Git | `main`，repo-local `wicanr2 <wicanr2@gmail.com>`，origin 指向本作私人庫 |

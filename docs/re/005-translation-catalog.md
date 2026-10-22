@@ -115,6 +115,9 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-fastillion-lighthouse-clauses.tsv` | 菲斯特隆實驗室及燈塔陷阱 206 筆，含 204 個新鍵與 2 個既有敘述銜接修正 |
 | `fastillion-lighthouse-clauses-review-input.json`、`story-fastillion-lighthouse-clauses-before.tsv` | 本批完整來源定位、原版及來源雜湊、允許修正的既有鍵與合併前 6,426 筆快照 |
 | `story-fastillion-lighthouse-clauses-comparison.json` | 新增、修正與未改舊鍵的差分收據；前作人物、怪物及物品 266 筆對照結果 |
+| `story-hulder-forest-clauses.tsv` | 森林、哈德弗克與眾樹之母片段 95 筆，含 93 個新鍵及 2 個舊譯修正 |
+| `hulder-forest-clauses-review-input.json`、`story-hulder-forest-clauses-before.tsv` | 完整來源、JOIN 三處相鄰語境、七種保留謎題字形及三個未知候選，另存合併前 6,630 筆快照 |
+| `story-hulder-forest-clauses-comparison.json` | 本批新增與修正差分、舊鍵保留、前作術語對照及謎題字形未合併檢查 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
@@ -134,10 +137,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 6,630 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+目前已檢查並合併 6,723 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
 森林、菲斯特隆實驗室、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 6,630 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 6,723 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -163,7 +166,7 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 6,630 筆，0 格式錯誤、0 未處理術語警示，265 則逐句校讀覆蓋 271 次匹配。
+完整譯表回驗為 6,723 筆，0 格式錯誤、0 未處理術語警示，265 則逐句校讀覆蓋 271 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -368,6 +371,42 @@ Drop、Speed、Icon、Level 等選項，支持使用既有「設定」。本輪�
 本批沒有接入新畫面，分段、動態角色名稱及原始 key 均保留。
 完整組句、正式分頁、其他選單、手札、戰鬥及中文讀檔仍未完成，未進行 HD。
 
+## 2026-10-22：森林、哈德弗克與眾樹之母的片段
+
+`story-hulder-forest-clauses.tsv` 補上 93 個新鍵，另修正 2 個舊鍵，共 95 筆。
+來源主要為 ECL 區塊 14 至 16，包含艾莉亞低語、狩獵與食物、宴席、國王覲見、數葉任務、
+戒指、龍之護符及離別敘述。防禦選項亦出現於區塊 42、45，採通用「防禦」。
+完整來源、所有定位、原文與原版雜湊均保存在 `hulder-forest-clauses-review-input.json`。
+這是靜態語境校讀，沒有推定新的分支、執行組句或規則。
+
+泰索何夫沿用前作名稱，姓氏「柏伏特」沿用現有全名詞條，仍保留先前英文新譯的校讀限制。
+坎德人沿用《幽靈騎士》，艾莉亞及魯明那里沿用既有術語。狩獵的 GAME 譯「獵物」，
+不套用一般「遊戲」。樹葉、砍樹與放火選項依同場來源翻譯，不改答案或樹葉數量判定。
+
+本次發現劇情 JOIN 由前作同文沿用成「集合物品」。回查該 key 的全部三個來源：
+區塊 15 檔案偏移 `128373`、`129474` 是宴席邀請，區塊 17 偏移 `151527` 是加入喜斯侍奉。
+依三處相鄰對話的強推論，改採通用「加入」，不改介面另一個同字 key。
+此為文字語境證據，尚非三處選單的動態顯示收據。
+另一個舊鍵補回 WORDS 的「話」，保留泰索何夫不耐煩時脫口而出的受詞。
+合併前 6,630 筆另存快照，其他 6,628 筆逐筆相同。
+
+七種獨立謎題字形保留原版：LIMENE、GEBENE、BILBARA、SHUWARA、HOLBANI，
+以及帶引號的 MAHENE 提問與 GEBENE 呼喊。含 GEBENE 的問候句只翻周圍敘述。
+這七個候選不加入中文筆數，不移除來源，也不宣稱它們是漏譯。
+另有 `SP`、`SH` 及夾雜 `A4BRB#D` 的長切片，保留為未知，不猜方向或補造原句。
+原始 entries、分類理由及未合併檢查保存在本批輸入與差分收據。
+
+先純校讀至零錯誤、零術語警示，再依已確認譯風合併；本輪沒有新增或放寬術語豁免。
+目前共 6,723 筆，SHA-256：
+`1ac0096b2a9af0cde2d2bfb24ab6093565d53c731e19dd33b8491bb004c5eb5d`。
+全表格式、字型及術語檢查通過，265 則校讀仍覆蓋 271 次匹配，前作 266 筆共通人物、怪物
+與物品對照零差異。差分收據為 `story-hulder-forest-clauses-comparison.json`。
+候選重分批後為 1,683 個一般候選與 1 個名稱候選，仍含已知保留字形、雜訊及切片，
+不換算漏譯數。既有營地十項的目前文字依賴與畫格／存檔收據回驗通過，未改歷史畫格。
+
+新譯尚未接入新畫面。完整組句、正式分頁、其他選單、手札、戰鬥及中文讀檔仍未完成，
+劇情與營地最終字級未定案，未開始 HD。
+
 ## 相鄰劇情字串候選
 
 [passage_candidates.py](../../tools/passage_candidates.py) 先核對 ECL 與 catalog 的來源雜湊，
@@ -426,6 +465,7 @@ bash tools/translation.sh check story-city-sea-choices
 bash tools/translation.sh check story-citadel-abyss-actions
 bash tools/translation.sh check story-sea-lighthouse-clauses
 bash tools/translation.sh check story-fastillion-lighthouse-clauses
+bash tools/translation.sh check story-hulder-forest-clauses
 bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
@@ -475,5 +515,5 @@ bash tools/translation.sh test-runtime-labels
 
 新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
 新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
-新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 6,630 筆全表另已回驗通過。
+新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 6,723 筆全表另已回驗通過。
 新模式沒有放寬名稱、數字或格式檢查。
