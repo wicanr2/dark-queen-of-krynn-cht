@@ -178,7 +178,7 @@ def prepare(texts, observed, output):
         k, value = formal(source)
         menu_terms[source] = (value, k)
     fields, field_ids, field_provenance = [], set(), []
-    def field_key(source, categories=None):
+    def field_key(source, categories=None, width=None):
         if categories == {"item"}:
             return bind("inventory", source, categories)
         key = "field." + sha(source.encode())[:20]
@@ -220,7 +220,7 @@ def prepare(texts, observed, output):
             assert found and len({v for _, v in found}) == 1, source
             k, translated = found[0]
             origin = {"formal_key": k}
-        assert translated and len(translated) <= len(source), source
+        assert translated and len(translated)*8 <= (len(source)*8 if width is None else width), source
         aliases[key], translations[key] = source, translated
         field_provenance.append({"key": key, "source": source, "origin": origin})
         return key
@@ -369,6 +369,39 @@ def prepare(texts, observed, output):
                 field_ids.add(identity)
             callsite_sources.append({"folder": folder, "step": c["step"], "wrapper_step": wrapper["step"],
                                      "first_glyph": c["first_glyph"], "field": field})
+    # 同一筆 AC\tHP 印字分為兩框；安全寬度由原版欄間與面板留白量測。
+    hud_sources = {
+        (0x205E, 0x2A0): ("Name", [(0, 4, 0)]),
+        (0x205E, 0x2B9): ("AC\tHP", [(0, 2, 24), (3, 2, 24)]),
+        (0x205E, 0x64F): ("camping", [(0, 7, 0)]),
+        (0x26B4, 0x2DB2): ("the party makes camp...", [(0, 23, 0)])}
+    hud = json.loads((observed / "observe-camp-roundtrip-r1/receipt.json").read_text())
+    seen_hud = set()
+    for c in hud["calls"]:
+        if c["wrapper_index"] < 0:
+            continue
+        wrapper = hud["wrappers"][c["wrapper_index"]]
+        caller = wrapper["caller"]
+        identity = caller["Seg"], caller["Off"]
+        if identity not in hud_sources:
+            continue
+        source, spans = hud_sources[identity]
+        assert c["format"]["text"] == "%s" and c["vararg_1_candidate"]["text"] == wrapper["format"]["text"] == source
+        seen_hud.add(identity)
+        for start, length, width in spans:
+            key = field_key(source[start:start+length], width=width or None)
+            field = {"Pane": "callsite", "Group": "body", "Key": key, "Start": start, "Length": length,
+                     "RawX": c["stack"][3], "RawY": c["stack"][2], "Caller": c["caller"], "UpperCaller": caller,
+                     "FormatSHA256": sha(c["format"]["text"].encode()), "SHA256": sha(source.encode())}
+            if width:
+                field["Width"] = width
+            encoded = json.dumps(field, sort_keys=True)
+            if encoded not in field_ids:
+                fields.append(field)
+                field_ids.add(encoded)
+            callsite_sources.append({"folder": "observe-camp-roundtrip-r1", "step": c["step"],
+                "wrapper_step": wrapper["step"], "caller": caller, "source": source, "binding": field})
+    assert seen_hud == set(hud_sources)
     output.mkdir()
     for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))

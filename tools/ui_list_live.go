@@ -45,6 +45,7 @@ type listField struct {
 	Pane, Group, Key, SHA256, FormatSHA256 string
 	MenuSignature                          string
 	Start, Length                          int
+	Width                                  int
 	RawX, RawY                             uint16
 	Caller, UpperCaller                    oracle.Addr
 }
@@ -88,7 +89,7 @@ type listState struct {
 	clearTargets           []listWord
 	clearCovered           map[int]bool
 	clearPending           bool
-	awaitGlyph             int
+	awaitGlyphs            []int
 	videoSample            []map[string]any
 	awaitPageFlip          bool
 	renderPageKnown        bool
@@ -153,7 +154,6 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	l := g.list
 	o := g.o
 	l.words = map[[2]int]listWord{}
-	l.awaitGlyph = -1
 	l.sources = readLiveCatalog(sourcePath)
 	b, e := os.ReadFile(inputs)
 	must(e)
@@ -197,7 +197,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	}
 	for _, f := range l.config.Fields {
-		if f.Start < 0 || f.Length <= 0 || len(l.sources[f.Key]) != f.Length || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key])) > f.Length ||
+		width := f.Width
+		if width == 0 {
+			width = f.Length * 8
+		}
+		if f.Start < 0 || f.Length <= 0 || len(l.sources[f.Key]) != f.Length || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key]))*8 > width || width < f.Length*8 || width > 320 || width%8 != 0 ||
 			(f.Group != "header" && f.Group != "body" && f.Group != "footer") ||
 			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix" && f.Pane != "callsite" && f.Pane != "menu") ||
 			(f.Pane == "menu" && (len(f.MenuSignature) != 64 || l.config.Menus[f.MenuSignature] == "")) ||
@@ -525,18 +529,18 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				}
 				l.words[[2]int{w.X, w.Y}] = w
 			}
-			l.awaitGlyph = g.listLog("row-before-glyph", map[string]any{"source_sha256": sha, "spans": binding.Spans,
-				"caller": o.Caller(), "foreground": byte(s[4]), "within_list": len(l.paints) > 0})
+			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("row-before-glyph", map[string]any{"source_sha256": sha, "spans": binding.Spans,
+				"caller": o.Caller(), "foreground": byte(s[4]), "within_list": len(l.paints) > 0}))
 			return
 		}
 		g.listLog("unknown-row-original", map[string]any{"source_sha256": sha})
 	})
 	g.installListFields()
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0xc96}, func(_ *oracle.Oracle) {
-		if l.awaitGlyph >= 0 {
-			l.events[l.awaitGlyph].FirstGlyph = o.Steps()
-			l.awaitGlyph = -1
+		for _, index := range l.awaitGlyphs {
+			l.events[index].FirstGlyph = o.Steps()
 		}
+		l.awaitGlyphs = nil
 	})
 }
 func (g *liveGame) installListFields() {
@@ -670,7 +674,11 @@ func (g *liveGame) installListFields() {
 			if f.Pane == "callsite" && (l.fieldWrapper.X != native(s[3]) || l.fieldWrapper.Y != native(s[2])) {
 				panic("欄位上下層座標不符")
 			}
-			w := listWord{X: native(s[3]) + f.Start*8, Y: native(s[2]), Width: f.Length * 8, Key: f.Key,
+			width := f.Width
+			if width == 0 {
+				width = f.Length * 8
+			}
+			w := listWord{X: native(s[3]) + f.Start*8, Y: native(s[2]), Width: width, Key: f.Key,
 				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background}
 			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+8 > 200 {
 				panic("列表欄位越界")
@@ -682,9 +690,8 @@ func (g *liveGame) installListFields() {
 				l.erase(w.X, w.Y, w.Width, 8)
 				l.words[[2]int{w.X, w.Y}] = w
 			}
-			l.awaitGlyph = g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": f.SHA256,
-				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix", "menu_signature": f.MenuSignature})
-			return
+			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": f.SHA256,
+				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix", "menu_signature": f.MenuSignature}))
 		}
 	})
 }
@@ -771,7 +778,7 @@ func (g *liveGame) composeList(px []byte) {
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage {
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))

@@ -169,11 +169,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
     # 由原版下層印字事件核對欄位，不以原型自行宣稱的文字框作為來源。
     fields = [e for e in b["list_events"] if e["Kind"] == "field-before-glyph"]
     calls_by_step = {c["step"]: c for c in trace["calls"]}
-    field_by_step = {}
+    field_by_id = {}
+    verified_field_widths = set()
     for e in fields:
         c = calls_by_step[e["Step"]]
         source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
-        matches = [f for f in config["Fields"] if f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
+        matches = [f for f in config["Fields"] if f["Key"] == e["detail"]["key"] and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
                    and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
                    and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                    and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite", "menu"))
@@ -192,11 +193,29 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert wrapper["step"] < c["step"] and wrapper["format"]["text"] == source["text"]
             assert (wrapper["stack"][2]&255)*8 == native(c["stack"][3])
             assert (wrapper["stack"][3]&255)*8 == native(c["stack"][2])
-        word = {"X": native(c["stack"][3])+f["Start"]*8, "Y": native(c["stack"][2]), "Width": f["Length"]*8,
+        width = f.get("Width", f["Length"]*8)
+        if "Width" in f:
+            # 唯一已量測擴框是 AC／HP 的欄間及面板留白，不准任意擴框。
+            assert f["UpperCaller"] == {"Seg": 0x205E, "Off": 0x2B9}
+            assert source["text"] == "AC\tHP" and (f["Start"], f["Length"], width) in ((0, 2, 24), (3, 2, 24))
+            assert (native(c["stack"][3]), native(c["stack"][2])) == (264, 16)
+            checkpoint = next(cp for cp in trace["checkpoints"] if cp["step"] >= c["return_step"])
+            original = Image.open(observed / (checkpoint["label"] + ".png")).convert("RGB")
+            foreground = tuple(checkpoint["palette"][c["stack"][4] & 15])
+            assert original.size == (320, 200)
+            background = tuple(checkpoint["palette"][config["Background"]])
+            assert set(original.crop((264, 16, 312, 24)).getdata()) == {foreground, background}
+            ink = {x for x in range(264, 312) if any(original.getpixel((x, y)) == foreground for y in range(16, 24))}
+            assert ink and ink <= set(range(264, 280)) | set(range(288, 304))
+            assert ink & set(range(264, 280)) and ink & set(range(288, 304))
+        word = {"X": native(c["stack"][3])+f["Start"]*8, "Y": native(c["stack"][2]), "Width": width,
                 "Key": f["Key"], "Group": f["Group"], "Foreground": c["stack"][4] & 15,
                 "Background": config["Background"]}
         assert e["detail"]["word"] == word
-        field_by_step[e["Step"]] = e
+        verified_field_widths.add((f["Key"], width))
+        identity = e["Step"], f["Key"]
+        assert identity not in field_by_id
+        field_by_id[identity] = e
     # 所有已辨識列表內的靜態標題、提示及按鈕均須接入。所有格候選另驗 attach。
     title_wrappers = [w for w in trace["wrappers"] if any(
         w["format"]["segment"] == h["Segment"] and w["format"]["offset"] == h["Offset"]
@@ -209,14 +228,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
     for c in trace["calls"]:
         source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
         in_list = any(start <= c["step"] < end for start, end in intervals)
-        if any(f["Pane"] != "suffix" and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
+        expected_keys = {f["Key"] for f in config["Fields"] if f["Pane"] != "suffix" and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
                and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
                and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                and ((f["Pane"] == "callsite" and c["wrapper_index"] >= 0
                      and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])
                     or (f["Pane"] == "menu" and f["MenuSignature"] == menu_signature(c))
-                    or (f["Pane"] not in ("callsite", "menu") and in_list)) for f in config["Fields"]):
-            assert c["step"] in field_by_step
+                    or (f["Pane"] not in ("callsite", "menu") and in_list))}
+        actual_keys = {key for (step, key), event in field_by_id.items() if step == c["step"] and not event["detail"]["deferred"]}
+        assert actual_keys == expected_keys, (c["step"], expected_keys, actual_keys)
     assert len([e for e in b["list_events"] if e["Kind"] == "title-suffix-attached"]) == len(title_wrappers)
 
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
@@ -264,7 +284,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     words[(word["X"], word["Y"])] = word
                     row_positions.add((word["X"], word["Y"]))
         elif kind == "field-before-glyph":
-            w = field_by_step[e["Step"]]["detail"]["word"]
+            w = field_by_id[e["Step"], e["detail"]["key"]]["detail"]["word"]
             if e["detail"]["deferred"]:
                 pending_suffix = w
             else:
@@ -309,8 +329,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
     for actual in (a, b):
         assert (actual["final_words"] or []) == model[-1][1]
-        assert all(w["Group"] == "footer" for w in actual["final_words"] or [])
-        assert {w["Key"] for w in actual["final_words"] or []} == final_keys
+        assert {w["Key"] for w in actual["final_words"] or [] if w["Group"] == "footer"} == final_keys
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
     assert len(cleared) == len(clear_baselines) > 0
     for event, (start, targets) in zip(cleared, clear_baselines):
@@ -340,7 +359,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         for w in words or []:
             x, y = w["X"] * 2, w["Y"] * 2
             width = w["Width"] * 2
-            assert w["Width"] == len(en[w["Key"]]) * 8 and w["Background"] == config["Background"]
+            assert (w["Width"] == len(en[w["Key"]])*8 or (w["Key"], w["Width"]) in verified_field_widths)
+            assert w["Background"] == config["Background"]
             assert 0 <= x < x + width <= 640 and 0 <= y < y + 16 <= 400
             assert len(zh[w["Key"]]) * 16 <= width
             assert all(x + width <= xx or xx + ww <= x or y + 16 <= yy or yy + 16 <= y for xx, yy, ww in rectangles)
@@ -411,7 +431,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "menu_field_events": sum(bool(e["detail"]["menu_signature"]) for e in fields),
               "menu_kinds": sorted({config["Menus"][e["detail"]["menu_signature"]] for e in fields if e["detail"]["menu_signature"]}),
               "final_menu_kind": config["Menus"].get(final_signature, "original"),
-              "final_footer_words": len(b["final_words"] or []),
+              "final_footer_words": sum(w["Group"] == "footer" for w in b["final_words"] or []),
+              "final_body_words": sum(w["Group"] != "footer" for w in b["final_words"] or []),
               "native_button_calls": sum(c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE} for c in trace["calls"]),
               "known_menu_shapes": sorted({menu["Signature"] for menu in trace["menus"] if menu["Signature"] in config["Menus"]}),
               "field_lifetime_model_equal": True,
