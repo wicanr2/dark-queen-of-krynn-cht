@@ -173,6 +173,10 @@ def prepare(texts, observed, output):
             if english in menu_terms:
                 assert menu_terms[english][0] == translated
             menu_terms[english] = (translated, k)
+    # 營地短標籤已有正式來源與先前字框量測，直接沿用既有詞條。
+    for source in ("View", "Magic", "Alt", "Fix", "Load", "Save"):
+        k, value = formal(source)
+        menu_terms[source] = (value, k)
     fields, field_ids, field_provenance = [], set(), []
     def field_key(source, categories=None):
         if categories == {"item"}:
@@ -224,10 +228,11 @@ def prepare(texts, observed, output):
         ("Items", "Spells", "Trade", "Drop", "Exit"): "status",
         ("Rdy", "Use", "Trade", "Drop", "Halve", "Join", "Exit"): "inventory",
         ("Cast", "Memorize", "Scribe", "Display", "Rest", "Exit"): "magic",
-        ("Memorize", "Exit"): "grimoire", ("Exit",): "effects"}
+        ("Memorize", "Exit"): "grimoire", ("Exit",): "effects",
+        ("View", "Magic", "Rest", "Alt", "Fix", "Load", "Save", "Exit"): "camp"}
     menus, menu_provenance = {}, []
     for pane, folder in (("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1"),
-                         ("effects", "observe-effects-r1")):
+                         ("effects", "observe-effects-r1"), ("camp", "observe-camp-roundtrip-r1")):
         receipt = json.loads((observed / folder / "receipt.json").read_text())
         known_menus = {}
         for index, menu in enumerate(receipt["menus"]):
@@ -245,7 +250,7 @@ def prepare(texts, observed, output):
         title_indices = {i for i, w in enumerate(receipt["wrappers"])
                          if h and (w["format"]["segment"], w["format"]["offset"], sha(w["format"]["text"].encode()))
                          == (h["Segment"], h["Offset"], h["SHA256"]) and w["stack"][3] & 255 == 1}
-        assert title_indices or pane == "effects"
+        assert title_indices or pane in ("effects", "camp")
         intervals = [(receipt["wrappers"][i]["step"], next(f for f in full_fills if f > receipt["wrappers"][i]["step"])) for i in title_indices]
         suffix_indices = {i - 1 for i in title_indices}
         for i in suffix_indices:
@@ -376,19 +381,30 @@ def prepare(texts, observed, output):
                            and sha(w["vararg_1_candidate"]["text"].encode()) in row_hashes
                            and w["stack"][4] & 255 in (7, 11))
     assert row_callers and all(seg == 0xC15 for seg, _ in row_callers)
+    windows = [[666000000, 667000000], [672000000, 673000000], [681000000, 682000000],
+               [690000000, 691000000], [699000000, 700000000], [705000000, 706000000],
+               [717000000, 718000000], [720000000, 721000000], [727000000, 728000000],
+               [738000000, 739000000], [741000000, 742000000], [744000000, 745000000]]
+    camp_request = observed / "camp-roundtrip-request.json"
+    for action in json.loads(camp_request.read_text())["actions"]:
+        windows.append([action["at"], min(action["at"]+1000000, action["end"])])
+    merged = []
+    for start, end in sorted(windows):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(end, merged[-1][1])
+        else:
+            merged.append([start, end])
     config = {"Headers": headers, "Rows": rows, "Fields": fields, "Menus": menus, "PaneLists": contexts,
               "RowCallers": [{"Seg": seg, "Off": off} for seg, off in sorted(row_callers)],
               "Background": backgrounds.pop(),
-              "fine_windows": [[666000000, 667000000], [672000000, 673000000], [681000000, 682000000],
-                               [690000000, 691000000], [699000000, 700000000], [705000000, 706000000],
-                               [717000000, 718000000], [720000000, 721000000], [727000000, 728000000],
-                               [738000000, 739000000], [741000000, 742000000], [744000000, 745000000]]}
+              "fine_windows": merged}
     (output / "inputs.json").write_text(json.dumps(config, indent=2) + "\n")
     (output / "provenance.json").write_text(json.dumps({"draft": True, "headers": provenance, "bindings": bindings,
         "fields": field_provenance,
         "callsite_sources": callsite_sources,
         "menus": menu_provenance,
         "effects_receipt_sha256": sha((observed / "observe-effects-r1/receipt.json").read_bytes()),
+        "camp_request_sha256": sha(camp_request.read_bytes()),
         "reviewed_fields_sha256": sha((texts / "ui-list-chrome-reviewed.tsv").read_bytes()),
         "observed_rows": len(rows),
         "formal_en_sha256": sha((texts / "en.tsv").read_bytes()),

@@ -67,7 +67,7 @@ case "${1:-}" in
     test ! -e "$PROBE/$RESULT"
     PARENT="$(dirname "$PROBE/$RESULT")"; test -d "$PARENT"
     test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
-    timeout 120s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 1 --pids-limit 64 \
+    timeout 120s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 1 --pids-limit 64 \
       --label project=dark-queen-of-krynn-cht -v "$PROBE:/probe:ro" -v "$ROOT/tools:/tools:ro" -v "$PARENT:/out" \
       --entrypoint python3 "$PIL_IMAGE" /tools/ui_list_live_check.py \
       "/probe/$EN" "/probe/$ZH" "/probe/$INPUT" "/probe/$CONTROL" "/probe/$OBS" "/out/$(basename "$RESULT")"

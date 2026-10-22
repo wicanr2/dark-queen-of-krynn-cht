@@ -96,7 +96,7 @@ type listState struct {
 	renderOrigin           [2]int
 	action                 int
 	sent                   bool
-	menuDepth              int
+	menus                  []paintReturn
 	buttons                []paintReturn
 	pendingHeader          *listWord
 	headerTransition       bool
@@ -554,8 +554,15 @@ func (g *liveGame) installListFields() {
 			panic("列表底列入口 bytes 不符")
 		}
 	}
+	menuReturns := map[oracle.Addr]bool{}
 	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, func(_ *oracle.Oracle) {
-		l.menuDepth++
+		r, at := o.Regs(), o.Caller()
+		p := paintReturn{at, r.SS, r.SP + 4}
+		// 執行前的中斷可使同一入口再次被觀測，仍屬同一次呼叫。
+		if len(l.menus) > 0 && l.menus[len(l.menus)-1] == p {
+			return
+		}
+		l.menus = append(l.menus, p)
 		if l.footerTransition {
 			for p, w := range l.words {
 				if w.Group == "footer" {
@@ -564,15 +571,21 @@ func (g *liveGame) installListFields() {
 			}
 			g.listLog("footer-render-entry", nil)
 		}
-	})
-	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, func(_ *oracle.Oracle) {
-		l.menuDepth--
-		if l.menuDepth < 0 {
-			panic("列表底列返回不成對")
-		}
-		if l.footerTransition {
-			l.footerTransition = false
-			g.listLog("footer-render-return", nil)
+		if !menuReturns[at] {
+			menuReturns[at] = true
+			o.OnCall(at, func(_ *oracle.Oracle) {
+				if len(l.menus) == 0 {
+					return
+				}
+				p, r := l.menus[len(l.menus)-1], o.Regs()
+				if p.Addr == at && p.SS == r.SS && p.SP == r.SP {
+					l.menus = l.menus[:len(l.menus)-1]
+					if len(l.menus) == 0 && l.footerTransition {
+						l.footerTransition = false
+						g.listLog("footer-render-return", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP})
+					}
+				}
+			})
 		}
 	})
 	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, func(_ *oracle.Oracle) {
@@ -758,7 +771,7 @@ func (g *liveGame) composeList(px []byte) {
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || l.menuDepth != 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage {
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))

@@ -437,7 +437,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
 	if g.list != nil {
-		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || g.list.menuDepth > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition)
+		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition)
 	}
 	if held {
 		if len(g.lastPixels) == 0 {
@@ -559,10 +559,8 @@ func main() {
 	if *story || *camp {
 		expectedSteps = 329000000
 	}
-	if *listMode {
-		expectedSteps = 665000000
-	}
-	if o.Steps() != expectedSteps {
+	// 列表請求在 installList 核對自己的起始步數，之後另驗快照雜湊。
+	if !*listMode && o.Steps() != expectedSteps {
 		panic("快照步數不符")
 	}
 	for i, want := range []byte{0x55, 0x8b, 0xec, 0xff, 0x76, 0x0a, 0x0e, 0xe8, 0x30, 0xff, 0x59} {

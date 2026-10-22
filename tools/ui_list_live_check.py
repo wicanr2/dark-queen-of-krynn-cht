@@ -420,7 +420,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "en_receipt_sha256": sha((en_run / "receipt.json").read_bytes()),
               "zh_receipt_sha256": sha((zh_run / "receipt.json").read_bytes()),
               "checker_sha256": sha(Path(__file__).read_bytes()),
-              "limits": "固定正常旅店快照與一般按鍵；已觀測列表、角色欄位及四類選單。數字與加值維持原版。不是全部介面、冷啟動、X11、裝備操作、施法、存讀檔、正式字級或正式中文化驗收。"}
+              "limits": "固定正常旅店快照與一般按鍵；已觀測列表、角色欄位及已知整表選單。數字與加值維持原版。不是全部介面、冷啟動、X11、裝備操作、施法、存讀檔、正式字級或正式中文化驗收。"}
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
