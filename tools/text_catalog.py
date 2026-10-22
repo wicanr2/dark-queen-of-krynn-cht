@@ -69,7 +69,7 @@ def write_tsv(path, header, rows):
         writer.writerows(rows)
 
 
-def extract(original, output, traces):
+def extract(original, output, traces, clock_traces=()):
     output.mkdir(parents=True, exist_ok=True)
     records, inputs = {}, []
 
@@ -179,6 +179,41 @@ def extract(original, output, traces):
             anchor = {"trace_sha256":trace_digest, "step":step}
             if anchor not in records[key]["observations"]:
                 records[key]["observations"].append(anchor)
+    clock_components = 0
+    for path in clock_traces:
+        data = json.loads(path.read_text())
+        if data.get("exe_sha256") != digest(exe) or not data.get("observe"):
+            raise ValueError("時間觀測的 EXE 或觀測模式不符")
+        if any(data.get(k) for k in ("pending_calls", "pending_lists", "pending_scrolls", "pending_fills")):
+            raise ValueError("時間觀測尚有未封閉交易")
+        trace_sha = digest(path.read_bytes())
+        for event in data.get("wrappers", []):
+            if event.get("caller") != {"Seg": 0x205E, "Off": 0x53C}:
+                continue
+            source, stack, regs = event["format"], event["stack"], event["regs"]
+            text = source["text"]
+            if not source.get("nul_terminated") or not re.fullmatch(r"[0-9]{1,2}:[0-9]{2} (AM|PM)", text):
+                continue
+            raw = text.encode("ascii")
+            if (regs["CS"], regs["IP"]) != (0xB72, 0x46) or source["hex"] != raw.hex():
+                raise ValueError("時間字串入口或原始 bytes 不符")
+            if (source["segment"], source["offset"]) != (stack[7], stack[6]):
+                raise ValueError("時間緩衝區指標不符")
+            if source["offset"]+len(raw)+1 > 0x10000 or source["segment"]*16+source["offset"]+len(raw)+1 > 0xa0000:
+                raise ValueError("時間緩衝區越界")
+            start = len(raw)-2
+            x, y = (stack[2]&255)*8, (stack[3]&255)*8
+            if (x,y) != (208,120):
+                raise ValueError("時間原始位置不符")
+            suffix = text[start:]
+            pointer = {"segment":source["segment"], "offset":source["offset"]+start}
+            add("ui", suffix, {"file":"runtime RAM", "address_space":"dosgolem runtime segment:offset",
+                **pointer, "encoding":"observed ASCII NUL suffix of clock buffer; original file origin unknown",
+                "screen_x":x+start*8,"screen_y":y}, {"trace_sha256":trace_sha,"step":event["step"],
+                "address_space":"dosgolem runtime segment:offset", "runtime_pointer":pointer,
+                "buffer_pointer":{"segment":source["segment"],"offset":source["offset"]},
+                "buffer_sha256":digest(raw),"slice_start":start,"slice_length":2,"caller":event["caller"]})
+            clock_components += 1
     def order(entry):
         file_positions = [s["file_offset"] for s in entry["sources"] if "file_offset" in s]
         # 原始檔與 RAM 是不同位址空間。執行期專有條目另排，不把 seg:off 偽裝成檔案偏移。
@@ -201,6 +236,7 @@ def extract(original, output, traces):
         "observed":sum(e["status"]=="observed" for e in ordered),
         "excluded_format_events":excluded_formats,
         "runtime_label_observations":runtime_labels,
+        "clock_component_observations":clock_components,
         "missing_observations":len(missing), "inputs":inputs,
         "tool_sha256":digest(Path(__file__).read_bytes()),
         "outputs":{name:digest((output/name).read_bytes()) for name in ("en.tsv","events.tsv","catalog.json")}}
@@ -213,5 +249,6 @@ if __name__ == "__main__":
     parser.add_argument("original", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--trace", type=Path, action="append", default=[])
+    parser.add_argument("--clock-trace", type=Path, action="append", default=[])
     args = parser.parse_args()
-    print(json.dumps(extract(args.original,args.output,args.trace),ensure_ascii=False))
+    print(json.dumps(extract(args.original,args.output,args.trace,args.clock_trace),ensure_ascii=False))

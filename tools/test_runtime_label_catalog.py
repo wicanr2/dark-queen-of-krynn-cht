@@ -66,6 +66,34 @@ def main():
         else:
             raise AssertionError("未拒絕 EXE 雜湊失配")
         print("執行期標籤 8 項檢查通過：真實 literal、座標、格式、結尾、入口、指標、顯存及 EXE 身分。")
+        if len(sys.argv) > 3:
+            clock = json.loads(Path(sys.argv[3]).read_text())
+            expected = {"ui."+hashlib.sha256(t.encode()).hexdigest()[:20] for t in ("AM","PM")}
+            result = root/"clock-full"
+            extract(original,result,[],[Path(sys.argv[3])])
+            entries = {r["key"]:r for r in json.loads((result/"catalog.json").read_text())["entries"]}
+            assert set(entries)-set(baseline)==expected
+            assert all(entries[k]==v for k,v in baseline.items())
+            one = copy.deepcopy(clock)
+            one["wrappers"] = [next(w for w in one["wrappers"] if w["caller"]=={"Seg":0x205E,"Off":0x53C})]
+            for name,change,outcome in [
+                ("unterminated",lambda d:d["wrappers"][0]["format"].__setitem__("nul_terminated",False),"skip"),
+                ("wrong-structure",lambda d:d["wrappers"][0]["format"].__setitem__("text","123:00 AM"),"skip"),
+                ("wrong-pointer",lambda d:d["wrappers"][0]["format"].__setitem__("offset",0),"reject"),
+                ("wrong-bytes",lambda d:d["wrappers"][0]["format"].__setitem__("hex","00"),"reject"),
+                ("wrong-exe",lambda d:d.__setitem__("exe_sha256","0"*64),"reject"),
+            ]:
+                mutated=copy.deepcopy(one);change(mutated)
+                source=root/("clock-"+name+".json");source.write_text(json.dumps(mutated))
+                dest=root/("clock-"+name)
+                try: extract(original,dest,[],[source])
+                except ValueError:
+                    assert outcome=="reject" and not (dest/"en.tsv").exists()
+                    continue
+                assert outcome=="skip"
+                actual={r["key"]:r for r in json.loads((dest/"catalog.json").read_text())["entries"]}
+                assert actual==baseline
+            print("時間來源 6 項檢查通過：真實上午／下午、結尾、結構、指標、bytes 及 EXE 身分。")
 
 
 if __name__ == "__main__":

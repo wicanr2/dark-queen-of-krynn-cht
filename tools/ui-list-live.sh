@@ -46,8 +46,8 @@ case "${1:-}" in
     PARENT="$(dirname "$PROBE/$RESULT")"; test -d "$PARENT"
     test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
     TRANSLATE=false; [[ "$1" = en ]] || TRANSLATE=true
-    timeout --kill-after=10s 600s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 \
-      --label project=dark-queen-of-krynn-cht -e GOMEMLIMIT=1GiB -e LIST_STATE="$STATE" -e LIST_REQUEST="$REQUEST" \
+    timeout --kill-after=10s 1800s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 3g --cpus 2 --pids-limit 128 \
+      --label project=dark-queen-of-krynn-cht -e GOMAXPROCS=2 -e GOMEMLIMIT=1GiB -e LIST_STATE="$STATE" -e LIST_REQUEST="$REQUEST" \
       -e LIST_INPUT="$INPUT" -e LIST_RESULT="$(basename "$RESULT")" -e LIST_TRANSLATE="$TRANSLATE" -e LIST_FINE="$FINE" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" --entrypoint bash "$GO_IMAGE" -c '
         set -e
@@ -55,10 +55,16 @@ case "${1:-}" in
         trap "kill $xvfb_pid 2>/dev/null; wait $xvfb_pid 2>/dev/null" EXIT
         for attempt in {1..50}; do test -S /tmp/.X11-unix/X99 && break; sleep 0.1; done
         export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1
+        result_status=0
         /probe/ui-list-live -list -state "/probe/$LIST_STATE" -list-request "/probe/$LIST_REQUEST" \
           -list-inputs "/probe/$LIST_INPUT/inputs.json" -source-catalog "/probe/$LIST_INPUT/en.tsv" \
           -catalog "/probe/$LIST_INPUT/zh-TW.tsv" -glyphs "/probe/$LIST_INPUT/glyphs-16.json" \
-          -out "/out/$LIST_RESULT" -translate="$LIST_TRANSLATE" -fine="$LIST_FINE"'
+          -out "/out/$LIST_RESULT" -translate="$LIST_TRANSLATE" -fine="$LIST_FINE" || result_status=$?
+        if test -d "/out/$LIST_RESULT"; then
+          cat /sys/fs/cgroup/memory.peak >"/out/$LIST_RESULT/memory-peak.txt"
+          cat /sys/fs/cgroup/memory.events >"/out/$LIST_RESULT/memory-events.txt"
+        fi
+        exit "$result_status"'
     ;;
   verify)
     EN="${2:?英文組}"; ZH="${3:?繁中組}"; INPUT="${4:?輸入}"; CONTROL="${5:?無觀測原版}"; OBS="${6:?原版觀測}"; RESULT="${7:?全新收據}"
@@ -67,7 +73,7 @@ case "${1:-}" in
     test ! -e "$PROBE/$RESULT"
     PARENT="$(dirname "$PROBE/$RESULT")"; test -d "$PARENT"
     test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
-    timeout 120s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 1 --pids-limit 64 \
+    timeout 180s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 3g --cpus 1 --pids-limit 64 \
       --label project=dark-queen-of-krynn-cht -v "$PROBE:/probe:ro" -v "$ROOT/tools:/tools:ro" -v "$PARENT:/out" \
       --entrypoint python3 "$PIL_IMAGE" /tools/ui_list_live_check.py \
       "/probe/$EN" "/probe/$ZH" "/probe/$INPUT" "/probe/$CONTROL" "/probe/$OBS" "/out/$(basename "$RESULT")"

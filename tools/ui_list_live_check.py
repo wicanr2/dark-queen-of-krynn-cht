@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import json
+import re
 import struct
 import sys
 from pathlib import Path
@@ -29,9 +30,21 @@ def check(en_run, zh_run, inputs, control, observed, output):
     zh = catalog(inputs / "zh-TW.tsv")
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
+    def field_start(field, text):
+        if not field.get("SourcePattern"):
+            return field["Start"] if sha(text.encode()) == field["SHA256"] else None
+        assert field["SourcePattern"] == "clock-period"
+        assert field["Pane"] == "callsite" and field["Group"] == "body"
+        assert field["UpperCaller"] == {"Seg": 0x205E, "Off": 0x53C}
+        assert (field["RawX"], field["RawY"], field["Start"], field["Length"]) == (8104, 8060, 0, 2)
+        if re.fullmatch(r"[0-9]{1,2}:[0-9]{2} (AM|PM)", text) and text[-2:] == en[field["Key"]] and sha(text[-2:].encode()) == field["SHA256"]:
+            return len(text)-2
+        return None
     # 從原版整表 bytes 獨立重建按鈕順序、文字指標、座標及指紋。
     native = lambda value: value if value < 400 else (value - 8000) * 2
-    for menu in [*trace["menus"], *(e["menu_snapshot"] for e in trace["list_events"] if "menu_snapshot" in e)]:
+    refresh_sources = {e["step"]: e for e in trace.get("menu_refresh_sources") or []}
+    for menu in [*trace["menus"], *(e["menu_snapshot"] for e in trace["list_events"] if "menu_snapshot" in e),
+                 *(e["menu_snapshot"] for e in refresh_sources.values() if e["valid"])]:
         raw = bytes.fromhex(menu["RawHex"])
         assert len(raw) == menu["Count"] * 32
         indices = [i for i in range(menu["Count"]) if struct.unpack_from("<HH", raw, i*32) == (0x8E, 0xCEB)]
@@ -175,7 +188,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         c = calls_by_step[e["Step"]]
         source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
         matches = [f for f in config["Fields"] if f["Key"] == e["detail"]["key"] and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
-                   and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
+                   and f["Caller"] == c["caller"] and field_start(f, source["text"]) is not None
                    and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                    and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite", "menu"))
                    and (f["Pane"] != "menu" or f["MenuSignature"] == menu_signature(c))
@@ -185,9 +198,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
         f = matches[0]
         assert e["detail"]["menu_signature"] == f.get("MenuSignature", "")
         assert e["Step"] < e["first_glyph"] == c["first_glyph"]
-        assert e["detail"]["source_sha256"] == f["SHA256"]
+        start = field_start(f, source["text"])
+        assert e["detail"]["source_sha256"] == sha(source["text"].encode())
+        assert e["detail"].get("source_start", None if f.get("SourcePattern") else f["Start"]) == start
         assert e["detail"]["deferred"] == (f["Pane"] == "suffix")
-        assert source["text"][f["Start"]:f["Start"]+f["Length"]] == en[f["Key"]]
+        assert source["text"][start:start+f["Length"]] == en[f["Key"]]
         if f["Pane"] == "callsite":
             wrapper = trace["wrappers"][c["wrapper_index"]]
             assert wrapper["step"] < c["step"] and wrapper["format"]["text"] == source["text"]
@@ -208,7 +223,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             ink = {x for x in range(264, 312) if any(original.getpixel((x, y)) == foreground for y in range(16, 24))}
             assert ink and ink <= set(range(264, 280)) | set(range(288, 304))
             assert ink & set(range(264, 280)) and ink & set(range(288, 304))
-        word = {"X": native(c["stack"][3])+f["Start"]*8, "Y": native(c["stack"][2]), "Width": width,
+        word = {"X": native(c["stack"][3])+start*8, "Y": native(c["stack"][2]), "Width": width,
                 "Key": f["Key"], "Group": f["Group"], "Foreground": c["stack"][4] & 15,
                 "Background": config["Background"]}
         assert e["detail"]["word"] == word
@@ -229,7 +244,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
         in_list = any(start <= c["step"] < end for start, end in intervals)
         expected_keys = {f["Key"] for f in config["Fields"] if f["Pane"] != "suffix" and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
-               and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
+               and f["Caller"] == c["caller"] and field_start(f, source["text"]) is not None
                and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                and ((f["Pane"] == "callsite" and c["wrapper_index"] >= 0
                      and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])
@@ -238,6 +253,21 @@ def check(en_run, zh_run, inputs, control, observed, output):
         actual_keys = {key for (step, key), event in field_by_id.items() if step == c["step"] and not event["detail"]["deferred"]}
         assert actual_keys == expected_keys, (c["step"], expected_keys, actual_keys)
     assert len([e for e in b["list_events"] if e["Kind"] == "title-suffix-attached"]) == len(title_wrappers)
+    clock_keys = {f["Key"] for f in config["Fields"] if f.get("SourcePattern") == "clock-period"}
+    clock_wrappers = [w for w in trace["wrappers"] if clock_keys and w["caller"] == {"Seg": 0x205E, "Off": 0x53C}
+                      and ((w["stack"][2]&255)*8, (w["stack"][3]&255)*8) == (208, 120)]
+    resets = [e for e in b["list_events"] if e["Kind"] == "clock-source-reset"]
+    returns = [e for e in b["list_events"] if e["Kind"] == "clock-render-return"]
+    assert len(resets) == len(returns) == len(clock_wrappers)
+    clock_intervals = []
+    for wrapper, reset, returned in zip(clock_wrappers, resets, returns):
+        assert reset["Step"] == wrapper["step"]
+        assert reset["detail"] == {"caller": wrapper["caller"], "native_xy": [208, 120]}
+        assert returned["detail"] == {"caller": wrapper["caller"], "ss": wrapper["regs"]["SS"], "sp": (wrapper["regs"]["SP"]+4)&65535}
+        lower = [c for c in trace["calls"] if c["wrapper_index"] >= 0 and trace["wrappers"][c["wrapper_index"]]["step"] == wrapper["step"]]
+        assert len(lower) == 1 and lower[0]["return_step"] < returned["Step"]
+        assert returned["Step"] < next((w["step"] for w in clock_wrappers if w["step"] > wrapper["step"]), oracle["request"]["actions"][-1]["end"])
+        clock_intervals.append((reset["Step"], returned["Step"]))
 
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
     words, pending_suffix, model, row_positions = {}, None, [], set()
@@ -265,8 +295,20 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert not targets, ("missing clear baseline", e["Step"])
             words = {pos: w for pos, w in words.items() if w["Group"] == "footer"}
             pending_suffix = None
+        elif kind == "clock-source-reset":
+            words = {pos: w for pos, w in words.items() if w["Key"] not in clock_keys}
         elif kind == "footer-render-entry":
-            words = {pos: w for pos, w in words.items() if w["Group"] != "footer"}
+            preserved = False
+            if e.get("detail") is not None:
+                native_refresh = refresh_sources[e["Step"]]
+                signature = native_refresh["menu_snapshot"]["Signature"] if native_refresh["valid"] else ""
+                expected = {(f["RawX"]+f["Start"]*8, f["RawY"], f.get("Width", f["Length"]*8), f["Key"])
+                            for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == signature}
+                before = {(w["X"], w["Y"], w["Width"], w["Key"]) for w in words.values() if w["Group"] == "footer"}
+                preserved = bool(expected) and signature in config["Menus"] and before == expected
+                assert e["detail"] == {"menu_signature": signature, "preserved": preserved}
+            if not preserved:
+                words = {pos: w for pos, w in words.items() if w["Group"] != "footer"}
         elif kind == "native-fill":
             assert any(f["step"] <= e["Step"] <= f["return_instruction_step"]
                        and f["native_rect"] == e["detail"] for f in trace["fill_events"])
@@ -330,6 +372,17 @@ def check(en_run, zh_run, inputs, control, observed, output):
     for actual in (a, b):
         assert (actual["final_words"] or []) == model[-1][1]
         assert {w["Key"] for w in actual["final_words"] or [] if w["Group"] == "footer"} == final_keys
+        # 每個動作終點都應保留完整已知按鈕；同區提示另外由生命週期模型驗證。
+        layouts = {frame["step"]: frame for frame in actual["list_frames"]}
+        menu_field_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu"}
+        for checkpoint in actual["checkpoints"]:
+            button = next(c for c in reversed(trace["calls"]) if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE})
+            signature = menu_signature(button)
+            if signature not in config["Menus"]:
+                continue
+            expected_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == signature}
+            actual_keys = {w["Key"] for w in layouts[checkpoint["step"]]["words"] or [] if w["Group"] == "footer" and w["Key"] in menu_field_keys}
+            assert actual_keys == expected_keys, ("checkpoint footer incomplete", checkpoint["label"], expected_keys-actual_keys, actual_keys-expected_keys)
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
     assert len(cleared) == len(clear_baselines) > 0
     for event, (start, targets) in zip(cleared, clear_baselines):
@@ -387,6 +440,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
             model_index += 1
         assert (state["words"] or []) == (model[model_index][1] if model_index >= 0 else []), frame["step"]
         original = originals[frame["step"]]
+        if any(start <= frame["step"] < end for start, end in clock_intervals):
+            assert frame["held"], ("clock transaction exposed", frame["step"])
         native_state = native_layouts[frame["step"]]
         for field in ("display_start", "render_page", "palette"):
             assert state[field] == native_state[field]
@@ -427,6 +482,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "list_page_rebases": len(pages),
               "preserved_actor_headers": len(actor_headers),
               "field_events": len(fields), "field_keys": sorted({e["detail"]["key"] for e in fields}),
+              "clock_transactions": len(clock_intervals),
+              "compatible_footer_refreshes": sum(e["Kind"] == "footer-render-entry" and bool((e.get("detail") or {}).get("preserved")) for e in b["list_events"]),
+              "fine_window_count": len(config["fine_windows"]),
               "callsite_field_events": sum(1 for e in fields if any(f["Pane"] == "callsite" and f["Key"] == e["detail"]["key"] for f in config["Fields"])),
               "menu_field_events": sum(bool(e["detail"]["menu_signature"]) for e in fields),
               "menu_kinds": sorted({config["Menus"][e["detail"]["menu_signature"]] for e in fields if e["detail"]["menu_signature"]}),

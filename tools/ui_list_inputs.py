@@ -165,7 +165,8 @@ def prepare(texts, observed, output):
     menu_terms = {}
     for source in ("Rdy Use Trade Deposit Drop Halve Join Sell Id Exit",
                    "Cast Memorize Scribe Display Rest Exit",
-                   "Items Spells Trade Deposit Drop Lay Cure Exit"):
+                   "Items Spells Trade Deposit Drop Lay Cure Exit",
+                   "Rest Days Hours Mins Add Subtract Exit"):
         k, target = formal(source)
         source_parts, target_parts = source.split(), target.replace("\\u3000", " ").split()
         assert len(source_parts) == len(target_parts)
@@ -174,7 +175,7 @@ def prepare(texts, observed, output):
                 assert menu_terms[english][0] == translated
             menu_terms[english] = (translated, k)
     # 營地短標籤已有正式來源與先前字框量測，直接沿用既有詞條。
-    for source in ("View", "Magic", "Alt", "Fix", "Load", "Save"):
+    for source in ("View", "Magic", "Alt", "Fix", "Load", "Save", "Palace", "Temple", "Hall", "Shop", "Inn", "Bar", "Leave"):
         k, value = formal(source)
         menu_terms[source] = (value, k)
     fields, field_ids, field_provenance = [], set(), []
@@ -229,10 +230,13 @@ def prepare(texts, observed, output):
         ("Rdy", "Use", "Trade", "Drop", "Halve", "Join", "Exit"): "inventory",
         ("Cast", "Memorize", "Scribe", "Display", "Rest", "Exit"): "magic",
         ("Memorize", "Exit"): "grimoire", ("Exit",): "effects",
-        ("View", "Magic", "Rest", "Alt", "Fix", "Load", "Save", "Exit"): "camp"}
+        ("View", "Magic", "Rest", "Alt", "Fix", "Load", "Save", "Exit"): "camp",
+        ("Rest", "Days", "Hours", "Mins", "Add", "Subtract", "Exit"): "rest",
+        ("Palace", "Temple", "Hall", "Shop", "Inn", "Bar", "Leave"): "city"}
     menus, menu_provenance = {}, []
     for pane, folder in (("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1"),
-                         ("effects", "observe-effects-r1"), ("camp", "observe-camp-roundtrip-r1")):
+                         ("effects", "observe-effects-r1"), ("camp", "observe-camp-roundtrip-r1"),
+                         ("camp", "observe-clock-city-r1")):
         receipt = json.loads((observed / folder / "receipt.json").read_text())
         known_menus = {}
         for index, menu in enumerate(receipt["menus"]):
@@ -402,6 +406,35 @@ def prepare(texts, observed, output):
             callsite_sources.append({"folder": "observe-camp-roundtrip-r1", "step": c["step"],
                 "wrapper_step": wrapper["step"], "caller": caller, "source": source, "binding": field})
     assert seen_hud == set(hud_sources)
+    clock = json.loads((observed / "observe-clock-city-r1/receipt.json").read_text())
+    for c in clock["calls"]:
+        if c["wrapper_index"] < 0:
+            continue
+        wrapper = clock["wrappers"][c["wrapper_index"]]
+        caller = wrapper["caller"]
+        text = c["vararg_1_candidate"]["text"]
+        period = caller == {"Seg": 0x205E, "Off": 0x53C}
+        rest = caller == {"Seg": 0x4A6, "Off": 0x631} and text == "Rest Time:"
+        if not (period or rest):
+            continue
+        assert c["format"]["text"] == "%s" and c["vararg_1_candidate"]["nul_terminated"]
+        assert wrapper["format"]["text"] == text
+        if period:
+            assert re.fullmatch(r"[0-9]{1,2}:[0-9]{2} (AM|PM)", text)
+            source = text[-2:]
+        else:
+            source = text
+        field = {"Pane":"callsite", "Group":"body", "Key":field_key(source), "Start":0, "Length":len(source),
+                 "RawX":c["stack"][3], "RawY":c["stack"][2], "Caller":c["caller"], "UpperCaller":caller,
+                 "FormatSHA256":sha(c["format"]["text"].encode()), "SHA256":sha(source.encode())}
+        if period:
+            field["SourcePattern"] = "clock-period"
+        encoded = json.dumps(field, sort_keys=True)
+        if encoded not in field_ids:
+            fields.append(field)
+            field_ids.add(encoded)
+        callsite_sources.append({"folder":"observe-clock-city-r1", "step":c["step"], "wrapper_step":wrapper["step"],
+                                 "caller":caller,"source":text,"binding":field})
     output.mkdir()
     for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
@@ -421,6 +454,13 @@ def prepare(texts, observed, output):
     camp_request = observed / "camp-roundtrip-request.json"
     for action in json.loads(camp_request.read_text())["actions"]:
         windows.append([action["at"], min(action["at"]+1000000, action["end"])])
+    clock_request = observed / "clock-city-request.json"
+    for action in json.loads(clock_request.read_text())["actions"]:
+        windows.append([action["at"],min(action["at"]+1000000,action["end"])])
+    for wrapper in clock["wrappers"]:
+        if wrapper["caller"] == {"Seg":0x205E,"Off":0x53C}:
+            start = wrapper["step"] // 1000000 * 1000000
+            windows.append([start,start+1000000])
     merged = []
     for start, end in sorted(windows):
         if merged and start <= merged[-1][1]:
@@ -438,6 +478,7 @@ def prepare(texts, observed, output):
         "menus": menu_provenance,
         "effects_receipt_sha256": sha((observed / "observe-effects-r1/receipt.json").read_bytes()),
         "camp_request_sha256": sha(camp_request.read_bytes()),
+        "clock_request_sha256": sha(clock_request.read_bytes()),
         "reviewed_fields_sha256": sha((texts / "ui-list-chrome-reviewed.tsv").read_bytes()),
         "observed_rows": len(rows),
         "formal_en_sha256": sha((texts / "en.tsv").read_bytes()),

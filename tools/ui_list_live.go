@@ -44,6 +44,7 @@ type listPaneSource struct {
 type listField struct {
 	Pane, Group, Key, SHA256, FormatSHA256 string
 	MenuSignature                          string
+	SourcePattern                          string
 	Start, Length                          int
 	Width                                  int
 	RawX, RawY                             uint16
@@ -104,6 +105,8 @@ type listState struct {
 	headerReturn           *paintReturn
 	footerTransition       bool
 	fieldWrapper           *listFieldWrapper
+	clockReturn            *paintReturn
+	clockKeys              map[string]bool
 	trackListPage          bool
 	rowPagePending         bool
 }
@@ -150,10 +153,59 @@ func listString(o *oracle.Oracle, seg, off uint16) (string, bool) {
 	}
 	return "", false
 }
+func (l *listState) fieldStart(f listField, source string) (int, bool) {
+	if f.SourcePattern == "" {
+		return f.Start, f.SHA256 == digest([]byte(source))
+	}
+	if f.SourcePattern != "clock-period" || len(source) < 7 || len(source) > 8 {
+		return 0, false
+	}
+	colon := len(source) - 6
+	if source[colon] != ':' || source[colon+3] != ' ' {
+		return 0, false
+	}
+	for _, i := range []int{0, colon + 1, colon + 2} {
+		if source[i] < '0' || source[i] > '9' {
+			return 0, false
+		}
+	}
+	if colon == 2 && (source[1] < '0' || source[1] > '9') {
+		return 0, false
+	}
+	start := len(source) - 2
+	return start, source[start:] == l.sources[f.Key] && digest([]byte(source[start:])) == f.SHA256
+}
+func (l *listState) footerCompatible(signature string) bool {
+	if l.config.Menus[signature] == "" {
+		return false
+	}
+	expected, actual := 0, 0
+	for _, word := range l.words {
+		if word.Group == "footer" {
+			actual++
+		}
+	}
+	for _, field := range l.config.Fields {
+		if field.Pane != "menu" || field.MenuSignature != signature {
+			continue
+		}
+		expected++
+		width := field.Width
+		if width == 0 {
+			width = field.Length * 8
+		}
+		word, ok := l.words[[2]int{int(field.RawX) + field.Start*8, int(field.RawY)}]
+		if !ok || word.Group != "footer" || word.Key != field.Key || word.Width != width || word.Background != l.config.Background {
+			return false
+		}
+	}
+	return expected > 0 && actual == expected
+}
 func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	l := g.list
 	o := g.o
 	l.words = map[[2]int]listWord{}
+	l.clockKeys = map[string]bool{}
 	l.sources = readLiveCatalog(sourcePath)
 	b, e := os.ReadFile(inputs)
 	must(e)
@@ -197,6 +249,12 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	}
 	for _, f := range l.config.Fields {
+		if f.SourcePattern != "" {
+			if f.SourcePattern != "clock-period" || f.Pane != "callsite" || f.Group != "body" || f.UpperCaller != (oracle.Addr{Seg: 0x205e, Off: 0x53c}) || f.RawX != 8104 || f.RawY != 8060 || f.Start != 0 || f.Length != 2 || f.Width != 0 {
+				panic("未知時間欄位契約")
+			}
+			l.clockKeys[f.Key] = true
+		}
 		width := f.Width
 		if width == 0 {
 			width = f.Length * 8
@@ -442,24 +500,41 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		for i := range s {
 			s[i] = o.StackWord(i)
 		}
+		col, row := int(byte(s[2])), int(byte(s[3]))
+		l.fieldWrapper = nil
+		if len(l.clockKeys) > 0 && o.Caller() == (oracle.Addr{Seg: 0x205e, Off: 0x53c}) && col*8 == 208 && row*8 == 120 {
+			for pos, word := range l.words {
+				if l.clockKeys[word.Key] {
+					delete(l.words, pos)
+				}
+			}
+			g.listLog("clock-source-reset", map[string]any{"caller": o.Caller(), "native_xy": [2]int{col * 8, row * 8}})
+		}
 		format, ok := listString(o, s[7], s[6])
 		if !ok {
 			return
 		}
-		col, row := int(byte(s[2])), int(byte(s[3]))
-		l.fieldWrapper = nil
 		for _, f := range l.config.Fields {
-			if f.Pane != "callsite" || f.UpperCaller != o.Caller() || f.SHA256 != digest([]byte(format)) {
+			_, matches := l.fieldStart(f, format)
+			if f.Pane != "callsite" || f.UpperCaller != o.Caller() || !matches {
 				continue
 			}
 			r, at := o.Regs(), o.Caller()
 			l.fieldWrapper = &listFieldWrapper{Return: paintReturn{at, r.SS, r.SP + 4}, Caller: at, Source: format, X: col * 8, Y: row * 8}
+			if f.SourcePattern == "clock-period" {
+				p := l.fieldWrapper.Return
+				l.clockReturn = &p
+			}
 			if !fieldRegistered[at] {
 				fieldRegistered[at] = true
 				o.OnCall(at, func(_ *oracle.Oracle) {
 					p, r := l.fieldWrapper, o.Regs()
 					if p != nil && p.Return.Addr == at && p.Return.SS == r.SS && p.Return.SP == r.SP {
 						l.fieldWrapper = nil
+					}
+					if c := l.clockReturn; c != nil && c.Addr == at && c.SS == r.SS && c.SP == r.SP {
+						l.clockReturn = nil
+						g.listLog("clock-render-return", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP})
 					}
 				})
 			}
@@ -568,12 +643,20 @@ func (g *liveGame) installListFields() {
 		}
 		l.menus = append(l.menus, p)
 		if l.footerTransition {
-			for p, w := range l.words {
-				if w.Group == "footer" {
-					delete(l.words, p)
+			menu, ok := readMenuSource(o)
+			signature := ""
+			if ok {
+				signature = menu.Signature
+			}
+			preserved := l.footerCompatible(signature)
+			if !preserved {
+				for p, w := range l.words {
+					if w.Group == "footer" {
+						delete(l.words, p)
+					}
 				}
 			}
-			g.listLog("footer-render-entry", nil)
+			g.listLog("footer-render-entry", map[string]any{"menu_signature": signature, "preserved": preserved})
 		}
 		if !menuReturns[at] {
 			menuReturns[at] = true
@@ -641,8 +724,9 @@ func (g *liveGame) installListFields() {
 			}
 		}
 		for _, f := range l.config.Fields {
+			start, matches := l.fieldStart(f, source)
 			if f.RawX != s[3] || f.RawY != s[2] || f.Caller != o.Caller() ||
-				f.FormatSHA256 != digest([]byte(format)) || f.SHA256 != digest([]byte(source)) {
+				f.FormatSHA256 != digest([]byte(format)) || !matches {
 				continue
 			}
 			if f.Pane == "suffix" {
@@ -668,7 +752,7 @@ func (g *liveGame) installListFields() {
 				}
 				return (int(v) - 8000) * 2
 			}
-			if f.Start+f.Length > len(source) || source[f.Start:f.Start+f.Length] != l.sources[f.Key] {
+			if start+f.Length > len(source) || source[start:start+f.Length] != l.sources[f.Key] {
 				panic("欄位詞框來源不符")
 			}
 			if f.Pane == "callsite" && (l.fieldWrapper.X != native(s[3]) || l.fieldWrapper.Y != native(s[2])) {
@@ -678,7 +762,7 @@ func (g *liveGame) installListFields() {
 			if width == 0 {
 				width = f.Length * 8
 			}
-			w := listWord{X: native(s[3]) + f.Start*8, Y: native(s[2]), Width: width, Key: f.Key,
+			w := listWord{X: native(s[3]) + start*8, Y: native(s[2]), Width: width, Key: f.Key,
 				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background}
 			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+8 > 200 {
 				panic("列表欄位越界")
@@ -690,7 +774,7 @@ func (g *liveGame) installListFields() {
 				l.erase(w.X, w.Y, w.Width, 8)
 				l.words[[2]int{w.X, w.Y}] = w
 			}
-			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": f.SHA256,
+			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": digest([]byte(source)), "source_start": start,
 				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix", "menu_signature": f.MenuSignature}))
 		}
 	})
@@ -778,7 +862,7 @@ func (g *liveGame) composeList(px []byte) {
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 {
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))

@@ -22,6 +22,7 @@ case "${1:-}" in
     test -f "$WORK/probe/story-return-sequence-20261022/trace.json"
     test -f "$WORK/probe/story-hall-20261022/trace.json"
     test -f "$WORK/probe/save-load-observe-r2-20261022/trace.json"
+    test -f "$WORK/probe/pane-render-20261022/observe-clock-city-r1/receipt.json"
     timeout 30s docker run --rm --init --label project=dark-queen-of-krynn-cht \
       --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/input/dos/drkqueen:/orig:ro" \
@@ -30,7 +31,8 @@ case "${1:-}" in
       --trace /receipts/early-observe/trace.json --trace /receipts/story-observe/trace.json \
       --trace /receipts/story-return-sequence-20261022/trace.json \
       --trace /receipts/story-hall-20261022/trace.json \
-      --trace /receipts/save-load-observe-r2-20261022/trace.json
+      --trace /receipts/save-load-observe-r2-20261022/trace.json \
+      --clock-trace /receipts/pane-render-20261022/observe-clock-city-r1/receipt.json
     ;;
   terms|seed)
     test -f "$WORK/translation/catalog.json"
@@ -144,11 +146,13 @@ case "${1:-}" in
   test-runtime-labels)
     test -f "$WORK/input/dos/drkqueen/DQK.EXE"
     test -f "$WORK/probe/story-return-sequence-20261022/trace.json"
+    test -f "$WORK/probe/pane-render-20261022/observe-clock-city-r1/receipt.json"
     timeout 60s docker run --rm --init --label project=dark-queen-of-krynn-cht \
       --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
       --entrypoint python3 -v "$ROOT/tools:/tools:ro" -v "$WORK/input/dos/drkqueen:/orig:ro" \
-      -v "$WORK/probe/story-return-sequence-20261022:/trace:ro" "$PIL_IMAGE" \
-      /tools/test_runtime_label_catalog.py /orig /trace/trace.json
+      -v "$WORK/probe:/trace:ro" "$PIL_IMAGE" \
+      /tools/test_runtime_label_catalog.py /orig /trace/story-return-sequence-20261022/trace.json \
+      /trace/pane-render-20261022/observe-clock-city-r1/receipt.json
     ;;
   test)
     test -f "$DKK/font/jf-openhuninn-2.1.ttf"

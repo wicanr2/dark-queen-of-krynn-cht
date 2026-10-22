@@ -139,6 +139,7 @@ func main() {
 	var calls []call
 	var wrappers []map[string]any
 	var menus []menuSourceSnapshot
+	var menuRefreshSources []map[string]any
 	menuIndices := map[string]int{}
 	var listEvents []map[string]any
 	var scrollEvents []map[string]any
@@ -161,6 +162,34 @@ func main() {
 		panic("格式化入口不符")
 	}
 	if observe {
+		refresh := false
+		for _, point := range []struct {
+			addr  oracle.Addr
+			bytes string
+		}{
+			{oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, "558bec83ec0456803ec2da00751833c0"},
+			{oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, "cb558bec83ec085657168d46fe50168d"},
+		} {
+			if hex.EncodeToString(o.Bytes(point.addr, len(point.bytes)/2)) != point.bytes {
+				panic("選單刷新入口 bytes 不符")
+			}
+		}
+		o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, func(_ *oracle.Oracle) {
+			if o.Regs().AX != 0xffff {
+				refresh = true
+			}
+		})
+		o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, func(_ *oracle.Oracle) {
+			if !refresh {
+				return
+			}
+			refresh = false
+			if len(menuRefreshSources) >= 2000 {
+				panic("選單刷新來源超出界限")
+			}
+			menu, ok := readMenuSource(o)
+			menuRefreshSources = append(menuRefreshSources, map[string]any{"step": o.Steps(), "regs": o.Regs(), "caller": o.Caller(), "valid": ok, "menu_snapshot": menu})
+		})
 		fillEntry := oracle.Addr{Seg: 0x13c7, Off: 0x0078}
 		fillCoordinates := oracle.Addr{Seg: 0x13c7, Off: 0x00f7}
 		fillReturn := oracle.Addr{Seg: 0x13c7, Off: 0x06db}
@@ -423,6 +452,6 @@ func main() {
 			matches = append(matches, i)
 		}
 	}
-	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
+	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "menu_refresh_sources": menuRefreshSources, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
 }
