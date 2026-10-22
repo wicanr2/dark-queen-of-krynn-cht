@@ -88,6 +88,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert returned["Step"] == p["return_step"]
         assert returned["detail"] == {"caller":p["caller"],"ss":p["regs"]["SS"],"sp":(p["regs"]["SP"]+4)&65535}
     from ui_journal_reader_check import reader_model, paint_reader
+    from ui_journal_illustrations_check import illustrations
+    reader_images = illustrations(inputs)
     reader = reader_model(inputs,config,native_paragraphs,paragraph_entries,(a,b))
     def field_start(field, text):
         if not field.get("SourcePattern"):
@@ -609,7 +611,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                         at = ((y + yy) * 640 + x + col * 16 + xx) * 4
                         for channel in range(3):
                             px[at + channel] = (fg[channel] * value + px[at + channel] * (255 - value) + 127) // 255
-        paint_reader(px,reader_page,palette,alpha)
+        paint_reader(px,reader_page,palette,alpha,reader_images)
         return sha(px)
 
     previous, held, translated_frames, model_index = None, 0, 0, -1

@@ -40,14 +40,14 @@ case "${1:-}" in
       --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOPROXY=off -e GOMAXPROCS=2 \
       -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro \
       -v "$PROBE/gocache:/gocache" -v "$PROBE:/out" -w /src --entrypoint bash "$GO_IMAGE" \
-      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_menu_source.go'
+      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go'
     ;;
   en|zh|keys-en|keys-zh)
     STATE="${2:?快照}"; REQUEST="${3:?一般按鍵請求}"; INPUT="${4:?輸入目錄}"; RESULT="${5:?全新輸出}"; FINE="${6:-false}"
     READER_PROBE="${7:-false}"
     READER_KEYS=false; KEY_MODE="${8:-reader-long}"
     if [[ "$1" = keys-* ]]; then READER_KEYS=true; fi
-    [[ "$KEY_MODE" = reader-long || "$KEY_MODE" = reader-seen ]]
+    [[ "$KEY_MODE" = reader-long || "$KEY_MODE" = reader-seen || "$KEY_MODE" = reader-image ]]
     relative "$STATE"; relative "$REQUEST"; relative "$INPUT"; relative "$RESULT"
     [[ "$FINE" = true || "$FINE" = false ]]
     [[ "$READER_PROBE" = true || "$READER_PROBE" = false ]]
@@ -69,6 +69,7 @@ case "${1:-}" in
         export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1
         reader_args=()
         if test -f "/probe/$LIST_INPUT/reader.zh-TW.tsv"; then reader_args=(-reader-catalog "/probe/$LIST_INPUT/reader.zh-TW.tsv"); fi
+        if test -f "/probe/$LIST_INPUT/illustrations.json"; then reader_args+=(-reader-illustrations "/probe/$LIST_INPUT/illustrations.json"); fi
         if test -f "/probe/$LIST_INPUT/reader-controls.json"; then reader_args+=(-reader-controls "/probe/$LIST_INPUT/reader-controls.json"); fi
         reader_args+=(-reader-probe="$LIST_READER_PROBE")
         reader_args+=(-reader-interactive="$LIST_READER_KEYS")

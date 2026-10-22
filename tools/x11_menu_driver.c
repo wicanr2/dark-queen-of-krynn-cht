@@ -106,17 +106,47 @@ static int reader_test(Display *d,unsigned long pid,const char *directory,int lo
     }
     return 0;
 }
+static int reader_image_test(Display *d,unsigned long pid,const char *directory) {
+    Window w=0;char json[8192],subdir[4096],path[4096];
+    struct timespec start,now,pause={0,10000000},present={0,80000000};
+    clock_gettime(CLOCK_MONOTONIC,&start);
+    for(;;) {
+        clock_gettime(CLOCK_MONOTONIC,&now);
+        if(now.tv_sec-start.tv_sec>150)return 4;
+        if(!w)w=find_window(d,DefaultRootWindow(d),pid);
+        reader_status(json,sizeof json);
+        if(w && number(json,"step")==810000000ULL && number(json,"reader_entry")==64 &&
+           strstr(json,"\"reader_stable\":true") && strstr(json,"\"reader_mode\":\"probe\""))break;
+        nanosleep(&pause,NULL);
+    }
+    count_field="reader_inputs";
+    KeySym keys[]={XK_equal,XK_s,XK_d,XK_equal,XK_minus,XK_Home,XK_Escape};
+    for(int phase=0;phase<7;phase++) {
+        nanosleep(&present,NULL);XSync(d,False);
+        reader_status(json,sizeof json);
+        if(number(json,"step")!=810000000ULL || number(json,"reader_entry")!=64 ||
+           number(json,"reader_page")!=1 || !strstr(json,"\"reader_mode\":\"probe\""))return 7;
+        snprintf(subdir,sizeof subdir,"%s/reader-%d",directory,phase);
+        if(mkdir(subdir,0755))return 6;
+        capture(d,w,subdir,json);
+        snprintf(path,sizeof path,"%s/latest.json",subdir);
+        FILE *f=fopen(path,"w");if(!f)return 6;fputs(json,f);fclose(f);
+        send_key(d,w,keys[phase]);nanosleep(&present,NULL);
+    }
+    return 0;
+}
 int main(int argc,char **argv) {
     if(argc!=4) {fprintf(stderr,"usage: driver pid output roundtrip|adventure\n");return 2;}
     int adventure=!strcmp(argv[3],"adventure");
-    int reader=!strcmp(argv[3],"reader-long") || !strcmp(argv[3],"reader-seen");
+    int image_reader=!strcmp(argv[3],"reader-image");
+    int reader=!strcmp(argv[3],"reader-long") || !strcmp(argv[3],"reader-seen") || image_reader;
     if(!adventure && strcmp(argv[3],"roundtrip") && !reader) return 2;
     Display *d=XOpenDisplay(NULL);if(!d) return 2;
     unsigned long pid=strtoul(argv[1],NULL,10); Window w=0;
     char path[4096],json[8192];snprintf(path,sizeof path,"%s/latest.json",argv[2]);
     snprintf(status_path,sizeof status_path,"%s/latest.json",argv[2]);
     if(reader) {
-        int result=reader_test(d,pid,argv[2],!strcmp(argv[3],"reader-long"));
+        int result=image_reader?reader_image_test(d,pid,argv[2]):reader_test(d,pid,argv[2],!strcmp(argv[3],"reader-long"));
         XCloseDisplay(d);return result;
     }
     int phase=0,spaces=0; unsigned long long previous_send=0;

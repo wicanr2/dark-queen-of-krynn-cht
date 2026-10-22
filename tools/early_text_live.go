@@ -575,10 +575,14 @@ func main() {
 	listRequest := flag.String("list-request", "", "一般按鍵及檢查點請求")
 	sourceCatalog := flag.String("source-catalog", "", "劇情原文 TSV，與現行譯文依 key 核對")
 	readerCatalog := flag.String("reader-catalog", "", "DRAFT：已校讀的單頁手札 TSV")
+	readerIllustrations := flag.String("reader-illustrations", "", "DRAFT：三則重繪圖文清單")
 	readerControls := flag.String("reader-controls", "", "DRAFT：獨立前端查閱控制重播")
 	readerInteractive := flag.Bool("reader-interactive", false, "DRAFT：接受真正鍵盤的查閱控制")
 	readerProbe := flag.Bool("reader-probe", false, "DRAFT：允許明列的手札畫面元件預覽")
 	flag.Parse()
+	if *readerIllustrations != "" && *readerCatalog == "" {
+		panic("圖文清單需要手札 TSV")
+	}
 	if _, err := os.Stat(*out); !os.IsNotExist(err) {
 		panic("輸出必須為全新目錄")
 	}
@@ -681,7 +685,7 @@ func main() {
 	if g.list != nil {
 		g.installList(*listInputs, *listRequest, *sourceCatalog)
 		if *readerCatalog != "" {
-			g.installReader(*readerCatalog)
+			g.installReader(*readerCatalog, *readerIllustrations)
 		}
 		if *readerControls != "" || *readerInteractive || *readerProbe {
 			g.installReaderControls(*readerControls, *listRequest, *readerInteractive, *readerProbe)
@@ -881,6 +885,9 @@ func main() {
 		g.listReceipt(result)
 		if g.reader != nil {
 			result["reader_catalog_sha256"] = g.reader.SHA256
+			if g.reader.ImageSHA != "" {
+				result["reader_illustrations_sha256"] = g.reader.ImageSHA
+			}
 			result["reader_events"] = g.reader.Events
 			result["final_reader"] = g.reader.Page
 			if g.reader.Ready {

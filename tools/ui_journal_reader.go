@@ -23,10 +23,11 @@ type readerPage struct {
 	Box       [4]int
 	Step      uint64 `json:"step"`
 	SourceKey string
-	Number    int    `json:",omitempty"`
-	Count     int    `json:",omitempty"`
-	Footer    string `json:",omitempty"`
-	Mode      string `json:",omitempty"`
+	Number    int              `json:",omitempty"`
+	Count     int              `json:",omitempty"`
+	Footer    string           `json:",omitempty"`
+	Mode      string           `json:",omitempty"`
+	Image     *readerImageView `json:",omitempty"`
 }
 
 type readerControl struct {
@@ -59,6 +60,8 @@ type journalReader struct {
 	Saved         *readerPage
 	SavedIndex    int
 	WaitDraw      bool
+	Images        map[int]readerIllustration
+	ImageSHA      string
 }
 
 func readerLines(body string) []string {
@@ -87,7 +90,7 @@ func readerLines(body string) []string {
 	return lines
 }
 
-func (g *liveGame) installReader(path string) {
+func (g *liveGame) installReader(path, illustrations string) {
 	if g.list == nil || len(g.list.config.Paragraphs) == 0 {
 		panic("手札原型需要完整段落辨識")
 	}
@@ -107,8 +110,13 @@ func (g *liveGame) installReader(path string) {
 		}
 		uiCount, r.Ready = 4, true
 	}
+	if illustrations != "" {
+		g.loadReaderIllustrations(r, illustrations)
+		g.validateReaderText(catalog["reader.image_hint"], 38)
+		uiCount++
+	}
 	for key, body := range catalog {
-		if key == "reader.heading" || (r.Ready && (key == "reader.page" || key == "reader.empty" || key == "reader.browse_hint")) || strings.HasSuffix(key, ".title") {
+		if key == "reader.heading" || (illustrations != "" && key == "reader.image_hint") || (r.Ready && (key == "reader.page" || key == "reader.empty" || key == "reader.browse_hint")) || strings.HasSuffix(key, ".title") {
 			continue
 		}
 		idText := strings.TrimSuffix(strings.TrimPrefix(key, "journal."), ".body")
@@ -136,9 +144,12 @@ func (g *liveGame) installReader(path string) {
 				}
 			}
 		}
+		if r.Entries[id].Entry != 0 {
+			panic("圖文與正文編號重複")
+		}
 		r.Entries[id] = p
 	}
-	if len(r.Entries) == 0 || len(catalog) != uiCount+len(r.Entries)*2 {
+	if len(r.Entries) == 0 || len(catalog) != uiCount+len(r.Entries)*2-len(r.Images) {
 		panic("手札缺頁或含未知鍵")
 	}
 	if r.Ready {
@@ -167,11 +178,14 @@ func (r *journalReader) page(id, index int, mode, key string, step uint64) *read
 	if !ok {
 		panic("未知手札頁")
 	}
-	count := (len(p.Lines) + 12) / 13
+	count := r.pageCount(id)
 	if index < 0 || index >= count {
 		panic("手札頁碼越界")
 	}
 	p.Lines = p.Lines[index*13 : min((index+1)*13, len(p.Lines))]
+	if p.Image != nil {
+		p.Image = &readerImageView{}
+	}
 	p.Step, p.SourceKey, p.Mode = step, key, mode
 	if count > 1 {
 		p.Number, p.Count = index+1, count
@@ -182,6 +196,9 @@ func (r *journalReader) page(id, index int, mode, key string, step uint64) *read
 			p.Footer += " "
 		}
 		p.Footer += r.UI["reader.browse_hint"]
+	}
+	if p.Image != nil {
+		p.Footer = r.UI["reader.image_hint"]
 	}
 	if len([]rune(p.Footer)) > 38 {
 		panic("手札頁尾超出安全框")
@@ -238,6 +255,9 @@ func (g *liveGame) composeReader(px []byte) {
 		}
 	}
 	rows := append([]string{p.Heading}, p.Lines...)
+	if p.Image != nil {
+		g.composeReaderImage(px, p)
+	}
 	if p.Footer != "" {
 		for len(rows) < 14 {
 			rows = append(rows, "")
@@ -308,6 +328,10 @@ func (g *liveGame) installReaderControls(path, nativeRequest string, live, probe
 		case "Esc":
 			manual = false
 		case "PgUp", "PgDn", "Left", "Right":
+		case "ZoomIn", "ZoomOut", "PanLeft", "PanRight", "PanUp", "PanDown", "Home":
+			if len(r.Images) == 0 {
+				panic("圖文控制未載入圖文")
+			}
 		case "Gallery", "Preview":
 			if !probe || manual || (c.Key == "Preview" && r.Entries[c.Entry].Entry == 0) {
 				panic("手札元件預覽未啟用或編號不符")
@@ -336,6 +360,8 @@ func (g *liveGame) readerKey(key, source string, entry int) {
 		return
 	}
 	switch key {
+	case "ZoomIn", "ZoomOut", "PanLeft", "PanRight", "PanUp", "PanDown", "Home":
+		g.readerImageKey(key)
 	case "Gallery":
 		if !r.Probe || r.Mode != "" {
 			panic("元件畫廊不可巢狀開啟")
@@ -347,7 +373,7 @@ func (g *liveGame) readerKey(key, source string, entry int) {
 		}
 		sort.Ints(ids)
 		for _, id := range ids {
-			for page := 0; page < (len(r.Entries[id].Lines)+12)/13; page++ {
+			for page := 0; page < r.pageCount(id); page++ {
 				r.Gallery = append(r.Gallery, *r.page(id, page, "gallery", "", step))
 			}
 		}
@@ -379,7 +405,7 @@ func (g *liveGame) readerKey(key, source string, entry int) {
 			if key == "PgUp" {
 				next = r.Index - 1
 			}
-			count := (len(r.Entries[r.Page.Entry].Lines) + 12) / 13
+			count := r.pageCount(r.Page.Entry)
 			if next >= 0 && next < count {
 				r.Index = next
 				r.Page = r.page(r.Page.Entry, next, r.Mode, r.Page.SourceKey, step)
@@ -445,6 +471,21 @@ func (g *liveGame) tickReader() bool {
 		}
 	}
 	if r.Live {
+		if r.Page != nil && r.Page.Image != nil {
+			for _, k := range []struct {
+				code ebiten.Key
+				name string
+			}{
+				{ebiten.KeyEqual, "ZoomIn"}, {ebiten.KeyMinus, "ZoomOut"}, {ebiten.KeyA, "PanLeft"}, {ebiten.KeyD, "PanRight"},
+				{ebiten.KeyW, "PanUp"}, {ebiten.KeyS, "PanDown"}, {ebiten.KeyHome, "Home"},
+			} {
+				if inpututil.IsKeyJustPressed(k.code) {
+					g.readerKey(k.name, "keyboard", 0)
+					r.WaitDraw = true
+					return true
+				}
+			}
+		}
 		for _, k := range []struct {
 			code ebiten.Key
 			name string

@@ -69,18 +69,25 @@ def legacy_reader_model(inputs, config, native_paragraphs, accepted, runs):
 
 def reader_model(inputs, config, native_paragraphs, accepted, runs):
     import json
+    from ui_journal_illustrations_check import illustrations, move, IMAGE_KEYS
     from ui_list_inputs import catalog, sha
     path = inputs / "reader.zh-TW.tsv"
     if not path.exists() or "reader.page" not in catalog(path):
         return legacy_reader_model(inputs,config,native_paragraphs,accepted,runs)
     text = catalog(path)
     ui = {"reader.heading","reader.page","reader.empty","reader.browse_hint"}
+    images = illustrations(inputs)
+    if images: ui.add("reader.image_hint")
     assert ui <= text.keys()
     entries = {}
     for key in text:
         if not key.endswith(".title"):
             continue
         entry = int(key.split(".")[1])
+        if entry in images:
+            assert f"journal.{entry}.body" not in text
+            entries[entry]=(text["reader.heading"] % (entry,text[key]),[[]])
+            continue
         lines = []
         for paragraph in text[f"journal.{entry}.body"].split(r"\n"):
             if not paragraph:
@@ -93,7 +100,7 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
         heading = text["reader.heading"] % (entry,text[key])
         assert len(heading) <= 37
         entries[entry] = (heading,[lines[i:i+13] for i in range(0,len(lines),13)])
-    assert entries and len(text)==4+len(entries)*2
+    assert entries and len(text)==len(ui)+len(entries)*2-len(images)
     def page_for(entry,index,mode,source,step):
         heading,pages=entries[entry]
         assert 0 <= index < len(pages)
@@ -103,6 +110,8 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
             p.update(Number=index+1,Count=len(pages));footer=text["reader.page"] % (index+1,len(pages))
         if mode in ("browse","probe"):
             footer=(footer+" " if footer else "")+text["reader.browse_hint"]
+        if entry in images:
+            p["Image"]={"zoom":0,"x":0,"y":0};footer=text["reader.image_hint"]
         if footer:
             assert len(footer)<=38;p["Footer"]=footer
         if mode:p["Mode"]=mode
@@ -113,12 +122,13 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
     summaries=[]
     native_events_all=None
     for run in runs:
+        if images: assert run["reader_illustrations_sha256"]==sha((inputs/"illustrations.json").read_bytes())
         assert run["reader_catalog_sha256"]==sha(path.read_bytes()) and run["reader_complete"]
         assert run["reader_controls_sha256"]==(sha(controls_path.read_bytes()) if controls_path.exists() else "")
         ui_events=run["reader_ui_events"] or []
         by_frame={}
         for e in ui_events:
-            assert e["source"] in ("script","probe","keyboard") and e["key"] in ("F5","Esc","PgUp","PgDn","Left","Right","Gallery","Preview")
+            assert e["source"] in ("script","probe","keyboard") and e["key"] in {"F5","Esc","PgUp","PgDn","Left","Right","Gallery","Preview"}|IMAGE_KEYS
             assert 0 <= e["frame"] < len(run["list_frames"])
             by_frame.setdefault(e["frame"],[]).append(e)
         scripted=[e for e in ui_events if e["source"]!="keyboard"]
@@ -167,7 +177,10 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
                     continue
                 assert e["step"]==step
                 key=e["key"]
-                if key=="Gallery":
+                if key in IMAGE_KEYS:
+                    assert visible and visible.get("Image")
+                    visible={**visible,"Image":move(images[visible["Entry"]],visible["Image"],key)}
+                elif key=="Gallery":
                     assert mode=="" and gallery is None
                     saved,saved_index=visible,index
                     gallery={"step":step,"at":0,"pages":[page_for(i,j,"gallery","",step) for i in sorted(entries) for j in range(len(entries[i][1]))]}
@@ -203,7 +216,7 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
             "catalog_sha256":sha(path.read_bytes()),"controls":summaries}
 
 
-def paint_reader(px, page, palette, alpha):
+def paint_reader(px, page, palette, alpha, images=None):
     if page is None:
         return
     assert page["Box"] == [16,16,624,256]
@@ -211,6 +224,9 @@ def paint_reader(px, page, palette, alpha):
         left = 32 if y < 32 else 16
         start = (y*640+left)*4
         px[start:start+(624-left)*4] = bytes([*palette[0],255])*(624-left)
+    if page.get("Image"):
+        from ui_journal_illustrations_check import paint
+        paint(px,page,images)
     rows=[page["Heading"]]+page["Lines"]
     if page.get("Footer"):
         rows += [""]*(14-len(rows))+[page["Footer"]]
