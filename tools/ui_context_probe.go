@@ -139,6 +139,9 @@ func main() {
 	var wrappers []map[string]any
 	var listEvents []map[string]any
 	var scrollEvents []map[string]any
+	var fillEvents []map[string]any
+	var fillStack []pendingCall
+	fillAudit := -1
 	var scrollPending []pendingCall
 	scrollRegistered := map[oracle.Addr]bool{}
 	type listPending struct {
@@ -155,6 +158,60 @@ func main() {
 		panic("格式化入口不符")
 	}
 	if observe {
+		fillEntry := oracle.Addr{Seg: 0x13c7, Off: 0x0078}
+		fillCoordinates := oracle.Addr{Seg: 0x13c7, Off: 0x00f7}
+		fillReturn := oracle.Addr{Seg: 0x13c7, Off: 0x06db}
+		if hex.EncodeToString(o.Bytes(fillEntry, 8)) != "558bec83ec2e5657" || hex.EncodeToString(o.Bytes(fillCoordinates, 3)) != "8b4606" || o.Byte(fillReturn) != 0xcb {
+			panic("填色邊界不符")
+		}
+		o.OnCall(fillEntry, func(_ *oracle.Oracle) {
+			if len(fillEvents) >= 20000 {
+				panic("超出填色觀測上限")
+			}
+			r := o.Regs()
+			s := make([]uint16, 12)
+			for i := range s {
+				s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
+			}
+			fillEvents = append(fillEvents, map[string]any{"step": o.Steps(), "stack": s, "within_list": len(listStack) > 0})
+			fillStack = append(fillStack, pendingCall{len(fillEvents) - 1, fillReturn, r.SS, r.SP})
+		})
+		o.OnCall(fillCoordinates, func(_ *oracle.Oracle) {
+			if len(fillStack) == 0 {
+				panic("未配對的填色座標")
+			}
+			p := fillStack[len(fillStack)-1]
+			r := o.Regs()
+			if p.ss != r.SS || p.sp != r.BP+2 {
+				panic("填色座標堆疊不符")
+			}
+			v := make([]int, 4)
+			for i := range v {
+				v[i] = int(int16(o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 6 + uint16(i*2)})))
+			}
+			fillEvents[p.index]["native_rect"] = []int{v[1], v[0], v[3] - v[1], v[2] - v[0]}
+			if len(listStack) == 0 && v[1] <= 8 && v[0] <= 8 && v[3] >= 312 && v[2] >= 184 {
+				fillAudit = p.index
+			}
+		})
+		o.OnCall(fillReturn, func(_ *oracle.Oracle) {
+			if len(fillStack) == 0 {
+				panic("未配對的填色返回")
+			}
+			p := fillStack[len(fillStack)-1]
+			r := o.Regs()
+			if p.ss != r.SS || p.sp != r.SP {
+				panic("填色返回堆疊不符")
+			}
+			e := fillEvents[p.index]
+			e["return_instruction_step"] = o.Steps()
+			if rect, ok := e["native_rect"].([]int); ok && rect[0] >= 0 && rect[1] >= 0 && rect[0]+rect[2] <= 320 && rect[1]+rect[3] <= 200 && rect[2] >= 200 && rect[3] >= 40 {
+				name := fmt.Sprintf("fill-%04d-after.idx", p.index)
+				must(os.WriteFile(filepath.Join(out, name), o.Indexed(), 0644))
+				e["indexed_after"] = name
+			}
+			fillStack = fillStack[:len(fillStack)-1]
+		})
 		scrollEntry := oracle.Addr{Seg: 0x13c7, Off: 0x2f06}
 		if hex.EncodeToString(o.Bytes(scrollEntry, 11)) != "558bec83ec0c5657168d46" {
 			panic("捲動入口不符")
@@ -236,6 +293,14 @@ func main() {
 				panic("超出格式化觀測上限")
 			}
 			r := o.Regs()
+			if fillAudit >= 0 {
+				name := fmt.Sprintf("fill-%04d-next-wrapper.idx", fillAudit)
+				must(os.WriteFile(filepath.Join(out, name), o.Indexed(), 0644))
+				fillEvents[fillAudit]["next_wrapper_indexed"] = name
+				fillEvents[fillAudit]["next_wrapper_step"] = o.Steps()
+				fillEvents[fillAudit]["next_wrapper_index"] = len(wrappers)
+				fillAudit = -1
+			}
 			s := make([]uint16, 32)
 			for i := range s {
 				s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
@@ -340,6 +405,6 @@ func main() {
 			matches = append(matches, i)
 		}
 	}
-	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
+	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
 }

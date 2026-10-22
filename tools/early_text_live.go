@@ -85,6 +85,7 @@ type liveGame struct {
 	escapeStep    uint64
 	camp          bool
 	campPositions map[[2]int]string
+	list          *listState
 }
 
 func must(err error) {
@@ -118,6 +119,9 @@ func readLiveCatalog(path string) map[string]string {
 	return result
 }
 func (g *liveGame) limit() uint64 {
+	if g.list != nil {
+		return g.list.request.Actions[len(g.list.request.Actions)-1].End
+	}
 	if g.camp {
 		return 715000000
 	}
@@ -246,6 +250,9 @@ func (g *liveGame) Update() error {
 	}
 	if g.o.Steps() >= g.limit() {
 		return nil
+	}
+	if g.list != nil {
+		return g.updateList()
 	}
 	if g.camp {
 		step := g.o.Steps()
@@ -425,7 +432,13 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			}
 		}
 	}
+	if g.translate && g.list != nil {
+		g.composeList(px)
+	}
 	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
+	if g.list != nil {
+		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip)
+	}
 	if held {
 		if len(g.lastPixels) == 0 {
 			panic("尚無完整畫格可保留")
@@ -449,10 +462,10 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		panic("前端提交與合成畫格不同")
 	}
 	name := fmt.Sprintf("frame-%03d-%09d.png", len(g.frames), g.o.Steps())
-	if g.interactive || g.camp {
+	if g.interactive || g.camp || g.list != nil {
 		name = "frame-" + composedHash + ".png"
 	}
-	if _, err := os.Stat(filepath.Join(g.out, name)); (!g.interactive && !g.camp) || os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(g.out, name)); (!g.interactive && !g.camp && g.list == nil) || os.IsNotExist(err) {
 		f, err := os.Create(filepath.Join(g.out, name))
 		must(err)
 		im := &image.RGBA{Pix: readback, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
@@ -460,6 +473,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		must(f.Close())
 	}
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
+	if g.list != nil {
+		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage})
+	}
 	if g.camp {
 		pal := g.o.Palette()
 		colors := [16][3]uint8{}
@@ -510,6 +526,9 @@ func main() {
 	interactive := flag.Bool("interactive", false, "DRAFT：冷啟動並接受實際視窗鍵盤事件；只翻譯角色選單")
 	camp := flag.Bool("camp", false, "DRAFT：正常旅店、營地與存檔 J 的底列短標籤")
 	campInputs := flag.String("camp-inputs", "", "營地原型的已觀測來源與座標索引")
+	listMode := flag.Bool("list", false, "DRAFT：依原版標題辨識 Shield 列表並處理捲動及退出")
+	listInputs := flag.String("list-inputs", "", "列表來源及原版事件索引")
+	listRequest := flag.String("list-request", "", "一般按鍵及檢查點請求")
 	sourceCatalog := flag.String("source-catalog", "", "劇情原文 TSV，與現行譯文依 key 核對")
 	flag.Parse()
 	if _, err := os.Stat(*out); !os.IsNotExist(err) {
@@ -540,6 +559,9 @@ func main() {
 	if *story || *camp {
 		expectedSteps = 329000000
 	}
+	if *listMode {
+		expectedSteps = 665000000
+	}
 	if o.Steps() != expectedSteps {
 		panic("快照步數不符")
 	}
@@ -552,6 +574,12 @@ func main() {
 	g.lifecycle = *lifecycle
 	g.interactive = *interactive
 	g.camp = *camp
+	if *listMode {
+		if *camp || *story || *interactive || *lifecycle {
+			panic("列表原型需獨立啟用")
+		}
+		g.list = &listState{}
+	}
 	if g.camp && (g.story || *story || g.interactive || !g.lifecycle) {
 		panic("營地原型只支援正常快照與生命週期觀測")
 	}
@@ -572,14 +600,14 @@ func main() {
 	b, err = os.ReadFile(*glyphPath)
 	must(err)
 	must(json.Unmarshal(b, &g.glyphs))
-	if ((!g.story && !g.camp && g.glyphs.Size != 20) || (g.story && g.glyphs.Size != 16 && g.glyphs.Size != 20) || (g.camp && g.glyphs.Size != 16)) || g.glyphs.Height != g.glyphs.Size+4 {
+	if ((!g.story && !g.camp && g.list == nil && g.glyphs.Size != 20) || (g.story && g.glyphs.Size != 16 && g.glyphs.Size != 20) || ((g.camp || g.list != nil) && g.glyphs.Size != 16)) || g.glyphs.Height != g.glyphs.Size+4 {
 		panic("未批准的字型尺寸")
 	}
 	g.catalog = readLiveCatalog(*catalogPath)
 	if g.storySequence && len(g.catalog) != 7 {
 		panic("連續原型需要本輪已匹配的七段子集")
 	}
-	if !g.story && !g.camp && len(g.catalog) != 12 {
+	if !g.story && !g.camp && g.list == nil && len(g.catalog) != 12 {
 		panic("角色選單原型需要 12 個標籤")
 	}
 	if g.camp {
@@ -604,7 +632,14 @@ func main() {
 			g.campPositions[pos] = v.SourceSHA256
 		}
 	}
-	if g.story {
+	if g.list != nil {
+		g.installList(*listInputs, *listRequest, *sourceCatalog)
+		stateBytes, err := os.ReadFile(*state)
+		must(err)
+		if digest(stateBytes) != g.list.request.StateSHA {
+			panic("列表快照雜湊不符")
+		}
+	} else if g.story {
 		g.sources = readLiveCatalog(*sourceCatalog)
 		anchor := oracle.Addr{Seg: 0x0b72, Off: 0x0311}
 		if hex.EncodeToString(o.Bytes(anchor, 8)) != "558bec83ec025657" {
@@ -789,6 +824,14 @@ func main() {
 		data, err := os.ReadFile(*campInputs)
 		must(err)
 		result["camp_inputs_sha256"] = digest(data)
+	}
+	if g.list != nil {
+		g.listReceipt(result)
+		for key, path := range map[string]string{"list_inputs_sha256": *listInputs, "list_request_sha256": *listRequest, "source_catalog_sha256": *sourceCatalog} {
+			data, err := os.ReadFile(path)
+			must(err)
+			result[key] = digest(data)
+		}
 	}
 	b, err = json.MarshalIndent(result, "", "  ")
 	must(err)

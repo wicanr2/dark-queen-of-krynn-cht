@@ -25,6 +25,12 @@ def check(observed, control, output, role):
     assert a["source_commit"] == "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8"
     assert a["exe_sha256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
     assert a["pending_calls"] == b["pending_calls"] == 0, "觀測呼叫尚未封閉"
+    if "fill_events" in a:
+        assert a["pending_fills"] == b["pending_fills"] == 0, "填色要求尚未封閉"
+        assert not b["fill_events"]
+        for event in a["fill_events"]:
+            assert event["step"] < event["return_instruction_step"]
+            assert len(event["native_rect"]) == 4
     lists = a.get("list_events") or []
     scrolls = a.get("scroll_events") or []
     scroll_pixels = {}

@@ -760,6 +760,72 @@ Docker 重播及比較仍走 `bash tools/ui-context.sh run …`、`check …`。
 不把舊版成功收據、失敗試排或不同檢查器的雜湊混用。
 尚待辨識上層選單語境與離開邊界，再做真正視窗的連續畫格驗證；不再把共用回呼當作候選分類器。
 
+## 2026-10-22：標題語境與列表視窗原型
+
+接續列表與捲動證據，原版較早的格式化入口還提供可區分的標題來源：
+背包是 `333E:4689`，法術書是 `333E:A7C4`。兩者都是標題列的直接格式字串，
+與玩家名稱的 `%s` 參數分開。比對原始來源指標、NUL 字串雜湊及低位元組列號，
+才設定物品或法術語境；其他標題輸出撤銷舊語境，不以玩家名字或共用列表回呼選譯。
+
+本次新增工具均為 DRAFT：
+
+- [ui_list_inputs.py](../../tools/ui_list_inputs.py)：由正式原文 TSV 或已驗 RAM 格式來源、既有術語 TSV 產生私有輸入。
+  `Spells in Grimoire` 尚未登錄主 catalog，保留此來源差異；`%s` 是格式語法，不計為漏譯文案。
+- [ui_list_live.go](../../tools/ui_list_live.go)：與既有 [early_text_live.go](../../tools/early_text_live.go) 共用前端。
+  原版標題決定語境，原版列表、捲動與顯存寫入決定呈現交易；中文不回寫原版。
+- [ui-list-live.sh](../../tools/ui-list-live.sh)：Docker 內準備、建置與一般按鍵重播入口。
+  `prepare INPUT`、`build`、`en|zh STATE REQUEST INPUT NEW_RESULT [true|false]` 的路徑相對 `workplace/probe/`。
+  最後一個參數只控制測試用的細分畫格，不決定物品或法術語境。
+- [ui_list_live_check.py](../../tools/ui_list_live_check.py)：比較無觀測原版狀態、來源事件與真正 GPU 提交畫格。
+- [oracle_video_observer.go](../../tools/oracle_video_observer.go)：僅由 Go build 的覆疊來源表掛入 `oracle`，
+  導出固定 dosgolem 已有的 `Machine.ObserveVideoWrites`，不修改隔離 clone 或上游。
+  此原型用它觀測 mode 13h 的原始視訊寫入，包含一般記憶體變值監看漏掉的路徑。
+
+私有來源與輸出位於 `workplace/probe/pane-render-20261022/`，IDA 查詢在
+`workplace/ida/pane-render-20261022/`，有效驗證結果在本節後續記錄。
+標題來源辨識、文字框背景與填色要求的返回不能互相替代；原版尚未真正重寫舊字框前，
+不得將填色返回直接當作中文清除完成。16px 仍是可丟棄原型，規格 001 維持 DRAFT。
+
+實際觀測進一步確認本路徑使用 mode 13h 的非鏈結 256 色平面，先繪製另一頁，再改變可見頁。
+例如法術書退出：原生填色起點 `(8,8)` 的首筆寫入位移為 `17026`，
+依固定執行器的 `VGA.Unchained256` 公式，該頁基底為 `0x4000`，當時可見頁仍是 `0`。
+因此直接把位移當成線性螢幕像素、或只監看一般 RAM 變值，都會漏掉這次清除。
+這是執行器視訊寫入契約與原版呼叫的證據，不追查硬體逐週期時序。
+
+原型現依原版整頁繪製請求失效舊語境，保留上一張完整畫面。
+視訊 observer 對應四個平面及繪製頁，舊字框的全部 384 個位元組都有寫入，
+且該頁已成為原版可見頁，才撤銷保留。上述退出在步數 `744367878` 滿足兩項條件，
+早於新狀態欄首字。此方法不靠延遲幾幀、玩家姓名、按鍵次數或螢幕英文辨識。
+未知頁基底、列距或分割線仍拒絕為有效原型，不推廣成任意 VGA 版面的契約。
+
+| 流程 | 成對 GPU 畫格 | 保留完整畫格 | 原版狀態檢查點 | 列表退出清除 |
+|---|---:|---:|---:|---:|
+| 法術書 | 3,654 | 357 | 21 | 1 |
+| 六人背包 | 3,804 | 407 | 29 | 4 |
+
+兩組實際 GPU 讀回比較通過；保留畫格等於上一張完整畫面，其他畫格逐像素符合原版背景與
+當前中文框。兩次法術 Shield 及四次裝備 Shield 都在原版首字元前選譯，裝備加值保持原樣。
+原版狀態與無觀測組相同，列表退出後中文字框為空。
+兩案合計 7,458 組成對畫格、50 個原版檢查點、5 次舊中文字框清除。
+這仍是原有兩條正常路徑，沒有把重跑累加成新的覆蓋數。
+
+有效法術書入口：`workplace/probe/pane-render-20261022/live-grimoire-en-r6/`、
+`live-grimoire-zh-r6/`、`grimoire-live-check.json`。私有 `inputs/` 保存 UTF-8 原文及兩個譯文鍵、
+標題來源、背景色號、字型及來源紀錄。`verify EN ZH INPUT CONTROL OBS NEW_RESULT` 可重跑比較。
+其餘 UI 仍可能是英文；這只驗兩種 Shield 詞義及指定路徑，不是完整列表中文化、
+冷啟動或實際 X11 按鍵驗收，也不是字級定案。
+
+最終證據索引為 `workplace/probe/pane-render-20261022/pane-render-evidence.json`。
+背包有效目錄為 `live-items-en-r7/`、`live-items-zh-r7/` 及 `items-live-check.json`；
+`live-guard-check.json` 記錄錯誤語境、延後攔截、錯誤可見頁及英文漏出四種變造均被拒絕。
+既有 20px 角色選單由原 Docker 入口重建，兩種語言模式都可執行，十二項事件及原版狀態相同；
+只作本次共用前端的回歸抽樣，不重複宣稱原有冷啟動與 X11 驗證。
+
+早期 `live-grimoire-*-r2/r3/r4` 退出清除未封閉，沒有列為成功收據。
+背包 r6 的程式畫格比較雖通過，執行中編輯 shell 導致 wrapper 結尾讀取失敗；
+固定腳本後兩組乾淨重跑 r7 成功，最終索引採 r7。這是驗證流程問題，沒有歸成遊戲缺陷。
+本輪不再深挖共用列表 helper；下一步沿已證實入口擴充已觀測的完整物品與法術列。
+
 ## 相鄰劇情字串候選
 
 [passage_candidates.py](../../tools/passage_candidates.py) 先核對 ECL 與 catalog 的來源雜湊，
