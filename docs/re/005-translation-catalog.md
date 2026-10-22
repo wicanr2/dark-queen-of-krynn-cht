@@ -118,6 +118,9 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-hulder-forest-clauses.tsv` | 森林、哈德弗克與眾樹之母片段 95 筆，含 93 個新鍵及 2 個舊譯修正 |
 | `hulder-forest-clauses-review-input.json`、`story-hulder-forest-clauses-before.tsv` | 完整來源、JOIN 三處相鄰語境、七種保留謎題字形及三個未知候選，另存合併前 6,630 筆快照 |
 | `story-hulder-forest-clauses-comparison.json` | 本批新增與修正差分、舊鍵保留、前作術語對照及謎題字形未合併檢查 |
+| `story-city-luminari-clauses.tsv` | 城內、神廟、門鎖及魯明那里燈塔片段 168 筆，含 165 個新鍵及 3 處舊譯修正 |
+| `city-luminari-clauses-review-input.json`、`story-city-luminari-clauses-before.tsv` | 本批全部來源定位、原版與譯表雜湊、允許修正鍵及合併前 6,723 筆快照；保留十八個未合併候選及理由 |
+| `city-luminari-clauses-term-reviews-before.tsv`、`story-city-luminari-clauses-comparison.json` | 舊 265 則校讀快照、新舊差分、十八個候選未合併、既有校讀 bytes 保留及前作術語對照 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
@@ -137,10 +140,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 6,723 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+目前已檢查並合併 6,888 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
 森林、菲斯特隆實驗室、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 6,723 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 6,888 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -166,7 +169,7 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 6,723 筆，0 格式錯誤、0 未處理術語警示，265 則逐句校讀覆蓋 271 次匹配。
+完整譯表回驗為 6,888 筆，0 格式錯誤、0 未處理術語警示，267 則逐句校讀覆蓋 273 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -397,7 +400,7 @@ Drop、Speed、Icon、Level 等選項，支持使用既有「設定」。本輪�
 原始 entries、分類理由及未合併檢查保存在本批輸入與差分收據。
 
 先純校讀至零錯誤、零術語警示，再依已確認譯風合併；本輪沒有新增或放寬術語豁免。
-目前共 6,723 筆，SHA-256：
+該批合併後共 6,723 筆，SHA-256：
 `1ac0096b2a9af0cde2d2bfb24ab6093565d53c731e19dd33b8491bb004c5eb5d`。
 全表格式、字型及術語檢查通過，265 則校讀仍覆蓋 271 次匹配，前作 266 筆共通人物、怪物
 與物品對照零差異。差分收據為 `story-hulder-forest-clauses-comparison.json`。
@@ -406,6 +409,47 @@ Drop、Speed、Icon、Level 等選項，支持使用既有「設定」。本輪�
 
 新譯尚未接入新畫面。完整組句、正式分頁、其他選單、手札、戰鬥及中文讀檔仍未完成，
 劇情與營地最終字級未定案，未開始 HD。
+
+## 2026-10-22：城內、神廟、門鎖與魯明那里燈塔片段
+
+`story-city-luminari-clauses.tsv` 共 168 筆，新增 165 個鍵，另修正三個既有鍵。
+來源主要為 ECL 區塊 12、17 至 19；TRAIN 與魯明那里獨立名稱另有區塊 1 來源，
+共用門鎖文字亦出現在區塊 39，REBELS 選項另見區塊 21。完整原文、所有位置、ECL 及
+catalog 雜湊保存於 `city-luminari-clauses-review-input.json`，原始資料未改。
+區塊 1 的除錯樣式鄰近字串不當成正常玩家顯示收據；本批只補譯文。
+
+內容涵蓋路人反應、抓丁隊、店家、神廟祝福、讀取命令、訓練、門鎖、守衛及囚犯，
+燈塔部分補上蜘蛛、蝙蝠、甲蟲、地侏、屏障、拱門與幽魂守衛。
+魯明那里沿用已核對的手冊詞根；本次將區塊 1 的獨立名稱納入譯表，未新增術語或改名。
+喜斯、米絲拉克莎、西洛爾、雙頭怪、觸手怪、紫蠕蟲等沿用現有表。
+法術 Knock 為前作「踢開術」，實際敲門動作依原文譯「敲門」；不改兩者的原版判定。
+
+三處舊譯依相鄰來源修正：寶石堆改回名詞片段，銜接「那裡有」；
+通行敘述移除重複的「似乎」，接續前段「看來」；同一位低階祭司的稱呼統一為祭司。
+合併前 6,723 筆另存快照，除此三鍵，舊 6,720 筆逐筆相同。
+字串仍各有原始 key，沒有把靜態相鄰當作已證實的完整訊息或分頁邊界。
+
+新增兩則固定原文與譯文雜湊的語境校讀：地侏口袋裡的小錘屬工具敘述，
+不套裝備名「鐵錘」；中文語序把小錘放到下一個口袋片段，必須連讀，執行組句仍待驗。
+審判官交付的 chain 是拴著囚犯的鐵鍊，不是鎖甲。舊 265 則校讀的原始 bytes 完整保留，
+快照另存，檢查器未放寬。
+
+十八個候選保留未合併，理由與原始 entries 均存於本批輸入。
+Pash 與 Ildamar 未找到已核對中譯；本輪查前作文字與本作 OCR 未命中，不證明手冊沒有。
+紫蠕蟲屍體下的 STEEL 可能指鋼幣或鋼鐵物件，保留兩個相鄰鍵待獎勵／顯示證據，
+不因出現在寶藏附近就定成鋼幣。THE 冠詞、短識別值及夾雜指令樣式的破碎切片也未猜譯。
+
+先純校讀至零錯誤、零未處理術語警示，且目前譯表雜湊未變，再依已確認譯風合併。
+目前共 6,888 筆，SHA-256：
+`164e28fbe20f322a7ddb0e690f7f983ff1fd1a7e648e1cb0bce59af48ad57248`。
+全表格式、實際字型及術語檢查通過，267 則校讀覆蓋 273 次匹配；前作 266 筆共通人物、
+怪物與物品術語對照零差異。差分收據為 `story-city-luminari-clauses-comparison.json`。
+重分批後剩 1,519 個一般候選，已無可直接沿用的單獨名稱批次；這不代表新專名全數已校讀，
+也不將候選數當成漏譯分母。MONCHA 的兩個未辨識名稱候選仍保留。
+
+既有營地十項目前文字依賴與畫格／存檔收據回驗通過，歷史畫格沒有修改。
+本批未接入新畫面，正式組句、分頁、其他選單、手札、戰鬥與中文讀檔仍未完成。
+劇情與營地最終字級未定案，沒有開始 HD。
 
 ## 相鄰劇情字串候選
 
@@ -466,6 +510,7 @@ bash tools/translation.sh check story-citadel-abyss-actions
 bash tools/translation.sh check story-sea-lighthouse-clauses
 bash tools/translation.sh check story-fastillion-lighthouse-clauses
 bash tools/translation.sh check story-hulder-forest-clauses
+bash tools/translation.sh check story-city-luminari-clauses
 bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
@@ -515,5 +560,5 @@ bash tools/translation.sh test-runtime-labels
 
 新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
 新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
-新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 6,723 筆全表另已回驗通過。
+新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 6,888 筆全表另已回驗通過。
 新模式沒有放寬名稱、數字或格式檢查。
