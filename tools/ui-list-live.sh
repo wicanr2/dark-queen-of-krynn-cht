@@ -14,6 +14,7 @@ case "${1:-}" in
   prepare)
     INPUT="${2:?需指定全新輸入目錄}"
     PARAGRAPHS="${3:-}"
+    BOOK="${4:-}"
     relative "$INPUT"
     test ! -e "$PROBE/$INPUT"
     test -d "$(dirname "$PROBE/$INPUT")"
@@ -21,10 +22,11 @@ case "${1:-}" in
     test -d "$PROBE/pane-render-20261022"
     test -f "$FONT/jf-openhuninn-2.1.ttf"
     if [[ -n "$PARAGRAPHS" ]]; then relative "$PARAGRAPHS"; test -f "$PROBE/$PARAGRAPHS"; fi
+    if [[ -n "$BOOK" ]]; then relative "$BOOK"; test -n "$PARAGRAPHS"; test -f "$ROOT/workplace/translation/$BOOK"; test -f "$ROOT/workplace/translation/reader-ui-review.tsv"; fi
     timeout 30s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 512m --cpus 1 --pids-limit 64 \
       -v "$ROOT/tools:/tools:ro" -v "$ROOT/workplace/translation:/text:ro" -v "$PROBE:/probe" -v "$FONT:/font:ro" \
       --entrypoint bash "$PIL_IMAGE" -c \
-      'set -e; if test -n "$2"; then python3 /tools/ui_list_inputs.py /text /probe/pane-render-20261022 "/probe/$1" "/probe/$2"; else python3 /tools/ui_list_inputs.py /text /probe/pane-render-20261022 "/probe/$1"; fi; python3 /tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "/probe/$1/zh-TW.tsv" "/probe/$1/glyphs-16.json" 16' -- "$INPUT" "$PARAGRAPHS"
+      'set -e; args=(/text /probe/pane-render-20261022 "/probe/$1"); if test -n "$2"; then args+=("/probe/$2"); fi; if test -n "$3"; then args+=("/text/$3"); fi; python3 /tools/ui_list_inputs.py "${args[@]}"; font_input="/probe/$1/zh-TW.tsv"; if test -f "/probe/$1/font-zh-TW.tsv"; then font_input="/probe/$1/font-zh-TW.tsv"; fi; python3 /tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "$font_input" "/probe/$1/glyphs-16.json" 16' -- "$INPUT" "$PARAGRAPHS" "$BOOK"
     ;;
   build)
     test -d "$ROOT/workplace/dosgolem"
@@ -36,7 +38,7 @@ case "${1:-}" in
       --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOPROXY=off -e GOMAXPROCS=2 \
       -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro \
       -v "$PROBE/gocache:/gocache" -v "$PROBE:/out" -w /src --entrypoint bash "$GO_IMAGE" \
-      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_menu_source.go'
+      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_menu_source.go'
     ;;
   en|zh)
     STATE="${2:?快照}"; REQUEST="${3:?一般按鍵請求}"; INPUT="${4:?輸入目錄}"; RESULT="${5:?全新輸出}"; FINE="${6:-false}"
@@ -57,11 +59,13 @@ case "${1:-}" in
         trap "kill $xvfb_pid 2>/dev/null || true; wait $xvfb_pid 2>/dev/null || true" EXIT
         for attempt in {1..50}; do test -S /tmp/.X11-unix/X99 && break; sleep 0.1; done
         export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1
+        reader_args=()
+        if test -f "/probe/$LIST_INPUT/reader.zh-TW.tsv"; then reader_args=(-reader-catalog "/probe/$LIST_INPUT/reader.zh-TW.tsv"); fi
         result_status=0
         /probe/ui-list-live -list -state "/probe/$LIST_STATE" -list-request "/probe/$LIST_REQUEST" \
           -list-inputs "/probe/$LIST_INPUT/inputs.json" -source-catalog "/probe/$LIST_INPUT/en.tsv" \
           -catalog "/probe/$LIST_INPUT/zh-TW.tsv" -glyphs "/probe/$LIST_INPUT/glyphs-16.json" \
-          -out "/out/$LIST_RESULT" -translate="$LIST_TRANSLATE" -fine="$LIST_FINE" || result_status=$?
+          -out "/out/$LIST_RESULT" -translate="$LIST_TRANSLATE" -fine="$LIST_FINE" "${reader_args[@]}" || result_status=$?
         if test -d "/out/$LIST_RESULT"; then
           cat /sys/fs/cgroup/memory.peak >"/out/$LIST_RESULT/memory-peak.txt"
           cat /sys/fs/cgroup/memory.events >"/out/$LIST_RESULT/memory-events.txt"
@@ -80,5 +84,5 @@ case "${1:-}" in
       --entrypoint python3 "$PIL_IMAGE" /tools/ui_list_live_check.py \
       "/probe/$EN" "/probe/$ZH" "/probe/$INPUT" "/probe/$CONTROL" "/probe/$OBS" "/out/$(basename "$RESULT")"
     ;;
-  *) printf '%s\n' '用法：ui-list-live.sh prepare INPUT [PARAGRAPH_TRACE] | build | en|zh STATE REQUEST INPUT RESULT [true|false] | verify EN ZH INPUT CONTROL OBS RESULT' >&2; exit 2 ;;
+  *) printf '%s\n' '用法：ui-list-live.sh prepare INPUT [PARAGRAPH_TRACE [BOOK_REVIEW]] | build | en|zh STATE REQUEST INPUT RESULT [true|false] | verify EN ZH INPUT CONTROL OBS RESULT' >&2; exit 2 ;;
 esac

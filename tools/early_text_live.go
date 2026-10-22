@@ -87,6 +87,7 @@ type liveGame struct {
 	camp          bool
 	campPositions map[[2]int]string
 	list          *listState
+	reader        *journalReader
 }
 
 func must(err error) {
@@ -454,6 +455,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	if g.translate && g.list != nil {
 		g.composeList(px)
+		g.composeReader(px)
 	}
 	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
 	if g.list != nil {
@@ -495,6 +497,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
 	if g.list != nil {
 		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage, "paragraph": g.page})
+		if g.reader != nil {
+			g.list.frames[len(g.list.frames)-1]["reader"] = g.reader.Page
+		}
 	}
 	if g.camp {
 		pal := g.o.Palette()
@@ -550,6 +555,7 @@ func main() {
 	listInputs := flag.String("list-inputs", "", "列表來源及原版事件索引")
 	listRequest := flag.String("list-request", "", "一般按鍵及檢查點請求")
 	sourceCatalog := flag.String("source-catalog", "", "劇情原文 TSV，與現行譯文依 key 核對")
+	readerCatalog := flag.String("reader-catalog", "", "DRAFT：已校讀的單頁手札 TSV")
 	flag.Parse()
 	if _, err := os.Stat(*out); !os.IsNotExist(err) {
 		panic("輸出必須為全新目錄")
@@ -652,6 +658,9 @@ func main() {
 	}
 	if g.list != nil {
 		g.installList(*listInputs, *listRequest, *sourceCatalog)
+		if *readerCatalog != "" {
+			g.installReader(*readerCatalog)
+		}
 		stateBytes, err := os.ReadFile(*state)
 		must(err)
 		if digest(stateBytes) != g.list.request.StateSHA {
@@ -845,6 +854,11 @@ func main() {
 	}
 	if g.list != nil {
 		g.listReceipt(result)
+		if g.reader != nil {
+			result["reader_catalog_sha256"] = g.reader.SHA256
+			result["reader_events"] = g.reader.Events
+			result["final_reader"] = g.reader.Page
+		}
 		for key, path := range map[string]string{"list_inputs_sha256": *listInputs, "list_request_sha256": *listRequest, "source_catalog_sha256": *sourceCatalog} {
 			data, err := os.ReadFile(path)
 			must(err)

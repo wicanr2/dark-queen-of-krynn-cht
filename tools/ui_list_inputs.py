@@ -20,7 +20,7 @@ def catalog(path):
     return result
 
 
-def prepare(texts, observed, output, paragraph_trace=None):
+def prepare(texts, observed, output, paragraph_trace=None, book_review=None):
     assert not output.exists()
     en = catalog(texts / "en.tsv")
     with (texts / "glossary.tsv").open(encoding="utf-8", newline="") as f:
@@ -486,6 +486,8 @@ def prepare(texts, observed, output, paragraph_trace=None):
                 assert template.replace("%s",argument) == source["text"]
                 key = "message."+sha(source["text"].encode())[:20]
                 aliases[key], translations[key] = source["text"], translated_template.replace("%s",argument)
+                if book_review is not None:
+                    aliases[template_key], translations[template_key] = template, translated_template
                 paragraph_templates[template_key] = {"en":template,"zh":translated_template}
                 origin = {"kind":"formatted-journal-reference","formal_template_key":template_key,"argument":argument}
             else:
@@ -493,6 +495,8 @@ def prepare(texts, observed, output, paragraph_trace=None):
                 aliases[key], translations[key] = en[key], zh[key]
             binding = {"Key":key,"SHA256":sha(source["text"].encode()),"Caller":p["caller"],"NativeBox":p["native_box"],
                        "Foreground":p["foreground"],"Background":p["background"],"Clear":p["clear"]}
+            if book_review is not None and origin["kind"] == "formatted-journal-reference":
+                binding["JournalEntry"] = int(origin["argument"])
             identity = json.dumps(binding,sort_keys=True)
             if identity not in identities:
                 identities.add(identity); paragraph_bindings.append(binding)
@@ -528,6 +532,19 @@ def prepare(texts, observed, output, paragraph_trace=None):
     output.mkdir()
     for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
+    if book_review is not None:
+        assert paragraph_trace is not None
+        reader = catalog(texts / "reader-ui-review.tsv")
+        assert set(reader) == {"reader.heading"} and reader["reader.heading"].count("%s") == 2
+        book = catalog(book_review)
+        assert book and not reader.keys() & book.keys()
+        assert all(re.fullmatch(r"journal\.[1-9][0-9]?\.(title|body)", key) for key in book)
+        reader.update(book)
+        font = dict(translations)
+        assert not font.keys() & reader.keys()
+        font.update(reader)
+        for name, strings in (("reader.zh-TW.tsv",reader),("font-zh-TW.tsv",font)):
+            (output / name).write_text("key\ttext\n"+"".join(f"{key}\t{value}\n" for key,value in strings.items()))
     row_hashes = {row["SHA256"] for row in rows}
     row_callers = set()
     for folder in ("observe-menus-items-r1", "observe-menus-grimoire-r1", "observe-effects-r1"):
@@ -589,6 +606,10 @@ def prepare(texts, observed, output, paragraph_trace=None):
         result_provenance["paragraph_bindings"] = paragraph_provenance
         if paragraph_templates:
             result_provenance["formatted_paragraph_templates"] = paragraph_templates
+    if book_review is not None:
+        result_provenance["reader_review_sha256"] = sha(book_review.read_bytes())
+        result_provenance["reader_ui_sha256"] = sha((texts / "reader-ui-review.tsv").read_bytes())
+        result_provenance["reader_catalog_sha256"] = sha((output / "reader.zh-TW.tsv").read_bytes())
     (output / "provenance.json").write_text(json.dumps(result_provenance, ensure_ascii=False, indent=2) + "\n")
     print(f"列表原型輸入：{len(rows)} 種完整列、{len(field_provenance)} 種標題提示與按鈕；未改正式譯表")
 

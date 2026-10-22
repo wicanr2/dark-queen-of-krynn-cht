@@ -3,6 +3,7 @@ package main
 
 import (
 	"encoding/hex"
+	"strconv"
 	"strings"
 
 	"github.com/wicanr2/dosgolem/oracle"
@@ -13,6 +14,7 @@ type listParagraph struct {
 	Caller                        oracle.Addr
 	NativeBox                     [4]int
 	Foreground, Background, Clear byte
+	JournalEntry                  int `json:",omitempty"`
 }
 
 func (g *liveGame) invalidateListParagraph(x, y, width, height int, reason string) {
@@ -36,6 +38,12 @@ func (g *liveGame) installListParagraphs() {
 		suffix := digest([]byte(source))[:20]
 		literal := p.Key == "ecl."+suffix
 		message := p.Key == "message."+suffix && p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x3320}) && p.Foreground == 7 && p.Clear == 1
+		if p.JournalEntry != 0 && (!message || p.JournalEntry < 1 || p.JournalEntry > 99 ||
+			digest([]byte(l.sources[journalTemplateKey]))[:20] != strings.TrimPrefix(journalTemplateKey, "ui.") ||
+			strings.Count(l.sources[journalTemplateKey], "%s") != 1 ||
+			strings.Replace(l.sources[journalTemplateKey], "%s", strconv.Itoa(p.JournalEntry), 1) != source) {
+			panic("手札編號與完整原文不符")
+		}
 		if source == "" || !(literal || message) || p.SHA256 != digest([]byte(source)) ||
 			g.catalog[p.Key] == "" || p.NativeBox != ([4]int{8, 136, 312, 184}) || p.Foreground > 15 || p.Background != 0 || p.Clear > 1 {
 			panic("段落來源或安全框不符")
@@ -47,6 +55,7 @@ func (g *liveGame) installListParagraphs() {
 	}
 	registered := map[oracle.Addr]bool{}
 	o.OnCall(anchor, func(_ *oracle.Oracle) {
+		g.closeReader()
 		caller := o.Caller()
 		box := [4]int{int(byte(o.StackWord(2))) * 8, int(byte(o.StackWord(3))) * 8, (int(byte(o.StackWord(4))) + 1) * 8, (int(byte(o.StackWord(5))) + 1) * 8}
 		fg, bg, clear := byte(o.StackWord(6)), byte(o.StackWord(7)), byte(o.StackWord(8))
@@ -131,6 +140,7 @@ func (g *liveGame) installListParagraphs() {
 		r := o.Regs()
 		l.paragraphPaints = append(l.paragraphPaints, paintReturn{caller, r.SS, r.SP + 4})
 		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("paragraph-before-glyph", map[string]any{"page": page, "caller": caller, "source_pointer": ptr}))
+		g.openReader(binding)
 		if !registered[caller] {
 			registered[caller] = true
 			o.OnCall(caller, func(_ *oracle.Oracle) {

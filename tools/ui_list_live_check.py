@@ -52,6 +52,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert template["en"].count("%s") == template["zh"].count("%s") == 1
                 assert en[f["Key"]] == template["en"].replace("%s",argument)
                 assert zh[f["Key"]] == template["zh"].replace("%s",argument)
+                if f.get("JournalEntry") or (inputs / "reader.zh-TW.tsv").exists():
+                    assert f["JournalEntry"] == int(argument)
+                    assert en[template_key] == template["en"] and zh[template_key] == template["zh"]
     typed_buttons = bool(b.get("button_ownership"))
     assert bool(a.get("button_ownership")) == typed_buttons
     if config.get("Paragraphs"):
@@ -84,6 +87,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         p = paragraph_by_step[entry["Step"]]
         assert returned["Step"] == p["return_step"]
         assert returned["detail"] == {"caller":p["caller"],"ss":p["regs"]["SS"],"sp":(p["regs"]["SP"]+4)&65535}
+    from ui_journal_reader_check import reader_model, paint_reader
+    reader = reader_model(inputs,config,native_paragraphs,paragraph_entries,(a,b))
     def field_start(field, text):
         if not field.get("SourcePattern"):
             return field["Start"] if sha(text.encode()) == field["SHA256"] else None
@@ -557,7 +562,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         verified_pngs.add((str(folder), name))
         return data
 
-    def compose(source, words, palette, page):
+    def compose(source, words, palette, page, reader_page):
         px = bytearray(source)
         rectangles = []
         if page is not None:
@@ -604,6 +609,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                         at = ((y + yy) * 640 + x + col * 16 + xx) * 4
                         for channel in range(3):
                             px[at + channel] = (fg[channel] * value + px[at + channel] * (255 - value) + 127) // 255
+        paint_reader(px,reader_page,palette,alpha)
         return sha(px)
 
     previous, held, translated_frames, model_index = None, 0, 0, -1
@@ -633,9 +639,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for start, end, (x, y, width, height) in actor_headers:
                 if start <= frame["step"] < end:
                     assert all(w["X"]+w["Width"] <= x or x+width <= w["X"] or w["Y"]+8 <= y or y+height <= w["Y"] for w in state["words"] or [])
-            key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]),json.dumps(state.get("paragraph"),sort_keys=True))
+            key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]),json.dumps(state.get("paragraph"),sort_keys=True),json.dumps(state.get("reader"),sort_keys=True))
             if key not in cache:
-                cache[key] = compose(pixels(en_run, original), state["words"], state["palette"],state.get("paragraph"))
+                cache[key] = compose(pixels(en_run, original), state["words"], state["palette"],state.get("paragraph"),state.get("reader"))
             expected_hash = cache[key]
             if state["words"]:
                 translated_frames += 1
@@ -683,6 +689,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "zh_receipt_sha256": sha((zh_run / "receipt.json").read_bytes()),
               "checker_sha256": sha(Path(__file__).read_bytes()),
               "limits": "固定正常旅店快照與一般按鍵；已觀測列表、角色欄位及已知整表選單。數字與加值維持原版。不是全部介面、冷啟動、X11、裝備操作、施法、存讀檔、正式字級或正式中文化驗收。"}
+    if reader is not None:
+        result["reader"] = reader
+        result["reader_model_sha256"] = sha((Path(__file__).parent / "ui_journal_reader_check.py").read_bytes())
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
