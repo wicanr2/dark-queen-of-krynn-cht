@@ -68,5 +68,27 @@ case "${1:-}" in
       --entrypoint python3 "$PIL_IMAGE" /tools/ui_context_check.py \
       "/probe/$OBS" "/probe/$CONTROL" "/out/$(basename "$RESULT")" --role "$ROLE"
     ;;
-  *) printf '%s\n' '用法：ui-context.sh build | run STATE REQUEST RESULT observe|control | check OBS CONTROL RESULT [inventory|grimoire|none]' >&2; exit 2 ;;
+  preview)
+    OBS="${2:?需指定已驗觀測組相對路徑}"
+    COMPARISON="${3:?需指定已驗比較 JSON 相對路徑}"
+    RESULT="${4:?需指定全新預覽相對路徑}"
+    relative "$OBS"; relative "$COMPARISON"; relative "$RESULT"
+    FONT=/home/anr2/cht/golden_box/death_knight_of_krynn/font
+    TEXT="$ROOT/workplace/translation"
+    test -f "$FONT/jf-openhuninn-2.1.ttf"
+    test -f "$TEXT/glossary.tsv"
+    test -f "$PROBE/$COMPARISON"
+    test -d "$PROBE/$OBS"
+    PARENT="$(dirname "$PROBE/$RESULT")"
+    test -d "$PARENT"
+    test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
+    test ! -e "$PROBE/$RESULT"
+    timeout 30s docker run --rm --init --network none --user "$(id -u):$(id -g)" \
+      --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
+      -v "$PROBE:/probe:ro" -v "$ROOT/tools:/tools:ro" -v "$PARENT:/out" \
+      -v "$FONT:/font:ro" -v "$TEXT:/text:ro" \
+      --entrypoint python3 "$PIL_IMAGE" /tools/ui_context_preview.py \
+      "/probe/$OBS" "/probe/$COMPARISON" /text/glossary.tsv /font/jf-openhuninn-2.1.ttf "/out/$(basename "$RESULT")"
+    ;;
+  *) printf '%s\n' '用法：ui-context.sh build | run STATE REQUEST RESULT observe|control | check OBS CONTROL RESULT [inventory|grimoire|none] | preview OBS COMPARISON RESULT' >&2; exit 2 ;;
 esac

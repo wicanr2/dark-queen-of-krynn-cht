@@ -47,16 +47,18 @@ type textSnapshot struct {
 	NUL     bool   `json:"nul_terminated"`
 }
 type call struct {
-	Step       uint64       `json:"step"`
-	Return     uint64       `json:"return_step,omitempty"`
-	Glyph      uint64       `json:"first_glyph,omitempty"`
-	Caller     oracle.Addr  `json:"caller"`
-	SS         uint16       `json:"ss"`
-	SP         uint16       `json:"sp"`
-	Stack      []uint16     `json:"stack"`
-	Format     textSnapshot `json:"format"`
-	Candidate1 textSnapshot `json:"vararg_1_candidate"`
-	Candidate2 textSnapshot `json:"vararg_2_candidate"`
+	Step       uint64           `json:"step"`
+	Return     uint64           `json:"return_step,omitempty"`
+	Glyph      uint64           `json:"first_glyph,omitempty"`
+	Caller     oracle.Addr      `json:"caller"`
+	SS         uint16           `json:"ss"`
+	SP         uint16           `json:"sp"`
+	Stack      []uint16         `json:"stack"`
+	Format     textSnapshot     `json:"format"`
+	Candidate1 textSnapshot     `json:"vararg_1_candidate"`
+	Candidate2 textSnapshot     `json:"vararg_2_candidate"`
+	Wrapper    int              `json:"wrapper_index"`
+	GlyphCalls []map[string]any `json:"glyph_calls,omitempty"`
 }
 type pendingCall struct {
 	index  int
@@ -134,10 +136,127 @@ func main() {
 		return s
 	}
 	var calls []call
+	var wrappers []map[string]any
+	var listEvents []map[string]any
+	var scrollEvents []map[string]any
+	var scrollPending []pendingCall
+	scrollRegistered := map[oracle.Addr]bool{}
+	type listPending struct {
+		index   int
+		ss, sp  uint16
+		pointer oracle.Addr
+	}
+	var listStack []listPending
 	var pending []pendingCall
 	registered := map[oracle.Addr]bool{}
 	observe := os.Args[4] == "observe"
+	wrapperEntry := oracle.Addr{Seg: 0x0b72, Off: 0x0046}
+	if hex.EncodeToString(o.Bytes(wrapperEntry, 11)) != "558bec83ec60168d461250" {
+		panic("格式化入口不符")
+	}
 	if observe {
+		scrollEntry := oracle.Addr{Seg: 0x13c7, Off: 0x2f06}
+		if hex.EncodeToString(o.Bytes(scrollEntry, 11)) != "558bec83ec0c5657168d46" {
+			panic("捲動入口不符")
+		}
+		o.OnCall(scrollEntry, func(_ *oracle.Oracle) {
+			if len(scrollEvents) >= 1000 {
+				panic("超出捲動觀測上限")
+			}
+			r := o.Regs()
+			s := make([]uint16, 12)
+			for i := range s {
+				s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
+			}
+			i := len(scrollEvents)
+			before := fmt.Sprintf("scroll-%03d-before.idx", i)
+			must(os.WriteFile(filepath.Join(out, before), o.Indexed(), 0644))
+			scrollEvents = append(scrollEvents, map[string]any{"step": o.Steps(), "stack": s, "regs": r, "indexed_before": before})
+			target := oracle.Addr{Seg: s[1], Off: s[0]}
+			scrollPending = append(scrollPending, pendingCall{i, target, r.SS, r.SP + 4})
+			if !scrollRegistered[target] {
+				scrollRegistered[target] = true
+				o.OnCall(target, func(_ *oracle.Oracle) {
+					if len(scrollPending) == 0 {
+						return
+					}
+					p := scrollPending[len(scrollPending)-1]
+					r := o.Regs()
+					if p.addr == target && p.ss == r.SS && p.sp == r.SP {
+						after := fmt.Sprintf("scroll-%03d-after.idx", p.index)
+						must(os.WriteFile(filepath.Join(out, after), o.Indexed(), 0644))
+						scrollEvents[p.index]["return_step"] = o.Steps()
+						scrollEvents[p.index]["indexed_after"] = after
+						scrollPending = scrollPending[:len(scrollPending)-1]
+					}
+				})
+			}
+		})
+		listEntry := oracle.Addr{Seg: 0x0c15, Off: 0x0055}
+		listReturn := oracle.Addr{Seg: 0x0c15, Off: 0x0508}
+		if hex.EncodeToString(o.Bytes(listEntry, 8)) != "558bec83ec245657" || o.Byte(listReturn) != 0xcb {
+			panic("列表繪製邊界不符")
+		}
+		o.OnCall(listEntry, func(_ *oracle.Oracle) {
+			if len(listEvents) >= 2000 {
+				panic("超出列表觀測上限")
+			}
+			r := o.Regs()
+			s := make([]uint16, 12)
+			for i := range s {
+				s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
+			}
+			ptr := oracle.Addr{Seg: s[6], Off: s[5]}
+			if uint32(ptr.Seg)*16+uint32(ptr.Off)+24 >= 0xa0000 || uint32(ptr.Off)+24 > 0x10000 {
+				panic("列表結構超出研究範圍")
+			}
+			data := o.Bytes(ptr, 24)
+			cb := oracle.Addr{Off: uint16(data[16]) | uint16(data[17])<<8, Seg: uint16(data[18]) | uint16(data[19])<<8}
+			if uint32(cb.Seg)*16+uint32(cb.Off)+64 >= 0xa0000 || uint32(cb.Off)+64 > 0x10000 {
+				panic("列表回呼超出研究範圍")
+			}
+			listEvents = append(listEvents, map[string]any{"step": o.Steps(), "stack": s, "regs": r, "descriptor_pointer": ptr, "descriptor_before_hex": hex.EncodeToString(data), "callback": cb, "callback_bytes_hex": hex.EncodeToString(o.Bytes(cb, 64))})
+			listStack = append(listStack, listPending{len(listEvents) - 1, r.SS, r.SP, ptr})
+		})
+		o.OnCall(listReturn, func(_ *oracle.Oracle) {
+			if len(listStack) == 0 {
+				panic("未配對的列表返回")
+			}
+			p := listStack[len(listStack)-1]
+			r := o.Regs()
+			if p.ss != r.SS || p.sp != r.SP {
+				panic("列表返回堆疊不符")
+			}
+			listEvents[p.index]["return_instruction_step"] = o.Steps()
+			listEvents[p.index]["descriptor_after_hex"] = hex.EncodeToString(o.Bytes(p.pointer, 24))
+			listStack = listStack[:len(listStack)-1]
+		})
+		o.OnCall(wrapperEntry, func(_ *oracle.Oracle) {
+			if len(wrappers) >= 10000 {
+				panic("超出格式化觀測上限")
+			}
+			r := o.Regs()
+			s := make([]uint16, 32)
+			for i := range s {
+				s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
+			}
+			var frames []map[string]any
+			bp := r.BP
+			for n := 0; n < 6 && uint32(bp)+24 <= 0x10000 && uint32(r.SS)*16+uint32(bp)+24 < 0xa0000; n++ {
+				words := make([]uint16, 12)
+				for i := range words {
+					words[i] = o.Word(oracle.Addr{Seg: r.SS, Off: bp + uint16(i*2)})
+				}
+				frames = append(frames, map[string]any{"bp": bp, "words": words})
+				if words[0] <= bp {
+					break
+				}
+				bp = words[0]
+			}
+			wrappers = append(wrappers, map[string]any{"step": o.Steps(), "regs": r, "stack": s,
+				"format": read(s[7], s[6]), "vararg_1_candidate": read(s[9], s[8]),
+				"caller": oracle.Addr{Seg: s[1], Off: s[0]}, "bp_chain_candidates": frames})
+		})
 		o.OnCall(entry, func(_ *oracle.Oracle) {
 			if len(calls) >= 10000 {
 				panic("超出文字觀測上限")
@@ -148,7 +267,11 @@ func main() {
 				s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
 			}
 			target := oracle.Addr{Seg: s[1], Off: s[0]}
-			calls = append(calls, call{Step: o.Steps(), Caller: target, SS: r.SS, SP: r.SP, Stack: s, Format: read(s[6], s[5]), Candidate1: read(s[8], s[7]), Candidate2: read(s[10], s[9])})
+			wrapper := -1
+			if target == (oracle.Addr{Seg: 0x0b72, Off: 0x027c}) && len(wrappers) > 0 {
+				wrapper = len(wrappers) - 1
+			}
+			calls = append(calls, call{Step: o.Steps(), Caller: target, SS: r.SS, SP: r.SP, Stack: s, Format: read(s[6], s[5]), Candidate1: read(s[8], s[7]), Candidate2: read(s[10], s[9]), Wrapper: wrapper})
 			pending = append(pending, pendingCall{len(calls) - 1, target, r.SS, r.SP + 4})
 			if !registered[target] {
 				registered[target] = true
@@ -170,6 +293,18 @@ func main() {
 				c := &calls[pending[len(pending)-1].index]
 				if c.Glyph == 0 {
 					c.Glyph = o.Steps()
+				}
+				if strings.Contains(strings.ToLower(c.Candidate1.Text), "shield") {
+					if len(c.GlyphCalls) >= 64 {
+						panic("超出單列字元觀測上限")
+					}
+					r := o.Regs()
+					s := make([]uint16, 12)
+					for i := range s {
+						s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
+					}
+					c.GlyphCalls = append(c.GlyphCalls, map[string]any{"step": o.Steps(), "regs": r, "stack": s,
+						"ds_ca12": o.Word(oracle.Addr{Seg: r.DS, Off: 0xca12}), "ds_ca14": o.Word(oracle.Addr{Seg: r.DS, Off: 0xca14})})
 				}
 			}
 		})
@@ -205,6 +340,6 @@ func main() {
 			matches = append(matches, i)
 		}
 	}
-	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Candidate varargs are raw pointers, not a complete formatter."})
+	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
 }
