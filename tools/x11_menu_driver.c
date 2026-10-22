@@ -7,7 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/stat.h>
 static char status_path[4096];
+static const char *count_field="inputs";
 
 static Window find_window(Display *d, Window w, unsigned long pid) {
     Atom type; int format; unsigned long n, extra; unsigned char *data = NULL;
@@ -29,7 +31,7 @@ static unsigned long long number(const char *json,const char *key) {
 }
 static unsigned long long input_count(void) {
     char json[8192];FILE *f=fopen(status_path,"r");if(!f)return 0;
-    size_t n=fread(json,1,sizeof json-1,f);json[n]=0;fclose(f);return number(json,"inputs");
+    size_t n=fread(json,1,sizeof json-1,f);json[n]=0;fclose(f);return number(json,count_field);
 }
 static void send_key(Display *d,Window w,KeySym sym) {
     unsigned long long before=input_count();
@@ -65,14 +67,58 @@ static void capture(Display *d,Window w,const char *directory,const char *status
     snprintf(path,sizeof path,"%s/x11-capture.json",directory);f=fopen(path,"w");if(!f)exit(6);
     fprintf(f,"{\"width\":%d,\"height\":%d,\"window\":%lu,\"step\":%llu}\n",a.width,a.height,w,number(status,"step"));fclose(f);
 }
+/* 閱讀元件停在原版完整畫面；本段只送 X11 事件及擷取視窗。 */
+static void reader_status(char *json,size_t capacity) {
+    FILE *f=fopen(status_path,"r");json[0]=0;if(!f)return;
+    size_t n=fread(json,1,capacity-1,f);json[n]=0;fclose(f);
+}
+static int reader_test(Display *d,unsigned long pid,const char *directory,int long_page) {
+    Window w=0;char json[8192],subdir[4096],path[4096];
+    struct timespec start,now,pause={0,10000000};clock_gettime(CLOCK_MONOTONIC,&start);
+    for(;;) {
+        clock_gettime(CLOCK_MONOTONIC,&now);
+        if(now.tv_sec-start.tv_sec>150) {fprintf(stderr,"reader X11 readiness timeout\n");return 4;}
+        if(!w)w=find_window(d,DefaultRootWindow(d),pid);
+        reader_status(json,sizeof json);
+        if(w && number(json,"step")==810000000ULL && number(json,"reader_entry")== (long_page?50:54) &&
+           strstr(json,"\"reader_stable\":true") &&
+           strstr(json,long_page?"\"reader_mode\":\"probe\"":"\"reader_mode\":\"browse\""))break;
+        nanosleep(&pause,NULL);
+    }
+    count_field="reader_inputs";
+    /* latest.json 在 Draw 內寫出；X11 實際呈現要等 Draw 返回後完成。 */
+    struct timespec present={0,80000000};nanosleep(&present,NULL);XSync(d,False);
+    KeySym long_keys[]={XK_Page_Down,XK_Page_Down,XK_Page_Up,XK_Page_Down,XK_Escape};
+    KeySym seen_keys[]={XK_Left,XK_Right,XK_Page_Down,XK_F5};
+    unsigned int pages[]={1,2,2,1,2};
+    int count=long_page?5:4;
+    for(int phase=0;phase<count;phase++) {
+        reader_status(json,sizeof json);
+        if(number(json,"step")!=810000000ULL || number(json,"reader_page")!=(long_page?pages[phase]:1) ||
+           number(json,"reader_entry")!=(long_page?50:54))return 7;
+        snprintf(subdir,sizeof subdir,"%s/reader-%d",directory,phase);
+        if(mkdir(subdir,0755))return 6;
+        capture(d,w,subdir,json);
+        snprintf(path,sizeof path,"%s/latest.json",subdir);
+        FILE *f=fopen(path,"w");if(!f)return 6;fputs(json,f);fclose(f);
+        send_key(d,w,long_page?long_keys[phase]:seen_keys[phase]);
+        struct timespec release={0,80000000};nanosleep(&release,NULL);
+    }
+    return 0;
+}
 int main(int argc,char **argv) {
     if(argc!=4) {fprintf(stderr,"usage: driver pid output roundtrip|adventure\n");return 2;}
     int adventure=!strcmp(argv[3],"adventure");
-    if(!adventure && strcmp(argv[3],"roundtrip")) return 2;
+    int reader=!strcmp(argv[3],"reader-long") || !strcmp(argv[3],"reader-seen");
+    if(!adventure && strcmp(argv[3],"roundtrip") && !reader) return 2;
     Display *d=XOpenDisplay(NULL);if(!d) return 2;
     unsigned long pid=strtoul(argv[1],NULL,10); Window w=0;
     char path[4096],json[8192];snprintf(path,sizeof path,"%s/latest.json",argv[2]);
     snprintf(status_path,sizeof status_path,"%s/latest.json",argv[2]);
+    if(reader) {
+        int result=reader_test(d,pid,argv[2],!strcmp(argv[3],"reader-long"));
+        XCloseDisplay(d);return result;
+    }
     int phase=0,spaces=0; unsigned long long previous_send=0;
     struct timespec start,now,pause={0,10000000};clock_gettime(CLOCK_MONOTONIC,&start);
     for(;;) {

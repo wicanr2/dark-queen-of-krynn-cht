@@ -20,7 +20,7 @@ def catalog(path):
     return result
 
 
-def prepare(texts, observed, output, paragraph_trace=None, book_review=None):
+def prepare(texts, observed, output, paragraph_trace=None, book_review=None, reader_ui=None):
     assert not output.exists()
     en = catalog(texts / "en.tsv")
     with (texts / "glossary.tsv").open(encoding="utf-8", newline="") as f:
@@ -534,8 +534,10 @@ def prepare(texts, observed, output, paragraph_trace=None, book_review=None):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
     if book_review is not None:
         assert paragraph_trace is not None
-        reader = catalog(texts / "reader-ui-review.tsv")
-        assert set(reader) == {"reader.heading"} and reader["reader.heading"].count("%s") == 2
+        ui_path = reader_ui or texts / "reader-ui-review.tsv"
+        reader = catalog(ui_path)
+        assert set(reader) in ({"reader.heading"},{"reader.heading","reader.page","reader.empty","reader.browse_hint"})
+        assert reader["reader.heading"].count("%s") == 2
         book = catalog(book_review)
         assert book and not reader.keys() & book.keys()
         assert all(re.fullmatch(r"journal\.[1-9][0-9]?\.(title|body)", key) for key in book)
@@ -543,6 +545,14 @@ def prepare(texts, observed, output, paragraph_trace=None, book_review=None):
         font = dict(translations)
         assert not font.keys() & reader.keys()
         font.update(reader)
+        # 編號來自鍵值，不在原始正文中；模板展開後也要納入字模來源。
+        for key, title in book.items():
+            if key.endswith(".title"):
+                entry = key.split(".")[1]
+                font[f"reader.heading.{entry}"] = reader["reader.heading"] % (entry, title)
+        if "reader.page" in reader:
+            for number in range(1, 4):
+                font[f"reader.page.{number}"] = reader["reader.page"] % (number, 3)
         for name, strings in (("reader.zh-TW.tsv",reader),("font-zh-TW.tsv",font)):
             (output / name).write_text("key\ttext\n"+"".join(f"{key}\t{value}\n" for key,value in strings.items()))
     row_hashes = {row["SHA256"] for row in rows}
@@ -608,7 +618,7 @@ def prepare(texts, observed, output, paragraph_trace=None, book_review=None):
             result_provenance["formatted_paragraph_templates"] = paragraph_templates
     if book_review is not None:
         result_provenance["reader_review_sha256"] = sha(book_review.read_bytes())
-        result_provenance["reader_ui_sha256"] = sha((texts / "reader-ui-review.tsv").read_bytes())
+        result_provenance["reader_ui_sha256"] = sha(ui_path.read_bytes())
         result_provenance["reader_catalog_sha256"] = sha((output / "reader.zh-TW.tsv").read_bytes())
     (output / "provenance.json").write_text(json.dumps(result_provenance, ensure_ascii=False, indent=2) + "\n")
     print(f"列表原型輸入：{len(rows)} 種完整列、{len(field_provenance)} 種標題提示與按鈕；未改正式譯表")

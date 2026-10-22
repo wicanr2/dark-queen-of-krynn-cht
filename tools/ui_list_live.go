@@ -841,6 +841,12 @@ func (g *liveGame) updateList() error {
 	if next-step < batch {
 		batch = next - step
 	}
+	if g.reader != nil && g.reader.ControlIndex < len(g.reader.Controls) {
+		at := g.reader.Controls[g.reader.ControlIndex].At
+		if at > step && at-step < batch {
+			batch = at - step
+		}
+	}
 	if batch == 0 {
 		panic("列表步數未前進")
 	}

@@ -690,6 +690,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "checker_sha256": sha(Path(__file__).read_bytes()),
               "limits": "固定正常旅店快照與一般按鍵；已觀測列表、角色欄位及已知整表選單。數字與加值維持原版。不是全部介面、冷啟動、X11、裝備操作、施法、存讀檔、正式字級或正式中文化驗收。"}
     if reader is not None:
+        from ui_journal_reader_check import check_reader_x11
+        windows=[check_reader_x11(folder,run) for folder,run in ((en_run,a),(zh_run,b))]
+        if any(windows):
+            reader["x11_windows"] = windows
         result["reader"] = reader
         result["reader_model_sha256"] = sha((Path(__file__).parent / "ui_journal_reader_check.py").read_bytes())
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
