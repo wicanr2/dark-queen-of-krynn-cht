@@ -163,7 +163,8 @@ def prepare(texts, observed, output):
     reviewed_by_en = {r["en"]: r for r in reviewed}
     menu_terms = {}
     for source in ("Rdy Use Trade Deposit Drop Halve Join Sell Id Exit",
-                   "Cast Memorize Scribe Display Rest Exit"):
+                   "Cast Memorize Scribe Display Rest Exit",
+                   "Items Spells Trade Deposit Drop Lay Cure Exit"):
         k, target = formal(source)
         source_parts, target_parts = source.split(), target.replace("\\u3000", " ").split()
         assert len(source_parts) == len(target_parts)
@@ -218,8 +219,22 @@ def prepare(texts, observed, output):
         aliases[key], translations[key] = source, translated
         field_provenance.append({"key": key, "source": source, "origin": origin})
         return key
-    for pane, folder in (("inventory", "observe-items-r2"), ("grimoire", "observe-grimoire-r2")):
+    menu_kinds = {
+        ("Items", "Spells", "Trade", "Drop", "Exit"): "status",
+        ("Rdy", "Use", "Trade", "Drop", "Halve", "Join", "Exit"): "inventory",
+        ("Cast", "Memorize", "Scribe", "Display", "Rest", "Exit"): "magic",
+        ("Memorize", "Exit"): "grimoire"}
+    menus, menu_provenance = {}, []
+    for pane, folder in (("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1")):
         receipt = json.loads((observed / folder / "receipt.json").read_text())
+        known_menus = {}
+        for index, menu in enumerate(receipt["menus"]):
+            sources = tuple(bytes.fromhex(b["SourceHex"]).decode("ascii") for b in menu["Buttons"])
+            if sources in menu_kinds:
+                known_menus[index] = menu["Signature"]
+                menus[menu["Signature"]] = menu_kinds[sources]
+                menu_provenance.append({"folder": folder, "menu_index": index, "signature": menu["Signature"],
+                                        "kind": menu_kinds[sources], "receipt_sha256": sha((observed / folder / "receipt.json").read_bytes())})
         full_fills = [f["step"] for f in receipt["fill_events"] if not f["within_list"]
                       and f["native_rect"][0] <= 8 and f["native_rect"][1] <= 8
                       and f["native_rect"][0] + f["native_rect"][2] >= 312
@@ -238,14 +253,15 @@ def prepare(texts, observed, output):
             source = c["vararg_1_candidate"] if fmt["text"] == "%s" else fmt
             if not source["nul_terminated"]:
                 continue
-            text, group, scope = source["text"], None, pane
+            text, group, scope, menu_signature = source["text"], None, pane, ""
             active = any(start <= c["step"] < end for start, end in intervals)
             if c["wrapper_index"] in title_indices:
                 group = "header"
             elif c["wrapper_index"] in suffix_indices:
                 group, scope = "header", "suffix"
-            elif active and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE} and stack[2] == 189 and text in menu_terms:
-                group = "footer"
+            elif c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE} and stack[2] == 189 and c["menu_index"] in known_menus:
+                group, scope, menu_signature = "footer", "menu", known_menus[c["menu_index"]]
+                assert text in menu_terms
             elif active and text in ("Ready Item", "1st Level", "Choose Spell:"):
                 group = "footer" if text == "Choose Spell:" else "body"
             if group is None:
@@ -256,12 +272,29 @@ def prepare(texts, observed, output):
             assert 0 <= x < x + len(text) * 8 <= 320 and 0 <= y <= 192
             field = {"Pane": scope, "Group": group, "Key": key,
                      "Start": 0, "Length": len(text),
+                     "MenuSignature": menu_signature,
                      "RawX": stack[3], "RawY": stack[2], "Caller": c["caller"],
                      "FormatSHA256": sha(fmt["text"].encode()), "SHA256": sha(text.encode())}
             identity = json.dumps(field, sort_keys=True)
             if identity not in field_ids:
                 fields.append(field)
                 field_ids.add(identity)
+        # 整表已給出所有按鈕。反白階段可能只印其中一個，不以舊追蹤是否
+        # 恰好印過該按鈕，限制同一已知完整選單的其餘按鈕。
+        native = lambda value: value if value < 400 else (value - 8000) * 2
+        for index, signature in known_menus.items():
+            for button in receipt["menus"][index]["Buttons"]:
+                text = bytes.fromhex(button["SourceHex"]).decode("ascii")
+                x, y = native(button["RawX"]), native(button["RawY"]) + 1
+                assert 0 <= x < x + len(text)*8 <= 320 and y == 189
+                field = {"Pane": "menu", "Group": "footer", "Key": field_key(text),
+                         "Start": 0, "Length": len(text), "MenuSignature": signature,
+                         "RawX": x, "RawY": y, "Caller": {"Seg": 0xCEB, "Off": 0x1BE},
+                         "FormatSHA256": button["SHA256"], "SHA256": button["SHA256"]}
+                identity = json.dumps(field, sort_keys=True)
+                if identity not in field_ids:
+                    fields.append(field)
+                    field_ids.add(identity)
     # 狀態及計數在列表標題之前印出。只接已觀測的上層專屬呼叫者，
     # 再由同一個尚未返回的 wrapper 核對完整來源、座標及下層印字。
     status_callers = {0x46, 0x6E, 0xA8, 0xD3, 0x10D, 0x147, 0x2F0, 0x309,
@@ -315,7 +348,7 @@ def prepare(texts, observed, output):
     output.mkdir()
     for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
-    config = {"Headers": headers, "Rows": rows, "Fields": fields, "Background": backgrounds.pop(),
+    config = {"Headers": headers, "Rows": rows, "Fields": fields, "Menus": menus, "Background": backgrounds.pop(),
               "fine_windows": [[666000000, 667000000], [672000000, 673000000], [681000000, 682000000],
                                [699000000, 700000000], [705000000, 706000000],
                                [738000000, 739000000], [741000000, 742000000], [744000000, 745000000]]}
@@ -323,6 +356,7 @@ def prepare(texts, observed, output):
     (output / "provenance.json").write_text(json.dumps({"draft": True, "headers": provenance, "bindings": bindings,
         "fields": field_provenance,
         "callsite_sources": callsite_sources,
+        "menus": menu_provenance,
         "reviewed_fields_sha256": sha((texts / "ui-list-chrome-reviewed.tsv").read_bytes()),
         "observed_rows": len(rows),
         "formal_en_sha256": sha((texts / "en.tsv").read_bytes()),

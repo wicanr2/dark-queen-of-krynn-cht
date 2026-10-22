@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import json
+import struct
 import sys
 from pathlib import Path
 from PIL import Image
@@ -28,6 +29,44 @@ def check(en_run, zh_run, inputs, control, observed, output):
     zh = catalog(inputs / "zh-TW.tsv")
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
+    # 從原版整表 bytes 獨立重建按鈕順序、文字指標、座標及指紋。
+    native = lambda value: value if value < 400 else (value - 8000) * 2
+    for menu in trace["menus"]:
+        raw = bytes.fromhex(menu["RawHex"])
+        assert len(raw) == menu["Count"] * 32
+        indices = [i for i in range(menu["Count"]) if struct.unpack_from("<HH", raw, i*32) == (0x8E, 0xCEB)]
+        assert indices == [b["Index"] for b in menu["Buttons"]]
+        signature = []
+        for button in menu["Buttons"]:
+            record = raw[button["Index"]*32:][:32]
+            off, seg, y, x = struct.unpack_from("<HHHH", record, 12)
+            assert button["SourcePointer"] == {"Seg": seg, "Off": off}
+            assert (button["RawX"], button["RawY"]) == (x, y)
+            assert sha(bytes.fromhex(button["SourceHex"])) == button["SHA256"]
+            signature.append([button["Index"], button["SHA256"], x, y])
+        assert sha(json.dumps([menu["Count"], signature], separators=(",", ":")).encode()) == menu["Signature"]
+        if menu["Signature"] in config["Menus"]:
+            for button in menu["Buttons"]:
+                text = bytes.fromhex(button["SourceHex"]).decode("ascii")
+                matches = [f for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == menu["Signature"]
+                           and f["RawX"] == native(button["RawX"]) and f["RawY"] == native(button["RawY"])+1
+                           and f["SHA256"] == button["SHA256"] and f["FormatSHA256"] == button["SHA256"]
+                           and f["Caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
+                assert len(matches) == 1
+                field = matches[0]
+                assert field["Group"] == "footer" and field["Start"] == 0 and field["Length"] == len(text)
+                assert en[field["Key"]] == text
+    def menu_signature(call):
+        index = call.get("menu_index", -1)
+        return trace["menus"][index]["Signature"] if index >= 0 else ""
+    for c in trace["calls"]:
+        if c["caller"] != {"Seg": 0xCEB, "Off": 0x1BE}:
+            continue
+        assert c["menu_index"] >= 0
+        menu = trace["menus"][c["menu_index"]]
+        buttons = [b for b in menu["Buttons"] if b["SourceHex"] == c["format"]["hex"]
+                   and native(b["RawX"]) == native(c["stack"][3]) and native(b["RawY"])+1 == native(c["stack"][2])]
+        assert len(buttons) == 1
     for actual in (a, b):
         assert actual["initial_state_sha256"] == oracle["state_sha256"]
         assert actual["list_request_sha256"] == oracle["request_sha256"]
@@ -35,7 +74,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert actual["catalog_sha256"] == sha((inputs / "zh-TW.tsv").read_bytes())
         assert actual["source_catalog_sha256"] == sha((inputs / "en.tsv").read_bytes())
         assert actual["glyphs_sha256"] == sha((inputs / "glyphs-16.json").read_bytes())
-        assert not actual["unimplemented"] and not actual["final_words"]
+        assert not actual["unimplemented"]
         assert len(actual["checkpoints"]) == len(oracle["checkpoints"])
         for x, y in zip(actual["checkpoints"], oracle["checkpoints"]):
             for field in ("label", "step", "regs", "ram_sha256", "indexed_sha256", "palette", "keys_consumed", "file_writes"):
@@ -76,7 +115,6 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert wanted in event["Words"]
     assert {e["detail"]["source_sha256"] for e in accepted} == {row["SHA256"] for row in wrappers.values()}
     # 由原版下層印字事件核對欄位，不以原型自行宣稱的文字框作為來源。
-    native = lambda value: value if value < 400 else (value - 8000) * 2
     fields = [e for e in b["list_events"] if e["Kind"] == "field-before-glyph"]
     calls_by_step = {c["step"]: c for c in trace["calls"]}
     field_by_step = {}
@@ -86,11 +124,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         matches = [f for f in config["Fields"] if f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
                    and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
                    and f["FormatSHA256"] == sha(c["format"]["text"].encode())
-                   and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite"))
+                   and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite", "menu"))
+                   and (f["Pane"] != "menu" or f["MenuSignature"] == menu_signature(c))
                    and (f["Pane"] != "callsite" or c["wrapper_index"] >= 0
                         and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])]
         assert len(matches) == 1
         f = matches[0]
+        assert e["detail"]["menu_signature"] == f.get("MenuSignature", "")
         assert e["Step"] < e["first_glyph"] == c["first_glyph"]
         assert e["detail"]["source_sha256"] == f["SHA256"]
         assert e["detail"]["deferred"] == (f["Pane"] == "suffix")
@@ -122,7 +162,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                and ((f["Pane"] == "callsite" and c["wrapper_index"] >= 0
                      and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])
-                    or (f["Pane"] != "callsite" and in_list)) for f in config["Fields"]):
+                    or (f["Pane"] == "menu" and f["MenuSignature"] == menu_signature(c))
+                    or (f["Pane"] not in ("callsite", "menu") and in_list)) for f in config["Fields"]):
             assert c["step"] in field_by_step
     assert len([e for e in b["list_events"] if e["Kind"] == "title-suffix-attached"]) == len(title_wrappers)
 
@@ -200,6 +241,14 @@ def check(en_run, zh_run, inputs, control, observed, output):
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
         model.append((e["Step"], expected_words, sorted(row_positions)))
+    # 法術書的退出會返回魔法選單。終點若仍有已辨識選單，應保留該選單的完整中文。
+    final_button = next(c for c in reversed(trace["calls"]) if c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE})
+    final_signature = menu_signature(final_button)
+    final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
+    for actual in (a, b):
+        assert (actual["final_words"] or []) == model[-1][1]
+        assert all(w["Group"] == "footer" for w in actual["final_words"] or [])
+        assert {w["Key"] for w in actual["final_words"] or []} == final_keys
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
     assert len(cleared) == len([e for e in b["list_events"] if e["Kind"] == "clear-write-baseline"])
     assert len(cleared) >= (6 if accepted[0]["Pane"] == "inventory" else 1)
@@ -289,13 +338,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "row_events": len(accepted), "clear_transactions": len(cleared),
               "field_events": len(fields), "field_keys": sorted({e["detail"]["key"] for e in fields}),
               "callsite_field_events": sum(1 for e in fields if any(f["Pane"] == "callsite" and f["Key"] == e["detail"]["key"] for f in config["Fields"])),
+              "menu_field_events": sum(bool(e["detail"]["menu_signature"]) for e in fields),
+              "menu_kinds": sorted({config["Menus"][e["detail"]["menu_signature"]] for e in fields if e["detail"]["menu_signature"]}),
+              "final_menu_kind": config["Menus"].get(final_signature, "original"),
+              "final_footer_words": len(b["final_words"] or []),
+              "native_button_calls": sum(c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE} for c in trace["calls"]),
+              "known_menu_shapes": sorted({menu["Signature"] for menu in trace["menus"] if menu["Signature"] in config["Menus"]}),
               "field_lifetime_model_equal": True,
               "fine_windows_verified": True,
               "all_submitted_pixels_equal_expected": True,
               "en_receipt_sha256": sha((en_run / "receipt.json").read_bytes()),
               "zh_receipt_sha256": sha((zh_run / "receipt.json").read_bytes()),
               "checker_sha256": sha(Path(__file__).read_bytes()),
-              "limits": "固定正常旅店快照與一般按鍵；已觀測列名及裝備是／否欄。數字與加值維持原版。不是全部物品法術、冷啟動、X11 按鍵、正式字級或正式中文化驗收。"}
+              "limits": "固定正常旅店快照與一般按鍵；已觀測列表、角色欄位及四類選單。數字與加值維持原版。不是全部介面、冷啟動、X11、裝備操作、施法、存讀檔、正式字級或正式中文化驗收。"}
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

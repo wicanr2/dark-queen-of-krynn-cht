@@ -26,7 +26,7 @@ case "${1:-}" in
       -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" \
       -v "$MODULES:/modules:ro" -v "$PROBE/gocache:/gocache" -v "$PROBE:/out" \
       -w /src --entrypoint bash "$GO_IMAGE" -c \
-      'set -e; test ! -e /out/ui-context-probe || test "$(stat -c %u:%g /out/ui-context-probe)" = "$(id -u):$(id -g)"; go build -o /out/ui-context-probe /tools/ui_context_probe.go'
+      'set -e; test ! -e /out/ui-context-probe || test "$(stat -c %u:%g /out/ui-context-probe)" = "$(id -u):$(id -g)"; go build -o /out/ui-context-probe /tools/ui_context_probe.go /tools/ui_menu_source.go'
     ;;
   run)
     STATE="${2:?需指定 probe 內的快照相對路徑}"

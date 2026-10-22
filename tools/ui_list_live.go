@@ -30,12 +30,14 @@ type listConfig struct {
 	Headers     []listHeader
 	Rows        []listRow
 	Fields      []listField
+	Menus       map[string]string
 	Background  byte
 	FineWindows [][2]uint64 `json:"fine_windows"`
 }
 type listField struct {
 	Pane, Group, Key, SHA256, FormatSHA256 string
-	Start, Length                         int
+	MenuSignature                          string
+	Start, Length                          int
 	RawX, RawY                             uint16
 	Caller, UpperCaller                    oracle.Addr
 }
@@ -187,7 +189,8 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	for _, f := range l.config.Fields {
 		if f.Start < 0 || f.Length <= 0 || len(l.sources[f.Key]) != f.Length || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key])) > f.Length ||
 			(f.Group != "header" && f.Group != "body" && f.Group != "footer") ||
-			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix" && f.Pane != "callsite") ||
+			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix" && f.Pane != "callsite" && f.Pane != "menu") ||
+			(f.Pane == "menu" && (len(f.MenuSignature) != 64 || l.config.Menus[f.MenuSignature] == "")) ||
 			(f.Pane == "callsite" && f.UpperCaller == (oracle.Addr{})) {
 			panic("列表欄位綁定無效")
 		}
@@ -573,6 +576,11 @@ func (g *liveGame) installListFields() {
 				if p == nil || p.Caller != f.UpperCaller || p.Source != source {
 					continue
 				}
+			} else if f.Pane == "menu" {
+				menu, ok := readMenuSource(o)
+				if !ok || menu.Signature != f.MenuSignature {
+					continue
+				}
 			} else if f.Pane != l.pane {
 				continue
 			}
@@ -601,7 +609,7 @@ func (g *liveGame) installListFields() {
 				l.words[[2]int{w.X, w.Y}] = w
 			}
 			l.awaitGlyph = g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": f.SHA256,
-				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix"})
+				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix", "menu_signature": f.MenuSignature})
 			return
 		}
 	})

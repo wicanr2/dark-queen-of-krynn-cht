@@ -34,7 +34,7 @@ case "${1:-}" in
       --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOPROXY=off -e GOMAXPROCS=2 \
       -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro \
       -v "$PROBE/gocache:/gocache" -v "$PROBE:/out" -w /src --entrypoint bash "$GO_IMAGE" \
-      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go'
+      -c 'set -e; test ! -e /out/ui-list-live || test "$(stat -c %u:%g /out/ui-list-live)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/ui-list-live /tools/early_text_live.go /tools/ui_list_live.go /tools/ui_menu_source.go'
     ;;
   en|zh)
     STATE="${2:?快照}"; REQUEST="${3:?一般按鍵請求}"; INPUT="${4:?輸入目錄}"; RESULT="${5:?全新輸出}"; FINE="${6:-false}"
@@ -46,8 +46,8 @@ case "${1:-}" in
     PARENT="$(dirname "$PROBE/$RESULT")"; test -d "$PARENT"
     test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
     TRANSLATE=false; [[ "$1" = en ]] || TRANSLATE=true
-    timeout --kill-after=10s 600s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 128 \
-      --label project=dark-queen-of-krynn-cht -e GOMEMLIMIT=384MiB -e LIST_STATE="$STATE" -e LIST_REQUEST="$REQUEST" \
+    timeout --kill-after=10s 600s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 \
+      --label project=dark-queen-of-krynn-cht -e GOMEMLIMIT=1GiB -e LIST_STATE="$STATE" -e LIST_REQUEST="$REQUEST" \
       -e LIST_INPUT="$INPUT" -e LIST_RESULT="$(basename "$RESULT")" -e LIST_TRANSLATE="$TRANSLATE" -e LIST_FINE="$FINE" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" --entrypoint bash "$GO_IMAGE" -c '
         set -e

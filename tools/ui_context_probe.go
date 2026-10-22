@@ -58,6 +58,7 @@ type call struct {
 	Candidate1 textSnapshot     `json:"vararg_1_candidate"`
 	Candidate2 textSnapshot     `json:"vararg_2_candidate"`
 	Wrapper    int              `json:"wrapper_index"`
+	Menu       int              `json:"menu_index"`
 	GlyphCalls []map[string]any `json:"glyph_calls,omitempty"`
 }
 type pendingCall struct {
@@ -137,6 +138,8 @@ func main() {
 	}
 	var calls []call
 	var wrappers []map[string]any
+	var menus []menuSourceSnapshot
+	menuIndices := map[string]int{}
 	var listEvents []map[string]any
 	var scrollEvents []map[string]any
 	var fillEvents []map[string]any
@@ -336,7 +339,19 @@ func main() {
 			if target == (oracle.Addr{Seg: 0x0b72, Off: 0x027c}) && len(wrappers) > 0 {
 				wrapper = len(wrappers) - 1
 			}
-			calls = append(calls, call{Step: o.Steps(), Caller: target, SS: r.SS, SP: r.SP, Stack: s, Format: read(s[6], s[5]), Candidate1: read(s[8], s[7]), Candidate2: read(s[10], s[9]), Wrapper: wrapper})
+			menu := -1
+			if target == (oracle.Addr{Seg: 0x0ceb, Off: 0x01be}) {
+				if snapshot, ok := readMenuSource(o); ok {
+					var found bool
+					menu, found = menuIndices[snapshot.Signature]
+					if !found {
+						menu = len(menus)
+						menuIndices[snapshot.Signature] = menu
+						menus = append(menus, snapshot)
+					}
+				}
+			}
+			calls = append(calls, call{Step: o.Steps(), Caller: target, SS: r.SS, SP: r.SP, Stack: s, Format: read(s[6], s[5]), Candidate1: read(s[8], s[7]), Candidate2: read(s[10], s[9]), Wrapper: wrapper, Menu: menu})
 			pending = append(pending, pendingCall{len(calls) - 1, target, r.SS, r.SP + 4})
 			if !registered[target] {
 				registered[target] = true
@@ -405,6 +420,6 @@ func main() {
 			matches = append(matches, i)
 		}
 	}
-	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
+	writeJSON(filepath.Join(out, "receipt.json"), map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."})
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
 }
