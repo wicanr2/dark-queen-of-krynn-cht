@@ -20,6 +20,11 @@ def read(path):
 def check(en_run, zh_run, inputs, control, observed, output):
     assert not output.exists()
     a, b, oracle, trace = [read(p / "receipt.json") for p in (en_run, zh_run, control, observed)]
+    # 未進列表的正常路徑，Go 的空 slice 會輸出 null。
+    for field in ("list_events", "scroll_events"):
+        if trace[field] is None:
+            trace[field] = []
+        assert isinstance(trace[field], list)
     assert not a["translate"] and b["translate"]
     assert a["prototype"] and b["prototype"]
     glyphs = read(inputs / "glyphs-16.json")
@@ -193,7 +198,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert wrapper["caller"] in config["RowCallers"], ("unregistered known-row caller", wrapper["caller"], source)
             wrappers[i] = row
     expected = [c for c in trace["calls"] if c["wrapper_index"] in wrappers]
-    assert len(accepted) == len(expected) > 0
+    assert len(accepted) == len(expected)
+    assert accepted or paragraph_entries, "沒有列表列或完整段落接入"
     for event, original in zip(accepted, expected):
         wrapper = trace["wrappers"][original["wrapper_index"]]
         assert event["Step"] == wrapper["step"] < event["first_glyph"] == original["first_glyph"]
@@ -342,10 +348,20 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert page is not None and page["Box"] == box and page["Foreground"] == p["foreground"] and page["Background"] == bg
                 components = page["Components"]+components
             text = "".join(zh[key] for key in components)
-            # 本輪三個實際短句與接續稿都只需一行；不以同一份斷行程式自證長段正確。
-            assert len(text)*glyphs["size"] <= box[2]-box[0]
+            # 由正式全文、框與禁則獨立驗每個分界，不呼叫 runtime 的斷行實作。
+            lines = e["detail"]["page"]["Lines"]
+            cells = (box[2]-box[0])//glyphs["size"]
+            assert lines and all(lines) and "".join(lines) == text
+            assert len(lines)*glyphs["height"] <= box[3]-box[1]
+            assert all(len(line) <= cells for line in lines)
+            offset = 0
+            for line in lines[:-1]:
+                offset += len(line)
+                legal = lambda end: text[end] not in "，。！？、；：」』）》】" and text[end-1] not in "「『（《【"
+                assert legal(offset)
+                assert not any(legal(end) for end in range(offset+1,min(offset-len(line)+cells,len(text)-1)+1))
             expected_page = {"step":p["step"],"Key":binding["Key"],"Source":p["source"]["text"],"Text":text,"Box":box,
-                             "Foreground":p["foreground"],"Background":bg,"Lines":[text],"Clear":p["clear"],"Components":components}
+                             "Foreground":p["foreground"],"Background":bg,"Lines":lines,"Clear":p["clear"],"Components":components}
             assert e["detail"]["page"] == expected_page
             page = expected_page
             page_history.append(page)
@@ -465,7 +481,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
     for actual in (a, b):
         assert (actual["final_words"] or []) == model[-1][1]
-        assert {w["Key"] for w in actual["final_words"] or [] if w["Group"] == "footer"} == final_keys
+        assert {w["Key"] for w in actual["final_words"] or [] if w["Group"] == "footer" and (not typed_buttons or w.get("Button"))} == final_keys
         # 每個動作終點都應保留完整已知按鈕；同區提示另外由生命週期模型驗證。
         layouts = {frame["step"]: frame for frame in actual["list_frames"]}
         menu_field_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu"}

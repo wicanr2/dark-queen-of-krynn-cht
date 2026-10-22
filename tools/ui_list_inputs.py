@@ -178,6 +178,16 @@ def prepare(texts, observed, output, paragraph_trace=None):
     for source in ("View", "Magic", "Alt", "Fix", "Load", "Save", "Palace", "Temple", "Hall", "Shop", "Inn", "Bar", "Leave"):
         k, value = formal(source)
         menu_terms[source] = (value, k)
+    # View 等共用控制沿已核對的獨立詞條，只從整列取本輪新增服務。
+    for source, needed in (("Heal View Repair Exit", {"Heal", "Repair"}),
+                           ("Buy View Take Pool Share Appraise Exit", {"Buy", "Pool", "Appraise"})):
+        k, target = formal(source)
+        source_parts, target_parts = source.split(), target.replace("\\u3000", " ").split()
+        assert len(source_parts) == len(target_parts)
+        for english, translated in zip(source_parts, target_parts):
+            if english in needed:
+                assert english not in menu_terms or menu_terms[english][0] == translated
+                menu_terms[english] = (translated, k)
     fields, field_ids, field_provenance = [], set(), []
     prompt_terms = {}
     if paragraph_trace is not None:
@@ -241,11 +251,16 @@ def prepare(texts, observed, output, paragraph_trace=None):
         ("Memorize", "Exit"): "grimoire", ("Exit",): "effects",
         ("View", "Magic", "Rest", "Alt", "Fix", "Load", "Save", "Exit"): "camp",
         ("Rest", "Days", "Hours", "Mins", "Add", "Subtract", "Exit"): "rest",
-        ("Palace", "Temple", "Hall", "Shop", "Inn", "Bar", "Leave"): "city"}
+        ("Palace", "Temple", "Hall", "Shop", "Inn", "Bar", "Leave"): "city",
+        ("Heal", "View", "Repair", "Exit"): "temple",
+        ("Buy", "View", "Pool", "Appraise", "Exit"): "shop"}
     menus, menu_provenance = {}, []
-    for pane, folder in (("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1"),
-                         ("effects", "observe-effects-r1"), ("camp", "observe-camp-roundtrip-r1"),
-                         ("camp", "observe-clock-city-r1")):
+    menu_receipts = [("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1"),
+                     ("effects", "observe-effects-r1"), ("camp", "observe-camp-roundtrip-r1"),
+                     ("camp", "observe-clock-city-r1")]
+    if paragraph_trace is not None:
+        menu_receipts.append(("camp", str(paragraph_trace.parent.relative_to(observed))))
+    for pane, folder in menu_receipts:
         receipt = json.loads((observed / folder / "receipt.json").read_text())
         known_menus = {}
         for index, menu in enumerate(receipt["menus"]):

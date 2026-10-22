@@ -25,6 +25,7 @@ def check(observed, control, output, role):
     assert a["source_commit"] == "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8"
     assert a["exe_sha256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
     assert a["pending_calls"] == b["pending_calls"] == 0, "觀測呼叫尚未封閉"
+    paragraph_wrap_space_checks = []
     if "paragraphs" in a:
         assert a["pending_paragraphs"] == b["pending_paragraphs"] == 0
         assert not b["paragraphs"]
@@ -41,7 +42,26 @@ def check(observed, control, output, role):
             calls = [c for c in a["calls"] if c.get("paragraph_index",-1)==i]
             assert calls and all(paragraph["step"] < c["step"] < c["return_step"] < paragraph["return_step"] for c in calls)
             assert all(c["format"]["text"] == "%c" and c["caller"] == {"Seg":0xB72,"Off":0x2E3} for c in calls)
-            assert bytes(c["stack"][7]&255 for c in calls).decode("ascii") == source["text"]
+            source_bytes, offset = source["text"].encode("ascii"), 0
+            native = lambda v: v if v < 400 else (v-8000)*2
+            for index, call in enumerate(calls):
+                char = call["stack"][7]&255
+                assert offset < len(source_bytes)
+                if char != source_bytes[offset]:
+                    assert index > 0 and source_bytes[offset] == 32 and offset+1 < len(source_bytes)
+                    assert char == source_bytes[offset+1]
+                    previous = calls[index-1]
+                    before = [native(previous["stack"][3]),native(previous["stack"][2])]
+                    after = [native(call["stack"][3]),native(call["stack"][2])]
+                    left,top,right,bottom = paragraph["native_box"]
+                    assert before[0]+8 == right and after == [left,before[1]+8]
+                    assert top <= before[1] < after[1] < bottom
+                    paragraph_wrap_space_checks.append({"paragraph_index":i,"source_offset":offset,
+                        "previous_step":previous["step"],"next_step":call["step"],"previous_native":before,"next_native":after})
+                    offset += 1
+                assert char == source_bytes[offset]
+                offset += 1
+            assert offset == len(source_bytes)
             assert paragraph["first_glyph"] == calls[0]["first_glyph"] > paragraph["step"]
     if "fill_events" in a:
         assert a["pending_fills"] == b["pending_fills"] == 0, "填色要求尚未封閉"
@@ -183,6 +203,7 @@ def check(observed, control, output, role):
               "role": role, "native_list_transactions": len(lists),
               "native_scroll_transactions": len(scrolls), "shield_occurrences": matches,
               "scroll_copy_checks": scroll_checks,
+              "paragraph_wrap_space_checks": paragraph_wrap_space_checks,
               "observed_receipt_sha256": sha((observed / "receipt.json").read_bytes()),
               "control_receipt_sha256": sha((control / "receipt.json").read_bytes()),
               "checker_sha256": sha(Path(__file__).read_bytes()),
