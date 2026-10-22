@@ -45,7 +45,6 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert a["list_events"] == b["list_events"]
     accepted = [e for e in b["list_events"] if e["Kind"] == "row-before-glyph"]
     bindings = {(row["Pane"], row["SHA256"]): row for row in config["Rows"]}
-    list_keys = {span["Key"] for row in config["Rows"] for span in row["Spans"]}
     wrappers, pane = {}, None
     for i, wrapper in enumerate(trace["wrappers"]):
         if wrapper["stack"][3] & 255 == 1:
@@ -87,13 +86,21 @@ def check(en_run, zh_run, inputs, control, observed, output):
         matches = [f for f in config["Fields"] if f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
                    and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
                    and f["FormatSHA256"] == sha(c["format"]["text"].encode())
-                   and (f["Pane"] == e["Pane"] or f["Pane"] == "suffix")]
+                   and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite"))
+                   and (f["Pane"] != "callsite" or c["wrapper_index"] >= 0
+                        and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])]
         assert len(matches) == 1
         f = matches[0]
         assert e["Step"] < e["first_glyph"] == c["first_glyph"]
         assert e["detail"]["source_sha256"] == f["SHA256"]
         assert e["detail"]["deferred"] == (f["Pane"] == "suffix")
-        word = {"X": native(c["stack"][3]), "Y": native(c["stack"][2]), "Width": len(source["text"])*8,
+        assert source["text"][f["Start"]:f["Start"]+f["Length"]] == en[f["Key"]]
+        if f["Pane"] == "callsite":
+            wrapper = trace["wrappers"][c["wrapper_index"]]
+            assert wrapper["step"] < c["step"] and wrapper["format"]["text"] == source["text"]
+            assert (wrapper["stack"][2]&255)*8 == native(c["stack"][3])
+            assert (wrapper["stack"][3]&255)*8 == native(c["stack"][2])
+        word = {"X": native(c["stack"][3])+f["Start"]*8, "Y": native(c["stack"][2]), "Width": f["Length"]*8,
                 "Key": f["Key"], "Group": f["Group"], "Foreground": c["stack"][4] & 15,
                 "Background": config["Background"]}
         assert e["detail"]["word"] == word
@@ -108,17 +115,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
                   and f["native_rect"][1] + f["native_rect"][3] >= 184]
     intervals = [(w["step"], next(s for s in full_fills if s > w["step"])) for w in title_wrappers]
     for c in trace["calls"]:
-        if not any(start <= c["step"] < end for start, end in intervals):
-            continue
         source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
+        in_list = any(start <= c["step"] < end for start, end in intervals)
         if any(f["Pane"] != "suffix" and f["RawX"] == c["stack"][3] and f["RawY"] == c["stack"][2]
                and f["Caller"] == c["caller"] and f["SHA256"] == sha(source["text"].encode())
-               and f["FormatSHA256"] == sha(c["format"]["text"].encode()) for f in config["Fields"]):
+               and f["FormatSHA256"] == sha(c["format"]["text"].encode())
+               and ((f["Pane"] == "callsite" and c["wrapper_index"] >= 0
+                     and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])
+                    or (f["Pane"] != "callsite" and in_list)) for f in config["Fields"]):
             assert c["step"] in field_by_step
     assert len([e for e in b["list_events"] if e["Kind"] == "title-suffix-attached"]) == len(title_wrappers)
 
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
-    words, pending_suffix, model = {}, None, []
+    words, pending_suffix, model, row_positions = {}, None, [], set()
     wrappers_by_step = {w["step"]: w for w in trace["wrappers"]}
     def intersects(w, rect):
         x, y, width, height = rect
@@ -127,6 +136,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         for pos, w in list(words.items()):
             if intersects(w, rect):
                 del words[pos]
+                row_positions.discard(pos)
     for e in b["list_events"]:
         kind = e["Kind"]
         if kind in ("pane-invalidate", "clear-write-baseline"):
@@ -149,6 +159,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                             "Key": span["Key"], "Group": "body", "Foreground": w["stack"][4]&255,
                             "Background": config["Background"]}
                     words[(word["X"], word["Y"])] = word
+                    row_positions.add((word["X"], word["Y"]))
         elif kind == "field-before-glyph":
             w = field_by_step[e["Step"]]["detail"]["word"]
             if e["detail"]["deferred"]:
@@ -174,19 +185,24 @@ def check(en_run, zh_run, inputs, control, observed, output):
             after = (observed / original["indexed_after"]).read_bytes()
             assert all(before[(sy+row)*320+sx:(sy+row)*320+sx+sw] ==
                        after[(sy+dy+row)*320+sx+dx:(sy+dy+row)*320+sx+dx+sw] for row in range(sh))
-            moved = []
+            moved, moved_rows = [], set()
             for w in words.values():
                 if intersects(w, source):
                     assert sx <= w["X"] and w["X"]+w["Width"] <= sx+sw and sy <= w["Y"] and w["Y"]+8 <= sy+sh
                     moved.append({**w, "X": w["X"]+dx, "Y": w["Y"]+dy})
+                    if (w["X"], w["Y"]) in row_positions:
+                        moved_rows.add((w["X"]+dx, w["Y"]+dy))
             erase((x,y,width,height))
             for w in moved:
                 words[(w["X"], w["Y"])] = w
+            row_positions.update(moved_rows)
+        row_positions.intersection_update(words)
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
-        model.append((e["Step"], expected_words))
+        model.append((e["Step"], expected_words, sorted(row_positions)))
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
-    assert len(cleared) == (6 if accepted[0]["Pane"] == "inventory" else 1)
+    assert len(cleared) == len([e for e in b["list_events"] if e["Kind"] == "clear-write-baseline"])
+    assert len(cleared) >= (6 if accepted[0]["Pane"] == "inventory" else 1)
     assert all(e["detail"]["pixels"] == sum(w["Width"] * 8 for w in e["detail"]["targets"]) for e in cleared)
     assert all(e["detail"]["target_page"] == e["detail"]["visible_page"] for e in cleared)
     originals = {}
@@ -248,7 +264,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             held += 1
         else:
             # 此契約來自上層列表列；下層靜態標題／提示不共用列表的填色頁生命週期。
-            if any(w["Key"] in list_keys for w in state["words"] or []):
+            if model_index >= 0 and model[model_index][2]:
                 assert state["display_start"] == state["render_page"]
             key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]))
             if key not in cache:
@@ -272,6 +288,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "observed_unique_rows": len({e["detail"]["source_sha256"] for e in accepted}),
               "row_events": len(accepted), "clear_transactions": len(cleared),
               "field_events": len(fields), "field_keys": sorted({e["detail"]["key"] for e in fields}),
+              "callsite_field_events": sum(1 for e in fields if any(f["Pane"] == "callsite" and f["Key"] == e["detail"]["key"] for f in config["Fields"])),
               "field_lifetime_model_equal": True,
               "fine_windows_verified": True,
               "all_submitted_pixels_equal_expected": True,

@@ -172,7 +172,9 @@ def prepare(texts, observed, output):
                 assert menu_terms[english][0] == translated
             menu_terms[english] = (translated, k)
     fields, field_ids, field_provenance = [], set(), []
-    def field_key(source):
+    def field_key(source, categories=None):
+        if categories == {"item"}:
+            return bind("inventory", source, categories)
         key = "field." + sha(source.encode())[:20]
         if key in translations:
             return key
@@ -182,8 +184,35 @@ def prepare(texts, observed, output):
         elif source in menu_terms:
             translated, k = menu_terms[source]
             origin = {"formal_menu_key": k, "component": source}
+        elif categories and any(t["en"].casefold() == source.casefold() and t["category"] in categories for t in terms):
+            term = glossary(source, categories)
+            translated, origin = term["zh"], {"glossary": term}
+        elif categories == {"class"} and "/" in source:
+            parts, origins = [], []
+            for part in source.split("/"):
+                if part.endswith(" Cleric"):
+                    deity, cleric = glossary(part[:-7], {"deity"}), glossary("Cleric", {"class"})
+                    parts.append(deity["zh"] + cleric["zh"])
+                    origins.extend([{"glossary": deity}, {"glossary": cleric}])
+                else:
+                    matches = [t for t in terms if t["en"].casefold() == part.casefold() and t["category"] == "class"]
+                    if matches:
+                        term = glossary(part, {"class"})
+                        parts.append(term["zh"])
+                        origins.append({"glossary": term})
+                    else:
+                        k, value = formal(part)
+                        parts.append(value)
+                        origins.append({"formal_key": k})
+            translated, origin = "/".join(parts), {"observed_class_components": origins}
+        elif source == "years":
+            k, value = formal("%d years")
+            assert value.startswith("%d ")
+            translated, origin = value[3:], {"formal_key": k, "suffix_only": True}
         else:
-            k, translated = formal(source)
+            found = [(k, zh[k]) for k, value in en.items() if value.strip() == source and k in zh]
+            assert found and len({v for _, v in found}) == 1, source
+            k, translated = found[0]
             origin = {"formal_key": k}
         assert translated and len(translated) <= len(source), source
         aliases[key], translations[key] = source, translated
@@ -226,23 +255,74 @@ def prepare(texts, observed, output):
             x, y = native(stack[3]), native(stack[2])
             assert 0 <= x < x + len(text) * 8 <= 320 and 0 <= y <= 192
             field = {"Pane": scope, "Group": group, "Key": key,
+                     "Start": 0, "Length": len(text),
                      "RawX": stack[3], "RawY": stack[2], "Caller": c["caller"],
                      "FormatSHA256": sha(fmt["text"].encode()), "SHA256": sha(text.encode())}
             identity = json.dumps(field, sort_keys=True)
             if identity not in field_ids:
                 fields.append(field)
                 field_ids.add(identity)
-    assert len(field_provenance) == 14
+    # 狀態及計數在列表標題之前印出。只接已觀測的上層專屬呼叫者，
+    # 再由同一個尚未返回的 wrapper 核對完整來源、座標及下層印字。
+    status_callers = {0x46, 0x6E, 0xA8, 0xD3, 0x10D, 0x147, 0x2F0, 0x309,
+                      0x3FA, 0x508, 0x5FD, 0x68F, 0x6D6, 0x760, 0x7BE, 0x81D, 0x93C}
+    callsite_sources = []
+    for folder in ("observe-items-r2", "observe-grimoire-r2"):
+        receipt = json.loads((observed / folder / "receipt.json").read_text())
+        for c in receipt["calls"]:
+            if c["wrapper_index"] < 0:
+                continue
+            wrapper = receipt["wrappers"][c["wrapper_index"]]
+            caller = wrapper["caller"]
+            status = caller["Seg"] == 0x2C4A and caller["Off"] in status_callers
+            equipped = caller == {"Seg": 0x88E, "Off": 0x71D}
+            counter = caller == {"Seg": 0x26B4, "Off": 0x9ED}
+            if not (status or equipped or counter):
+                continue
+            source, stack = c["vararg_1_candidate"], c["stack"]
+            assert c["format"]["text"] == "%s" and source["nul_terminated"]
+            text = source["text"]
+            assert wrapper["format"]["text"] == text
+            start, end = len(text) - len(text.lstrip()), len(text.rstrip())
+            categories = None
+            if status and caller["Off"] == 0xD3:
+                match = re.fullmatch(r"[0-9]+ (years)", text)
+                assert match
+                start, end = match.span(1)
+            elif status and caller["Off"] == 0x7BE:
+                assert text == "THAC0\t "
+                start, end, categories = 0, 5, {"attribute"}
+            elif status and caller["Off"] == 0x2F0:
+                categories = {"class"}
+            elif status and caller["Off"] == 0x147:
+                categories = {"race"}
+            elif equipped:
+                categories = {"item"}
+                item = re.fullmatch(r"(.+?)(?: \+[0-9]+)? *", text)
+                assert item
+                start, end = item.span(1)
+            key = field_key(text[start:end], categories)
+            field = {"Pane": "callsite", "Group": "body", "Key": key,
+                     "Start": start, "Length": end - start, "UpperCaller": caller,
+                     "RawX": stack[3], "RawY": stack[2], "Caller": c["caller"],
+                     "FormatSHA256": sha(c["format"]["text"].encode()), "SHA256": sha(text.encode())}
+            identity = json.dumps(field, sort_keys=True)
+            if identity not in field_ids:
+                fields.append(field)
+                field_ids.add(identity)
+            callsite_sources.append({"folder": folder, "step": c["step"], "wrapper_step": wrapper["step"],
+                                     "first_glyph": c["first_glyph"], "field": field})
     output.mkdir()
     for name, strings in (("en.tsv", aliases), ("zh-TW.tsv", translations)):
         (output / name).write_text("key\ttext\n" + "".join(f"{key}\t{value}\n" for key, value in strings.items()))
     config = {"Headers": headers, "Rows": rows, "Fields": fields, "Background": backgrounds.pop(),
-              "fine_windows": [[672000000, 673000000], [681000000, 682000000],
+              "fine_windows": [[666000000, 667000000], [672000000, 673000000], [681000000, 682000000],
                                [699000000, 700000000], [705000000, 706000000],
                                [738000000, 739000000], [741000000, 742000000], [744000000, 745000000]]}
     (output / "inputs.json").write_text(json.dumps(config, indent=2) + "\n")
     (output / "provenance.json").write_text(json.dumps({"draft": True, "headers": provenance, "bindings": bindings,
         "fields": field_provenance,
+        "callsite_sources": callsite_sources,
         "reviewed_fields_sha256": sha((texts / "ui-list-chrome-reviewed.tsv").read_bytes()),
         "observed_rows": len(rows),
         "formal_en_sha256": sha((texts / "en.tsv").read_bytes()),

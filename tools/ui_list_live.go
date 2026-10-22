@@ -35,8 +35,15 @@ type listConfig struct {
 }
 type listField struct {
 	Pane, Group, Key, SHA256, FormatSHA256 string
+	Start, Length                         int
 	RawX, RawY                             uint16
-	Caller                                 oracle.Addr
+	Caller, UpperCaller                    oracle.Addr
+}
+type listFieldWrapper struct {
+	Return paintReturn
+	Caller oracle.Addr
+	Source string
+	X, Y   int
 }
 type listSpan struct {
 	Start, Length int
@@ -85,6 +92,7 @@ type listState struct {
 	headerTransition       bool
 	headerReturn           *paintReturn
 	footerTransition       bool
+	fieldWrapper           *listFieldWrapper
 }
 
 func (l *listState) snapshot() []listWord {
@@ -177,9 +185,10 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	}
 	for _, f := range l.config.Fields {
-		if digest([]byte(l.sources[f.Key])) != f.SHA256 || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key])) > len(l.sources[f.Key]) ||
+		if f.Start < 0 || f.Length <= 0 || len(l.sources[f.Key]) != f.Length || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key])) > f.Length ||
 			(f.Group != "header" && f.Group != "body" && f.Group != "footer") ||
-			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix") {
+			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix" && f.Pane != "callsite") ||
+			(f.Pane == "callsite" && f.UpperCaller == (oracle.Addr{})) {
 			panic("列表欄位綁定無效")
 		}
 	}
@@ -371,6 +380,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	})
 	headerRegistered := map[oracle.Addr]bool{}
+	fieldRegistered := map[oracle.Addr]bool{}
 	o.OnCall(oracle.Addr{Seg: 0xb72, Off: 0x46}, func(_ *oracle.Oracle) {
 		s := [10]uint16{}
 		for i := range s {
@@ -381,6 +391,24 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			return
 		}
 		col, row := int(byte(s[2])), int(byte(s[3]))
+		l.fieldWrapper = nil
+		for _, f := range l.config.Fields {
+			if f.Pane != "callsite" || f.UpperCaller != o.Caller() || f.SHA256 != digest([]byte(format)) {
+				continue
+			}
+			r, at := o.Regs(), o.Caller()
+			l.fieldWrapper = &listFieldWrapper{Return: paintReturn{at, r.SS, r.SP + 4}, Caller: at, Source: format, X: col * 8, Y: row * 8}
+			if !fieldRegistered[at] {
+				fieldRegistered[at] = true
+				o.OnCall(at, func(_ *oracle.Oracle) {
+					p, r := l.fieldWrapper, o.Regs()
+					if p != nil && p.Return.Addr == at && p.Return.SS == r.SS && p.Return.SP == r.SP {
+						l.fieldWrapper = nil
+					}
+				})
+			}
+			break
+		}
 		if row == 1 {
 			hadSuffix := l.pendingHeader != nil
 			l.pane = ""
@@ -540,6 +568,11 @@ func (g *liveGame) installListFields() {
 				if len(l.fills) > 0 {
 					return
 				}
+			} else if f.Pane == "callsite" {
+				p := l.fieldWrapper
+				if p == nil || p.Caller != f.UpperCaller || p.Source != source {
+					continue
+				}
 			} else if f.Pane != l.pane {
 				continue
 			}
@@ -549,7 +582,13 @@ func (g *liveGame) installListFields() {
 				}
 				return (int(v) - 8000) * 2
 			}
-			w := listWord{X: native(s[3]), Y: native(s[2]), Width: len(source) * 8, Key: f.Key,
+			if f.Start+f.Length > len(source) || source[f.Start:f.Start+f.Length] != l.sources[f.Key] {
+				panic("欄位詞框來源不符")
+			}
+			if f.Pane == "callsite" && (l.fieldWrapper.X != native(s[3]) || l.fieldWrapper.Y != native(s[2])) {
+				panic("欄位上下層座標不符")
+			}
+			w := listWord{X: native(s[3]) + f.Start*8, Y: native(s[2]), Width: f.Length * 8, Key: f.Key,
 				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background}
 			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+8 > 200 {
 				panic("列表欄位越界")
