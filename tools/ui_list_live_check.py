@@ -35,6 +35,23 @@ def check(en_run, zh_run, inputs, control, observed, output):
     zh = catalog(inputs / "zh-TW.tsv")
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
+    messages = [f for f in config.get("Paragraphs",[]) if f["Key"].startswith("message.")]
+    if messages:
+        provenance = read(inputs / "provenance.json")
+        for f in messages:
+            assert f["Key"] == "message."+sha(en[f["Key"]].encode())[:20]
+            assert f["Caller"] == {"Seg":0x26B4,"Off":0x3320} and f["Foreground"] == 7 and f["Clear"] == 1
+            origins = [item for item in provenance["paragraph_bindings"] if item["binding"] == f]
+            assert origins
+            for item in origins:
+                assert item["kind"] == "formatted-journal-reference"
+                template_key, argument = item["formal_template_key"], item["argument"]
+                assert template_key == "ui.aa93370ee0689e9a462e" and re.fullmatch(r"[1-9][0-9]?",argument)
+                template = provenance["formatted_paragraph_templates"][template_key]
+                assert template_key == "ui."+sha(template["en"].encode())[:20]
+                assert template["en"].count("%s") == template["zh"].count("%s") == 1
+                assert en[f["Key"]] == template["en"].replace("%s",argument)
+                assert zh[f["Key"]] == template["zh"].replace("%s",argument)
     typed_buttons = bool(b.get("button_ownership"))
     assert bool(a.get("button_ownership")) == typed_buttons
     if config.get("Paragraphs"):
@@ -342,10 +359,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
             p = paragraph_by_step[e["Step"]]
             binding = paragraph_bindings(p)[0]
             components = [binding["Key"]]
+            component_colors = [p["foreground"]]
             box = [v*2 for v in p["native_box"]]
             bg = p["background"] or 8
             if not p["clear"]:
-                assert page is not None and page["Box"] == box and page["Foreground"] == p["foreground"] and page["Background"] == bg
+                assert page is not None and page["Box"] == box and page["Background"] == bg
+                component_colors = page.get("ComponentColors",[page["Foreground"]]*len(page["Components"]))+component_colors
                 components = page["Components"]+components
             text = "".join(zh[key] for key in components)
             # 由正式全文、框與禁則獨立驗每個分界，不呼叫 runtime 的斷行實作。
@@ -362,6 +381,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert not any(legal(end) for end in range(offset+1,min(offset-len(line)+cells,len(text)-1)+1))
             expected_page = {"step":p["step"],"Key":binding["Key"],"Source":p["source"]["text"],"Text":text,"Box":box,
                              "Foreground":p["foreground"],"Background":bg,"Lines":lines,"Clear":p["clear"],"Components":components}
+            if len(set(component_colors)) > 1:
+                expected_page["ComponentColors"] = component_colors
             assert e["detail"]["page"] == expected_page
             page = expected_page
             page_history.append(page)
@@ -513,7 +534,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 if not changed:
                     assert word in (layouts[checkpoint["step"]]["words"] or []), ("missing retained prompt",checkpoint["label"],f["Key"])
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
-    assert len(cleared) == len(clear_baselines) > 0
+    assert len(cleared) == len(clear_baselines)
+    assert cleared or any(p["Clear"] for p in page_history), "沒有列表清除或段落替換"
     for event, (start, targets) in zip(cleared, clear_baselines):
         assert start < event["Step"] and event["detail"]["targets"] == targets
     assert all(e["detail"]["pixels"] == sum(w["Width"] * 8 for w in e["detail"]["targets"]) for e in cleared)
@@ -548,9 +570,14 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for yy in range(y,bottom):
                 at=(yy*640+x)*4;px[at:at+width*4]=row
             assert len(page["Lines"])*glyphs["height"] <= height
+            colors = [color for key,color in zip(page["Components"],page.get("ComponentColors",[page["Foreground"]]*len(page["Components"]))) for ch in zh[key]]
+            assert len(colors) == len(page["Text"])
+            glyph_index = 0
             for line,text in enumerate(page["Lines"]):
                 assert len(text)*glyphs["size"] <= width
                 for col,ch in enumerate(text):
+                    fg = palette[colors[glyph_index]]
+                    glyph_index += 1
                     for off,value in enumerate(alpha[ch]):
                         if value:
                             yy,xx=divmod(off,glyphs["size"])
@@ -635,7 +662,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "clock_transactions": len(clock_intervals),
               "typed_button_ownership":typed_buttons,
               "paragraph_events":len(paragraph_entries),"paragraph_original_fallbacks":len(paragraph_fallbacks),
+              "formatted_paragraph_events":sum(e["detail"]["page"]["Key"].startswith("message.") for e in paragraph_entries),
               "paragraph_joins":sum(not p["Clear"] for p in page_history),
+              "paragraph_replacements":sum(bool(p["Clear"]) for p in page_history),
               "paragraph_invalidations":sum(e["Kind"]=="paragraph-invalidated" for e in b["list_events"]),
               "compatible_footer_refreshes": sum(e["Kind"] == "footer-render-entry" and bool((e.get("detail") or {}).get("preserved")) for e in b["list_events"]),
               "fine_window_count": len(config["fine_windows"]),

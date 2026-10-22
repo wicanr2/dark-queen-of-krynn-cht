@@ -33,7 +33,10 @@ func (g *liveGame) installListParagraphs() {
 	}
 	for _, p := range l.config.Paragraphs {
 		source := l.sources[p.Key]
-		if source == "" || p.Key != "ecl."+digest([]byte(source))[:20] || p.SHA256 != digest([]byte(source)) ||
+		suffix := digest([]byte(source))[:20]
+		literal := p.Key == "ecl."+suffix
+		message := p.Key == "message."+suffix && p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x3320}) && p.Foreground == 7 && p.Clear == 1
+		if source == "" || !(literal || message) || p.SHA256 != digest([]byte(source)) ||
 			g.catalog[p.Key] == "" || p.NativeBox != ([4]int{8, 136, 312, 184}) || p.Foreground > 15 || p.Background != 0 || p.Clear > 1 {
 			panic("段落來源或安全框不符")
 		}
@@ -73,14 +76,22 @@ func (g *liveGame) installListParagraphs() {
 		}
 		text := g.catalog[binding.Key]
 		components := []string{binding.Key}
+		componentColors := []int{int(fg)}
 		outputBox := [4]int{box[0] * 2, box[1] * 2, box[2] * 2, box[3] * 2}
 		if clear == 0 {
-			if g.page == nil || g.page.Box != outputBox || g.page.Foreground != fg || g.page.Background != bg {
+			if g.page == nil || g.page.Box != outputBox || g.page.Background != bg {
 				fallback("missing compatible predecessor")
 				return
 			}
 			text = g.page.Text + text
 			components = append(append([]string{}, g.page.Components...), binding.Key)
+			previousColors := append([]int{}, g.page.ComponentColors...)
+			if len(previousColors) == 0 {
+				for range g.page.Components {
+					previousColors = append(previousColors, int(g.page.Foreground))
+				}
+			}
+			componentColors = append(previousColors, int(fg))
 		}
 		cells := (outputBox[2] - outputBox[0]) / g.glyphs.Size
 		chars := []rune(text)
@@ -108,6 +119,12 @@ func (g *liveGame) installListParagraphs() {
 			return
 		}
 		page := storyPage{Step: o.Steps(), Key: binding.Key, Source: source, Text: text, Box: outputBox, Foreground: fg, Background: bg, Lines: lines, Clear: clear, Components: components}
+		for _, color := range componentColors {
+			if color != int(fg) {
+				page.ComponentColors = componentColors
+				break
+			}
+		}
 		g.page = &page
 		g.pages = append(g.pages, page)
 		l.erase(box[0], box[1], box[2]-box[0], box[3]-box[1])

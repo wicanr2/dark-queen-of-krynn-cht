@@ -52,6 +52,7 @@ type storyPage struct {
 	Lines                  []string
 	Clear                  byte
 	Components             []string
+	ComponentColors        []int `json:"ComponentColors,omitempty"`
 }
 type liveGame struct {
 	o             *oracle.Oracle
@@ -408,13 +409,32 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			p := g.page
 			pal := g.o.Palette()
 			bg, fg := pal[p.Background], pal[p.Foreground]
+			var glyphColors []int
+			if len(p.ComponentColors) > 0 {
+				if len(p.ComponentColors) != len(p.Components) {
+					panic("段落來源與字色數量不符")
+				}
+				for i, key := range p.Components {
+					for range []rune(g.catalog[key]) {
+						glyphColors = append(glyphColors, p.ComponentColors[i])
+					}
+				}
+				if len(glyphColors) != len([]rune(p.Text)) {
+					panic("段落文字與字色長度不符")
+				}
+			}
 			for y := p.Box[1]; y < p.Box[3]; y++ {
 				for x := p.Box[0]; x < p.Box[2]; x++ {
 					copy(px[(y*640+x)*4:][:3], bg[:])
 				}
 			}
+			glyphIndex := 0
 			for row, line := range p.Lines {
 				for col, ch := range []rune(line) {
+					if len(glyphColors) > 0 {
+						fg = pal[glyphColors[glyphIndex]]
+					}
+					glyphIndex++
 					alpha, ok := g.glyphs.Glyphs[string(ch)]
 					if !ok || len(alpha) != g.glyphs.Size*g.glyphs.Height {
 						panic("劇情字型缺字")

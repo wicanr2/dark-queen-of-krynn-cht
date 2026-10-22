@@ -257,7 +257,7 @@ def prepare(texts, observed, output, paragraph_trace=None):
     menus, menu_provenance = {}, []
     menu_receipts = [("inventory", "observe-menus-items-r1"), ("grimoire", "observe-menus-grimoire-r1"),
                      ("effects", "observe-effects-r1"), ("camp", "observe-camp-roundtrip-r1"),
-                     ("camp", "observe-clock-city-r1")]
+                     ("camp", "observe-clock-city-r1"), ("camp", "observe-city-facilities-r1")]
     if paragraph_trace is not None:
         menu_receipts.append(("camp", str(paragraph_trace.parent.relative_to(observed))))
     for pane, folder in menu_receipts:
@@ -459,28 +459,53 @@ def prepare(texts, observed, output, paragraph_trace=None):
             field_ids.add(encoded)
         callsite_sources.append({"folder":"observe-clock-city-r1", "step":c["step"], "wrapper_step":wrapper["step"],
                                  "caller":caller,"source":text,"binding":field})
-    paragraph_bindings, paragraph_provenance = [], []
+    paragraph_bindings, paragraph_provenance, paragraph_templates = [], [], {}
     paragraph_receipt = None
     if paragraph_trace is not None:
         paragraph_receipt = json.loads(paragraph_trace.read_text())
         assert paragraph_receipt["observe"] and paragraph_receipt["exe_sha256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
         assert paragraph_receipt["paragraphs"] and not paragraph_receipt["pending_paragraphs"]
         identities = set()
-        for p in paragraph_receipt["paragraphs"]:
+        def add_paragraph(p, trace_path):
             source, stack = p["source"], p["stack"]
             assert source["nul_terminated"] and bytes.fromhex(source["hex"]).decode("ascii") == source["text"]
             assert (source["segment"], source["offset"]) == (stack[10], stack[9])
             assert p["step"] < p["first_glyph"] < p["return_step"]
             key = "ecl." + sha(source["text"].encode())[:20]
-            assert en.get(key) == source["text"] and key in zh
             assert p["native_box"] == [8,136,312,184] and p["foreground"] in (3,7) and p["background"] == 0 and p["clear"] in (0,1)
-            aliases[key], translations[key] = en[key], zh[key]
+            origin = {"kind":"ecl-literal"}
+            if p["caller"] == {"Seg":0x26B4,"Off":0x3320}:
+                template_key = "ui.aa93370ee0689e9a462e"
+                template, translated_template = en[template_key], zh[template_key]
+                assert template_key == "ui."+sha(template.encode())[:20]
+                assert template.count("%s") == translated_template.count("%s") == 1
+                prefix,suffix = template.split("%s")
+                match = re.fullmatch(re.escape(prefix)+r"([1-9][0-9]?)"+re.escape(suffix),source["text"])
+                assert match and p["foreground"] == 7 and p["clear"] == 1
+                argument = match[1]
+                assert template.replace("%s",argument) == source["text"]
+                key = "message."+sha(source["text"].encode())[:20]
+                aliases[key], translations[key] = source["text"], translated_template.replace("%s",argument)
+                paragraph_templates[template_key] = {"en":template,"zh":translated_template}
+                origin = {"kind":"formatted-journal-reference","formal_template_key":template_key,"argument":argument}
+            else:
+                assert en.get(key) == source["text"] and key in zh
+                aliases[key], translations[key] = en[key], zh[key]
             binding = {"Key":key,"SHA256":sha(source["text"].encode()),"Caller":p["caller"],"NativeBox":p["native_box"],
                        "Foreground":p["foreground"],"Background":p["background"],"Clear":p["clear"]}
             identity = json.dumps(binding,sort_keys=True)
             if identity not in identities:
                 identities.add(identity); paragraph_bindings.append(binding)
-            paragraph_provenance.append({"step":p["step"],"first_glyph":p["first_glyph"],"return_step":p["return_step"],"binding":binding})
+            paragraph_provenance.append({"step":p["step"],"first_glyph":p["first_glyph"],"return_step":p["return_step"],"binding":binding,
+                "folder":str(trace_path),"receipt_sha256":sha(trace_path.read_bytes()),**origin})
+        paragraph_traces = [observed/name/"receipt.json" for name in ("observe-city-messages-r1","observe-city-facilities-r1")]
+        paragraph_traces.append(paragraph_trace)
+        for trace_path in dict.fromkeys(paragraph_traces):
+            receipt = json.loads(trace_path.read_text())
+            assert receipt["observe"] and receipt["exe_sha256"] == paragraph_receipt["exe_sha256"]
+            assert receipt["paragraphs"] and not receipt["pending_paragraphs"]
+            for p in receipt["paragraphs"]:
+                add_paragraph(p, trace_path)
         for call in paragraph_receipt["calls"]:
             if call["wrapper_index"]<0:
                 continue
@@ -562,6 +587,8 @@ def prepare(texts, observed, output, paragraph_trace=None):
     if paragraph_trace is not None:
         result_provenance["paragraph_trace_sha256"] = sha(paragraph_trace.read_bytes())
         result_provenance["paragraph_bindings"] = paragraph_provenance
+        if paragraph_templates:
+            result_provenance["formatted_paragraph_templates"] = paragraph_templates
     (output / "provenance.json").write_text(json.dumps(result_provenance, ensure_ascii=False, indent=2) + "\n")
     print(f"列表原型輸入：{len(rows)} 種完整列、{len(field_provenance)} 種標題提示與按鈕；未改正式譯表")
 

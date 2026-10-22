@@ -60,7 +60,7 @@ case "${1:-}" in
         set -e
         Xvfb :99 -screen 0 800x600x24 -nolisten tcp > "/out/${DQK_RUN}-xvfb.log" 2>&1 &
         xvfb_pid=$!
-        trap "kill $xvfb_pid 2>/dev/null; wait $xvfb_pid 2>/dev/null" EXIT
+        trap "kill $xvfb_pid 2>/dev/null || true; wait $xvfb_pid 2>/dev/null || true" EXIT
         for attempt in {1..50}; do test -S /tmp/.X11-unix/X99 && break; sleep 0.1; done
         export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 HOME=/tmp
         set +e

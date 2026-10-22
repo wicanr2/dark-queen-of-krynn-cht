@@ -42,6 +42,8 @@ def check(observed, control, output, role):
             calls = [c for c in a["calls"] if c.get("paragraph_index",-1)==i]
             assert calls and all(paragraph["step"] < c["step"] < c["return_step"] < paragraph["return_step"] for c in calls)
             assert all(c["format"]["text"] == "%c" and c["caller"] == {"Seg":0xB72,"Off":0x2E3} for c in calls)
+            color = ((paragraph["background"] or 8)<<4) | paragraph["foreground"]
+            assert all(c["stack"][4]&255 == color for c in calls)
             source_bytes, offset = source["text"].encode("ascii"), 0
             native = lambda v: v if v < 400 else (v-8000)*2
             for index, call in enumerate(calls):
