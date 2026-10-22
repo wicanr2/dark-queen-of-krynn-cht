@@ -32,8 +32,9 @@ type liveFrame struct {
 	Step         uint64 `json:"step"`
 	Events       int    `json:"events"`
 	File, SHA256 string
-	Held         bool `json:"held"`
-	Active       int  `json:"active"`
+	Held         bool          `json:"held"`
+	Active       int           `json:"active"`
+	CampPalette  *[16][3]uint8 `json:"camp_palette,omitempty"`
 }
 type paintReturn struct {
 	Addr   oracle.Addr
@@ -82,6 +83,8 @@ type liveGame struct {
 	inputs        []map[string]any
 	escapePending bool
 	escapeStep    uint64
+	camp          bool
+	campPositions map[[2]int]string
 }
 
 func must(err error) {
@@ -115,6 +118,9 @@ func readLiveCatalog(path string) map[string]string {
 	return result
 }
 func (g *liveGame) limit() uint64 {
+	if g.camp {
+		return 715000000
+	}
 	if g.story {
 		if g.storySequence {
 			return 575000000
@@ -153,7 +159,7 @@ func (g *liveGame) installLifecycle() {
 	}
 	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, func(_ *oracle.Oracle) {
 		if o.Regs().AX != 0xffff {
-			if g.interactive && len(g.active) == 0 {
+			if (g.interactive || g.camp) && len(g.active) == 0 {
 				return
 			}
 			if g.interactive && o.Regs().AX == 10 {
@@ -239,6 +245,43 @@ func (g *liveGame) Update() error {
 		return nil
 	}
 	if g.o.Steps() >= g.limit() {
+		return nil
+	}
+	if g.camp {
+		step := g.o.Steps()
+		for i, key := range "spells\n" {
+			if step == 330000000+uint64(i)*500000 {
+				if key == '\n' {
+					must(g.o.SendKeys("Return"))
+				} else {
+					must(g.o.TypeKeys(string(key)))
+				}
+			}
+		}
+		if step >= 375000000 && step < 575000000 && (step-375000000)%25000000 == 0 {
+			must(g.o.SendKeys("Return"))
+		}
+		for _, action := range []struct {
+			at  uint64
+			key string
+		}{{576000000, "l"}, {601000000, "Return"}, {616000000, "i"}, {641000000, "Return"}, {666000000, "s"}, {691000000, "j"}} {
+			if step == action.at {
+				if action.key == "Return" {
+					must(g.o.SendKeys(action.key))
+				} else {
+					must(g.o.TypeKeys(action.key))
+				}
+			}
+		}
+		batch := uint64(500000)
+		if g.fine && ((step >= 641000000 && step < 642000000) || (step >= 666000000 && step < 667000000) || (step >= 691000000 && step < 692000000)) {
+			batch = 2000
+		}
+		must(g.o.Run(batch))
+		end := g.o.Steps()
+		if end == 375000000 || (end > 375000000 && end <= 575000000 && (end-375000000)%25000000 == 0) || end == 600000000 || end == 615000000 || end == 640000000 || end == 665000000 || end == 690000000 || end == 715000000 {
+			g.capture()
+		}
 		return nil
 	}
 	if g.story {
@@ -339,7 +382,14 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 						if a == 0 {
 							continue
 						}
-						d := ((y-2+yy)*640 + x + i*g.glyphs.Size + xx) * 4
+						textY := y - 2
+						if g.camp {
+							if yy >= 16 {
+								panic("營地中文字墨超出原文字高")
+							}
+							textY = y
+						}
+						d := ((textY+yy)*640 + x + i*g.glyphs.Size + xx) * 4
 						for c := 0; c < 3; c++ {
 							px[d+c] = byte((uint32(fg[c])*a + uint32(px[d+c])*(255-a) + 127) / 255)
 						}
@@ -399,10 +449,10 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		panic("前端提交與合成畫格不同")
 	}
 	name := fmt.Sprintf("frame-%03d-%09d.png", len(g.frames), g.o.Steps())
-	if g.interactive {
+	if g.interactive || g.camp {
 		name = "frame-" + composedHash + ".png"
 	}
-	if _, err := os.Stat(filepath.Join(g.out, name)); !g.interactive || os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(g.out, name)); (!g.interactive && !g.camp) || os.IsNotExist(err) {
 		f, err := os.Create(filepath.Join(g.out, name))
 		must(err)
 		im := &image.RGBA{Pix: readback, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
@@ -410,6 +460,12 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		must(f.Close())
 	}
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
+	if g.camp {
+		pal := g.o.Palette()
+		colors := [16][3]uint8{}
+		copy(colors[:], pal[:16])
+		g.frames[len(g.frames)-1].CampPalette = &colors
+	}
 	if g.interactive {
 		status, err := json.Marshal(map[string]any{"step": g.o.Steps(), "active": len(g.active), "held": held, "inputs": len(g.inputs), "keys_consumed": g.o.KeysConsumed(), "file": name})
 		must(err)
@@ -452,6 +508,8 @@ func main() {
 	story := flag.Bool("story", false, "DRAFT：正常首段劇情的字級原型")
 	storySequence := flag.Bool("story-sequence", false, "DRAFT：接續八次一般 Return，觀測七段已匹配文字")
 	interactive := flag.Bool("interactive", false, "DRAFT：冷啟動並接受實際視窗鍵盤事件；只翻譯角色選單")
+	camp := flag.Bool("camp", false, "DRAFT：正常旅店、營地與存檔 J 的底列短標籤")
+	campInputs := flag.String("camp-inputs", "", "營地原型的已觀測來源與座標索引")
 	sourceCatalog := flag.String("source-catalog", "", "劇情原文 TSV，與現行譯文依 key 核對")
 	flag.Parse()
 	if _, err := os.Stat(*out); !os.IsNotExist(err) {
@@ -479,7 +537,7 @@ func main() {
 	if *interactive {
 		expectedSteps = 0
 	}
-	if *story {
+	if *story || *camp {
 		expectedSteps = 329000000
 	}
 	if o.Steps() != expectedSteps {
@@ -493,6 +551,10 @@ func main() {
 	g := &liveGame{o: o, out: *out, translate: *translate, fine: *fine, catalog: map[string]string{}, active: map[[2]int]liveEvent{}}
 	g.lifecycle = *lifecycle
 	g.interactive = *interactive
+	g.camp = *camp
+	if g.camp && (g.story || *story || g.interactive || !g.lifecycle) {
+		panic("營地原型只支援正常快照與生命週期觀測")
+	}
 	if g.interactive && !g.lifecycle {
 		panic("互動原型需要生命週期觀測")
 	}
@@ -510,15 +572,37 @@ func main() {
 	b, err = os.ReadFile(*glyphPath)
 	must(err)
 	must(json.Unmarshal(b, &g.glyphs))
-	if ((!g.story && g.glyphs.Size != 20) || (g.story && g.glyphs.Size != 16 && g.glyphs.Size != 20)) || g.glyphs.Height != g.glyphs.Size+4 {
+	if ((!g.story && !g.camp && g.glyphs.Size != 20) || (g.story && g.glyphs.Size != 16 && g.glyphs.Size != 20) || (g.camp && g.glyphs.Size != 16)) || g.glyphs.Height != g.glyphs.Size+4 {
 		panic("未批准的字型尺寸")
 	}
 	g.catalog = readLiveCatalog(*catalogPath)
 	if g.storySequence && len(g.catalog) != 7 {
 		panic("連續原型需要本輪已匹配的七段子集")
 	}
-	if !g.story && len(g.catalog) != 12 {
+	if !g.story && !g.camp && len(g.catalog) != 12 {
 		panic("角色選單原型需要 12 個標籤")
+	}
+	if g.camp {
+		var input struct {
+			Bindings []struct {
+				SourceSHA256 string `json:"source_sha256"`
+				X, Y         int
+			}
+		}
+		data, err := os.ReadFile(*campInputs)
+		must(err)
+		must(json.Unmarshal(data, &input))
+		g.campPositions = map[[2]int]string{}
+		if len(g.catalog) != 10 || len(input.Bindings) != 10 {
+			panic("營地原型需要十個已觀測短標籤")
+		}
+		for _, v := range input.Bindings {
+			pos := [2]int{v.X, v.Y}
+			if _, ok := g.catalog[v.SourceSHA256]; !ok || v.Y != 189 || g.campPositions[pos] != "" {
+				panic("營地來源與座標索引失配")
+			}
+			g.campPositions[pos] = v.SourceSHA256
+		}
 	}
 	if g.story {
 		g.sources = readLiveCatalog(*sourceCatalog)
@@ -633,6 +717,9 @@ func main() {
 				return
 			}
 			e := liveEvent{Step: o.Steps(), X: int(word(6)), Y: int(word(4)), Color: word(8), Source: string(source), Key: key, Text: text}
+			if g.camp && (o.Caller() != (oracle.Addr{Seg: 0x0ceb, Off: 0x01be}) || g.campPositions[[2]int{e.X, e.Y}] != key) {
+				return
+			}
 			g.events = append(g.events, e)
 			g.active[[2]int{e.X, e.Y}] = e
 		})
@@ -689,12 +776,19 @@ func main() {
 		if !g.interactive && (g.transition || g.renderDepth != 0 || len(g.paints) != 0) {
 			panic("未完成的呈現交易")
 		}
-		if !g.interactive {
+		if !g.interactive && !g.camp {
 			result["scope"] = "DRAFT normal p/l/e menu roundtrip; twelve labels only; no story/scroll/save"
 		}
 		result["boundaries"] = g.boundaries
 		result["checkpoints"] = g.checkpoints
 		result["unimplemented"] = o.Unimplemented()
+	}
+	if g.camp {
+		result["scope"] = "DRAFT normal camp/footer and save J; sixteen-pixel disposable prototype; no production, story, all menus or GUI cold-load claim"
+		result["font_size"] = g.glyphs.Size
+		data, err := os.ReadFile(*campInputs)
+		must(err)
+		result["camp_inputs_sha256"] = digest(data)
 	}
 	b, err = json.MarshalIndent(result, "", "  ")
 	must(err)

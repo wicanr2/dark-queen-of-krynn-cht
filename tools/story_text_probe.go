@@ -20,11 +20,12 @@ func storyCheck(err error) {
 }
 func main() {
 	if len(os.Args) < 3 || len(os.Args) > 4 {
-		panic("用法：story-probe state output [control|sequence|sequence-control|enter-sequence|enter-sequence-control|hall-sequence|hall-sequence-control|city-state|save-sequence|save-sequence-control]")
+		panic("用法：story-probe state output [control|sequence|sequence-control|enter-sequence|enter-sequence-control|hall-sequence|hall-sequence-control|city-state|save-sequence|save-sequence-control|camp-lifecycle]")
 	}
 	observe, sequence, enter, hall := true, false, false, false
 	cityState := false
 	saveSequence := false
+	campLifecycle := false
 	var exitCode *uint8
 	if len(os.Args) == 4 {
 		switch os.Args[3] {
@@ -56,11 +57,12 @@ func main() {
 			enter = true
 			observe = false
 			cityState = true
-		case "save-sequence", "save-sequence-control":
+		case "save-sequence", "save-sequence-control", "camp-lifecycle":
 			sequence = true
 			enter = true
 			saveSequence = true
-			observe = os.Args[3] == "save-sequence"
+			observe = os.Args[3] != "save-sequence-control"
+			campLifecycle = os.Args[3] == "camp-lifecycle"
 		default:
 			panic("未知模式")
 		}
@@ -124,6 +126,54 @@ func main() {
 		return v
 	}
 	var calls, glyphs, paragraphs []map[string]any
+	var menuEvents []map[string]any
+	activeLabel := -1
+	var labelSS, labelSP uint16
+	if campLifecycle {
+		for _, p := range []struct {
+			addr oracle.Addr
+			sig  string
+			kind string
+		}{
+			{oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, "558bec83ec0456803ec2da00751833c0", "render-entry"},
+			{oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, "cb558bec56803ecfda00750e1eb811a2", "render-return"},
+			{oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, "cb558bec83ec085657168d46fe50168d", "selection-return"},
+		} {
+			if hex.EncodeToString(o.Bytes(p.addr, len(p.sig)/2)) != p.sig {
+				panic("營地選單研究入口 bytes 不符")
+			}
+			seen := map[string]bool{}
+			o.OnCall(p.addr, func(_ *oracle.Oracle) {
+				if o.Steps() < 640000000 || (p.kind == "selection-return" && o.Regs().AX == 0xffff) {
+					return
+				}
+				r := o.Regs()
+				header := o.Bytes(oracle.Addr{Seg: r.DS, Off: 0xdac0}, 17)
+				count := o.Word(oracle.Addr{Seg: r.DS, Off: 0xdac0})
+				if count > 64 {
+					panic("營地選單表超出研究界限")
+				}
+				ptr := oracle.Addr{Seg: o.Word(oracle.Addr{Seg: r.DS, Off: 0xdac9}), Off: o.Word(oracle.Addr{Seg: r.DS, Off: 0xdac7})}
+				data := o.Bytes(ptr, int(count)*32)
+				hash := sha256.Sum256(data)
+				id := hex.EncodeToString(header) + hex.EncodeToString(hash[:])
+				if seen[id] && p.kind != "selection-return" {
+					return
+				}
+				seen[id] = true
+				menuEvents = append(menuEvents, map[string]any{"step": o.Steps(), "kind": p.kind, "regs": r, "stack": stack(), "header_hex": hex.EncodeToString(header), "count": count, "table_pointer": ptr, "table_hex": hex.EncodeToString(data)})
+				if len(menuEvents) > 2000 {
+					panic("營地選單事件超出研究界限")
+				}
+			})
+		}
+		o.OnCall(oracle.Addr{Seg: 0x0ceb, Off: 0x01be}, func(_ *oracle.Oracle) {
+			if activeLabel >= 0 && o.Regs().SS == labelSS && o.Regs().SP == labelSP {
+				calls[activeLabel]["return_step"] = o.Steps()
+				activeLabel = -1
+			}
+		})
+	}
 	type pendingReturn struct {
 		index  int
 		addr   oracle.Addr
@@ -171,8 +221,19 @@ func main() {
 			}
 			s := stack()
 			calls = append(calls, map[string]any{"step": o.Steps(), "stack": s, "regs": o.Regs(), "format": read(s[6], s[5]), "vararg_1_candidate": read(s[8], s[7]), "cursor_x": o.Word(oracle.Addr{Seg: o.Regs().DS, Off: 0xca12}), "cursor_y": o.Word(oracle.Addr{Seg: o.Regs().DS, Off: 0xca14})})
+			if campLifecycle && s[0] == 0x01be && s[1] == 0x0ceb && s[2] == 189 && o.Steps() >= 640000000 {
+				if activeLabel >= 0 {
+					panic("重疊的營地標籤印字")
+				}
+				activeLabel, labelSS, labelSP = len(calls)-1, o.Regs().SS, o.Regs().SP+4
+			}
 		})
 		o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x0c96}, func(_ *oracle.Oracle) {
+			if activeLabel >= 0 {
+				if _, ok := calls[activeLabel]["first_glyph"]; !ok {
+					calls[activeLabel]["first_glyph"] = o.Steps()
+				}
+			}
 			if len(paragraphs) > 0 {
 				p := paragraphs[len(paragraphs)-1]
 				if _, seen := p["first_glyph"]; !seen {
@@ -271,7 +332,7 @@ func main() {
 	b, err = json.MarshalIndent(map[string]any{"prototype": true, "observe": observe,
 		"source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "input_sha256": hex.EncodeToString(h[:]),
 		"ram_sha256": hex.EncodeToString(ramHash[:]), "indexed_sha256": hex.EncodeToString(pixelsHash[:]), "palette": o.Palette(),
-		"evidence_level": "raw observation; vararg candidate is not a proven parser", "calls": calls, "glyphs": glyphs, "paragraphs": paragraphs, "steps": o.Steps(), "regs": o.Regs(), "sequence": sequence, "enter_sequence": enter, "save_sequence": saveSequence, "exit_code": exitCode, "checkpoints": checkpoints, "unimplemented": o.Unimplemented()}, "", "  ")
+		"evidence_level": "raw observation; vararg candidate is not a proven parser", "calls": calls, "glyphs": glyphs, "paragraphs": paragraphs, "steps": o.Steps(), "regs": o.Regs(), "sequence": sequence, "enter_sequence": enter, "save_sequence": saveSequence, "menu_events": menuEvents, "exit_code": exitCode, "checkpoints": checkpoints, "unimplemented": o.Unimplemented()}, "", "  ")
 	storyCheck(err)
 	storyCheck(os.WriteFile(filepath.Join(out, "trace.json"), append(b, '\n'), 0644))
 	storyCheck(o.WritePNG(filepath.Join(out, "final.png")))

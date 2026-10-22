@@ -283,3 +283,102 @@ bash tools/cold-save-load.sh 全新控制名 全新冷讀名
 
 限制：這是 dosgolem 執行原版的存檔 J 與冷讀路徑。未驗中文覆繪、實際 GUI 前端、
 營地內 Load、其他槽位、覆寫取消、長段分頁、戰鬥或跨平台封包。規格 001 維持 DRAFT。
+
+## 2026-10-22：營地底列與存檔 J 的中文視窗原型
+
+本次沿上節正常旅店路徑，補驗十個短標籤的繪製前資料、清除及選取。
+輸入仍為 `DQK.EXE` 1.1，SHA-256
+`3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58`，
+dosgolem 固定 `f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`。
+工具沿用 Go 1.24.13／Ebiten 2.9.9 image `8ed6bdee2bce` 與 Pillow 11.3 image `44d0742ca106`。
+完整 image ID 固定於 [camp-live.sh](../../tools/camp-live.sh)，未重建工具鏈。
+下列位址都是 dosgolem 執行期 segment:offset，不是 IDA 線性位址或 EXE 檔案偏移。
+
+### 已證實的正常繪製邊界
+
+[story_text_probe.go](../../tools/story_text_probe.go) 的 `camp-lifecycle` 只加唯讀觀測，
+保留原始暫存器、堆疊、`DS:DAC0` 起 17 位元組及原始表格。`DAC0` 為本次觀測的項數，
+`DAC7／DAC9` 組成表格 far pointer，項目跨度 32 位元組；其他欄位不補語意名稱。
+事件依種類、原始 header 與表格雜湊去重，選擇返回不去重。表中重複或缺少一端的事件數
+不能當成函式呼叫次數或成對性證據；視窗原型另追每次實際進入與返回。
+
+| 執行期位址 | 核對 bytes | 本次作用 |
+|---|---|---|
+| `1BB6:151F` | `558bec83ec0456803ec2da00751833c0` | 整批繪製入口 |
+| `1BB6:1585` | `cb558bec56803ecfda00750e1eb811a2` | 整批繪製返回 |
+| `1BB6:17B8` | `cb558bec83ec085657168d46fe50168d` | 選擇返回，保留原始 AX |
+| `0CEB:008E` | `558bec83ec085657c45e0626f6471c20` | 單個按鈕繪製入口 |
+| `1212:03A0` | `558becff760a0ee830ff59` | 字串輸出，底列呼叫者為 `0CEB:01BE` |
+
+`SS:SP+4／+6／+8／+10／+12` 分別為 Y、X、顏色、字串 offset、segment。
+原型只接受已觀測呼叫者、來源雜湊與座標三者一致的十項文字。每項在
+`13C7:0C96` 的第一個原版字元前 345 道指令取得；返回還核對 SS 與 SP，沒有改寫 guest。
+字串範圍以原文長度乘 16 個輸出像素計，不宣稱已解出完整點擊範圍。
+
+| 一般操作 | 完整繪製入口／返回 | 已觀測原始選擇 AX |
+|---|---|---|
+| 營地八項底列 | `641681972／641817442` | Save 返回於 `666083101`，AX=7 |
+| 存檔 A 至 J | `666133832／666222129` | J 返回於 `691108315`，AX=10 |
+| 回 DOS 的 Yes／No | `691212321／691238489` | Yes 返回於 `716022100`，AX=1 |
+
+AX=10 在此表示選槽 J，不能套用角色管理選單的開始冒險判斷。
+營地項數由 9 變 10、槽位表項數 11、確認表項數 3，均保留原表內容；
+不能把項數直接當可見文字數。觀測組 16 個原版檢查點與上一節無觀測組相同。
+
+### 十個標籤的實際視窗驗證
+
+[camp_live_inputs.py](../../tools/camp_live_inputs.py) 由目前正式 TSV 衍生十個短標籤，
+包含營地八項與 Yes／No。保留完整來源快照、正式 key、實際座標、字型與 trace 雜湊。
+A 至 J 不翻譯。譯表仍為 6,426 筆，本輪沒有改動任何正式譯文。
+
+16px 粉圓可將十項譯文放進原文字串寬度及 16px 字墨高度；20px 的 View、Load、Save
+三項超出原字串寬度。因此只做 16px 可丟棄原型，未定案營地字級或改變原版位置。
+角色管理選單沿用使用者已選定的 20px，劇情字級仍待選。
+字型 SHA-256：`9d5bf4932d31fe94c18cd8cfddc98bc1b14ce10f4e354c682179db290a99c825`。
+
+[early_text_live.go](../../tools/early_text_live.go) 的 `-camp -lifecycle` 由正常 329M 快照開始，
+以原版按鍵進營地、Save、J，於 715M 存檔後確認頁結束，不提交 Yes。
+每批及單個按鈕繪製期間保留上一張完整畫面；在下一批原版繪製入口清除舊中文。
+底列原型與劇情覆繪分開，敘述、姓名、欄位、存檔提示及槽位仍顯示原版。
+
+| 收據，均在 `workplace/probe/` | SHA-256 |
+|---|---|
+| `camp-lifecycle-observe-20261022/trace.json` | `5b36fe21d8fa0d57dc2f18a20f126bc2a1203eb0cc748c5809f6a9c6ee57e0b6` |
+| `camp-live-en-fine-20261022/receipt.json` | `1de940d7f9789eab3516645e18f5aecbe01e01b9ef62633715f9491c9248af4f` |
+| `camp-live-zh-fine-20261022/receipt.json` | `1ad44ebe5037daaa3271e52fd4d41c169dd8801f99d2c7b2b05c2f8ecf4412bf` |
+
+英文、中文各 2,266 個實際 GPU 提交畫格，含各 184 個保留畫格。
+三段細分視窗為 641M 至 642M、666M 至 667M、691M 至 692M，每段 501 個不同步數，
+最大間隔 2,000 道指令。[camp_live_check.py](../../tools/camp_live_check.py) 逐一回驗 PNG，
+以原版畫格、每幀色盤、目前 TSV 依賴與字模獨立重建所有非保留中文畫格，逐像素相同。
+保留畫格均等於上一張完整畫面。沒有提交僅建立部分中文的營地或確認頁；
+690M 的槽位畫面沒有中文殘字，665M 八項與 715M 兩項完整顯示。
+圖像去重後英文 326 張、中文 328 張，不將檔案數當成畫格數。
+
+兩組各 15 處暫存器、1 MiB RAM、原版色號、完整色盤、消耗按鍵與寫檔紀錄
+與上一節固定無觀測組相同，兩個存檔亦符合上一節的固定雜湊及長度。
+遊戲內未回報未實作服務，兩組 OOM 計數皆為 0。
+角色管理選單另外重跑一次，三個檢查點、25 個事件、繪製邊界與最終畫格均與舊 r3 相同。
+
+輸入在 `camp-live-inputs-20261022/`，總檢查收據為中文組 `camp-comparison.json`，
+SHA-256 `b1c61635e702dae9c6af8c44f69832885833e6ee9a29b1294d8ee6af662d6351`。
+三頁並列抽圖 `camp-contact.png` 已目視核對，圖含原版素材，只留本機。
+回歸收據位於 `live-lifecycle-camp-regression-20261022/`。
+
+```sh
+bash tools/story-live.sh probe-build
+bash tools/story-live.sh camp-lifecycle 全新觀測名
+bash tools/camp-live.sh prepare
+bash tools/camp-live.sh build
+bash tools/camp-live.sh fine-en 全新英文名
+bash tools/camp-live.sh fine-zh 全新中文名
+bash tools/camp-live.sh verify 全新英文名 全新中文名
+```
+
+既有輸入不重建；需新輸入時設定 `DQK_CAMP_INPUT_RUN` 為全新名。
+`prepare` 目前使用本節固定觀測收據，`verify` 使用上節固定控制組，重生它們後須明確核對依賴。
+全部工作負載在限時 Docker 內，原版與原型輸入唯讀，只寫研究輸出；Xvfb 有結束 trap。
+
+限制：這是一般遊戲按鍵腳本驅動的 Ebiten／GPU 原型，沒有本輪實際 X11 按鍵或可見視窗擷取。
+沒有驗中文模式的冷啟動讀回、營地內 Load、其他槽位、取消覆寫、所有反白、戰鬥、分頁及整款
+無閃爍。正式入口、最終營地字級、字母快捷鍵提示與其他文字接入仍未完成；規格 001 維持 DRAFT。
