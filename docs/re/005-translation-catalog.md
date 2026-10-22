@@ -112,6 +112,9 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 | `story-sea-lighthouse-clauses-comparison.json`、`sea-lighthouse-clauses-context-review.json` | 本批差分收據、甲蟲敘述的推論等級、未知接續 bytes 及 OTHER 共享語境限制 |
 | `ui-camp-save-observed.tsv` | 正常旅店營地與存檔確認頁新增的九個短標籤，保留實際大小寫；不含 A 至 J 槽位字母 |
 | `../probe/catalog-runtime-save-20261022/` | 新舊來源比較，`before/` 保留 8,388 鍵與 6,417 筆譯表，`catalog-comparison.json` 核對九個短標籤及十個槽位字母 |
+| `story-fastillion-lighthouse-clauses.tsv` | 菲斯特隆實驗室及燈塔陷阱 206 筆，含 204 個新鍵與 2 個既有敘述銜接修正 |
+| `fastillion-lighthouse-clauses-review-input.json`、`story-fastillion-lighthouse-clauses-before.tsv` | 本批完整來源定位、原版及來源雜湊、允許修正的既有鍵與合併前 6,426 筆快照 |
+| `story-fastillion-lighthouse-clauses-comparison.json` | 新增、修正與未改舊鍵的差分收據；前作人物、怪物及物品 266 筆對照結果 |
 | `current-validation.tsv`、`current-validation-check.json` | 現行譯表整體檢查的固定輸入及收據，不代表遊戲接入驗收 |
 | `checker-equivalence.json` | 同一份 2,127 筆輸入的檢查器修正前後收據索引；除工具雜湊外結果相同 |
 | `batches/index.json` | 其餘候選的分批入口，不是完成度分母 |
@@ -131,10 +134,10 @@ MONCHA 的簡單 RLE 探針在多個區塊失敗，沒有把該假說寫成正�
 前作「第一級」至「第九級」與英文序數做數值等價檢查，不為通過檢查改成另一套名稱。
 帶參數的傷害片段仍需驗證完整組句，格式參數相同不代表實際句序已正確。
 
-目前已檢查並合併 6,426 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
-森林、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
+目前已檢查並合併 6,630 筆本機譯文，包含首批試譯、前作同文校讀、角色與介面、洞穴、海底、
+森林、菲斯特隆實驗室、西洛爾、鷹峽、黑水坡、地侏堡壘、火焰塔、深淵及部分結局分支。
 逐批數量見上表及 WORKLOG，現行譯文以 `zh-TW.tsv` 為準，歷史批次不重複計數。
-這是譯文進度，不能稱為 6,426 個功能、全遊戲覆蓋率或可玩中文化完成。
+這是譯文進度，不能稱為 6,630 個功能、全遊戲覆蓋率或可玩中文化完成。
 前作同文也可能依賴原場景；例如 TOWER 的前作譯文帶有特定塔名，不能直接帶入本作。
 THE、SWORD、Shield 等片段或同文異義項目保留待查，不用前作的單一譯法補洞。
 字型為 jf open 粉圓 2.1，SHA-256 沿用規格 001；fontTools 4.53.1 核對實際 cmap。
@@ -160,7 +163,7 @@ Skeletal Warrior 沿用前作 Skeleton Warrior 的「骷髏戰士」。Iron Drag
 另查多詞法術名稱，將一個既有 Mind Blank 狀態敘述修正為「受心靈防護術保護」，對齊前作。
 人物、怪物及物品的程式檢查之外，地名與法術仍須人工校讀；射線描述、複合法術名及樓層
 不能依較短的術語片段硬換。
-完整譯表回驗為 6,426 筆，0 格式錯誤、0 未處理術語警示，261 則逐句校讀覆蓋 267 次匹配。
+完整譯表回驗為 6,630 筆，0 格式錯誤、0 未處理術語警示，265 則逐句校讀覆蓋 271 次匹配。
 這些檢查不證明正式遊戲顯示、動態組句、跨頁或結局正常路徑已完成。
 
 手冊第 110、115、116、124 頁補核地侏國王、伯基藍那摩、風船、火艦隊及兩類地侏。
@@ -328,11 +331,42 @@ Drop、Speed、Icon、Level 等選項，支持使用既有「設定」。本輪�
 擷取入口已納入 `save-load-observe-r2-20261022/trace.json`，乾淨重跑四份產物逐位元組相同。
 新原文表 SHA-256 為 `c998b6f2232d41ddbae8bdfd9c3ae59ad4c873c2be09d32a2589fa3c6a01a479`。
 
-目前譯表為 6,426 筆，SHA-256 為
+該批合併後譯表為 6,426 筆，SHA-256 為
 `485bc3898fa6920e4531357632e80b44b507043edd9ef7d67329bd03045be2a3`。
 舊 6,417 筆逐筆未改，格式、實際字型覆蓋與術語檢查通過，261 則校讀覆蓋 267 次匹配。
 剩餘為 1,980 個一般候選及 1 個名稱候選，含十個槽位字母、雜訊與切片，不當作漏譯數。
 本輪只觀測原版與補譯短標籤，未接入營地中文、格式模板、完整組句或 GUI 存讀檔。
+
+## 2026-10-22：菲斯特隆實驗室與燈塔敘述片段
+
+`story-fastillion-lighthouse-clauses.tsv` 共 206 筆，新增 204 個鍵，另修正兩個既有鍵。
+來源為 ECL 區塊 13 的靜態文字，部分同鍵另出現在區塊 12；每個來源位置均保留於
+`fastillion-lighthouse-clauses-review-input.json`，不以相鄰字串推定已驗證的執行組句。
+合併前 6,426 筆快照及允許修改的兩鍵另存，原始 ECL、catalog 與原文表雜湊未變。
+
+新譯涵蓋精靈女子的求助、菲斯特隆工作與交付鑰匙、贊托斯對話、能量漩渦、鋼顎陷阱、
+落穴、石像、拉桿、樓層提示及怪物遭遇。菲斯特隆沿用已核對手冊的譯名，贊托斯仍為
+既有英文新譯待全書校讀。鐵魔像及地侏詞根沿用《幽靈騎士》；牛精、多眼怪、野豬怪、
+火元素沿用目前已核對的本作術語，不因字面或外形描述改造怪物種類。
+
+兩處舊譯修正均有同場完整來源：讀清單片段移除重複代詞，接續菲斯特隆皺眉後的動作；
+鐵魔像的後段改為站在「門前」，補回上一片段 before 的位置關係。
+其他舊 6,424 筆逐筆相同。金屬公牛、牛精石像與怪物記錄分開描述，沒有推定新規則。
+
+新增四則固定原文與譯文雜湊的語境校讀。鋼顎及尖刺的 steel 指鋼鐵材質，並非鋼幣；
+墜落時 armor 的撞擊聲用敘事詞「盔甲」，裝備類名「護甲」不變。沒有放寬術語檢查器。
+先純校讀達零錯誤、零未處理警示，確認譯表仍未變，再依已確認譯風合併。
+
+合併後共 6,630 筆，SHA-256：
+`eb722060e1df0cbae4469b2c4beb8ba3c651a22c096c62b9e35fe3d59335102e`。
+全表格式、實際字型及術語檢查通過，265 則逐句校讀覆蓋 271 次匹配；
+《幽靈騎士》266 筆共通人物、怪物與物品術語對照零差異。
+差分結果位於 `story-fastillion-lighthouse-clauses-comparison.json`。
+剩餘為 1,776 個一般候選與 1 個名稱候選，仍含雜訊、識別字及切片，不換算漏譯數。
+
+既有營地十項依賴及其畫格／存檔收據回驗通過，未改歷史畫格或重跑未變的 runtime。
+本批沒有接入新畫面，分段、動態角色名稱及原始 key 均保留。
+完整組句、正式分頁、其他選單、手札、戰鬥及中文讀檔仍未完成，未進行 HD。
 
 ## 相鄰劇情字串候選
 
@@ -391,6 +425,7 @@ bash tools/translation.sh check ui-camp-save-observed
 bash tools/translation.sh check story-city-sea-choices
 bash tools/translation.sh check story-citadel-abyss-actions
 bash tools/translation.sh check story-sea-lighthouse-clauses
+bash tools/translation.sh check story-fastillion-lighthouse-clauses
 bash tools/translation.sh check story-undersea
 bash tools/translation.sh check story-travel-rescue
 bash tools/translation.sh check story-new-names
@@ -440,5 +475,5 @@ bash tools/translation.sh test-runtime-labels
 
 新增純校讀模式後，原有 8 項防錯測試及新增 1 項隔離測試均通過。
 新增測試使用不同來源的既有譯表，確認已開譯風確認旗標的純校讀仍不改寫譯表或建立完成批次。
-新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 6,426 筆全表另已回驗通過。
+新增純校讀模式時的 6,040 筆已由預設模式回驗；目前 6,630 筆全表另已回驗通過。
 新模式沒有放寬名稱、數字或格式檢查。
