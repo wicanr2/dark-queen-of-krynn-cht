@@ -38,6 +38,7 @@ type liveFrame struct {
 	ColdUIWords   []listWord    `json:"cold_ui_words,omitempty"`
 	ColdUIEvents  int           `json:"cold_ui_events,omitempty"`
 	ColdUIPending bool          `json:"cold_ui_pending,omitempty"`
+	ColdUIPage    uint32        `json:"cold_ui_page,omitempty"`
 }
 type paintReturn struct {
 	Addr   oracle.Addr
@@ -125,8 +126,15 @@ func (g *liveGame) updateCold() error {
 		if g.transition || g.renderDepth != 0 || len(g.paints) != 0 {
 			panic("冷讀交接仍有未完成角色選單交易")
 		}
-		if c.ui != nil && (c.ui.held() || len(c.ui.Words) > 0 || len(c.ui.Await) > 0 || c.ui.Wrapper != nil) {
-			panic("冷讀提示交接尚未完成")
+		if c.ui != nil {
+			if c.ui.held() || len(c.ui.Await) > 0 || c.ui.Wrapper != nil {
+				panic("冷讀提示交接尚未完成")
+			}
+			for _, word := range c.ui.Words {
+				if word.Group != "quiz" && word.Group != "party-name" {
+					panic("冷讀交接包含未驗證的提示")
+				}
+			}
 		}
 		bridge := filepath.Join(g.out, "cold-handoff.state")
 		must(o.SaveStateFile(bridge))
@@ -182,6 +190,15 @@ func (g *liveGame) updateCold() error {
 	}
 	batch := uint64(500000)
 	if g.fine {
+		if c.ui != nil {
+			for _, w := range c.ui.Config.FineWindows {
+				if step >= w[0] && step < w[1] {
+					batch = 2000
+				} else if step < w[0] && w[0]-step < batch {
+					batch = w[0] - step
+				}
+			}
+		}
 		for _, a := range c.Actions {
 			at := a.At
 			if at < 239000000 {
@@ -640,7 +657,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		g.composeList(px)
 		g.composeReader(px)
 	}
-	if g.translate && g.cold != nil && !g.cold.ready && g.cold.ui != nil {
+	if g.translate && g.cold != nil && g.cold.ui != nil {
 		u := g.cold.ui
 		g.composeWords(px, u.snapshot(), u.Catalog, u.Glyphs)
 	}
@@ -650,6 +667,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	if g.list != nil {
 		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition || g.list.clockReturn != nil || (g.list.feedback != nil && g.list.feedback.Restoring) || (g.list.serviceNotice != nil && g.list.serviceNotice.Restoring))
+		if g.translate && g.cold != nil && g.cold.ui != nil && g.cold.ui.held() {
+			held = true
+		}
 	}
 	if held {
 		if len(g.lastPixels) == 0 {
@@ -685,12 +705,13 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		must(f.Close())
 	}
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
-	if g.cold != nil && !g.cold.ready && g.cold.ui != nil {
+	if g.cold != nil && g.cold.ui != nil {
 		u := g.cold.ui
 		f := &g.frames[len(g.frames)-1]
 		f.ColdUIWords = u.snapshot()
 		f.ColdUIEvents = len(u.Events)
 		f.ColdUIPending = u.held()
+		f.ColdUIPage = g.o.VideoLayoutState().DisplayStart
 	}
 	if g.list != nil {
 		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "list_event_count": len(g.list.events), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage, "paragraph": g.page})

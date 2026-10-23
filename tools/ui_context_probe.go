@@ -54,20 +54,24 @@ type textSnapshot struct {
 	NUL     bool   `json:"nul_terminated"`
 }
 type call struct {
-	Step       uint64           `json:"step"`
-	Return     uint64           `json:"return_step,omitempty"`
-	Glyph      uint64           `json:"first_glyph,omitempty"`
-	Caller     oracle.Addr      `json:"caller"`
-	SS         uint16           `json:"ss"`
-	SP         uint16           `json:"sp"`
-	Stack      []uint16         `json:"stack"`
-	Format     textSnapshot     `json:"format"`
-	Candidate1 textSnapshot     `json:"vararg_1_candidate"`
-	Candidate2 textSnapshot     `json:"vararg_2_candidate"`
-	Wrapper    int              `json:"wrapper_index"`
-	Menu       int              `json:"menu_index"`
-	Paragraph  int              `json:"paragraph_index"`
-	GlyphCalls []map[string]any `json:"glyph_calls,omitempty"`
+	Step         uint64                  `json:"step"`
+	Return       uint64                  `json:"return_step,omitempty"`
+	Glyph        uint64                  `json:"first_glyph,omitempty"`
+	Caller       oracle.Addr             `json:"caller"`
+	SS           uint16                  `json:"ss"`
+	SP           uint16                  `json:"sp"`
+	Stack        []uint16                `json:"stack"`
+	Format       textSnapshot            `json:"format"`
+	Candidate1   textSnapshot            `json:"vararg_1_candidate"`
+	Candidate2   textSnapshot            `json:"vararg_2_candidate"`
+	Wrapper      int                     `json:"wrapper_index"`
+	Menu         int                     `json:"menu_index"`
+	Paragraph    int                     `json:"paragraph_index"`
+	GlyphCalls   []map[string]any        `json:"glyph_calls,omitempty"`
+	VideoFirst   *oracle.VideoWriteEvent `json:"video_first,omitempty"`
+	VideoLast    *oracle.VideoWriteEvent `json:"video_last,omitempty"`
+	VideoPages   map[uint32]int          `json:"video_pages,omitempty"`
+	ReturnLayout *oracle.VideoWriteEvent `json:"return_layout,omitempty"`
 }
 type pendingCall struct {
 	index  int
@@ -260,6 +264,51 @@ func main() {
 	var pending []pendingCall
 	registered := map[oracle.Addr]bool{}
 	observe := os.Args[4] == "observe"
+	var displayChanges []map[string]any
+	videoTrace := observe && os.Getenv("DQK_CONTEXT_VIDEO") == "1"
+	if videoTrace {
+		o.OnVideoWriteEvent(func(hit oracle.VideoWriteEvent) {
+			for _, p := range pending {
+				c := &calls[p.index]
+				if c.VideoFirst == nil {
+					first := hit
+					c.VideoFirst = &first
+				}
+				last := hit
+				c.VideoLast = &last
+				if c.VideoPages == nil {
+					c.VideoPages = map[uint32]int{}
+				}
+				c.VideoPages[hit.Offset&0xc000]++
+			}
+			for _, p := range fillStack {
+				f := fillEvents[p.index]
+				if _, ok := f["video_first"]; !ok {
+					f["video_first"] = hit
+				}
+				f["video_last"] = hit
+				pages, ok := f["video_pages"].(map[uint32]int)
+				if !ok {
+					pages = map[uint32]int{}
+					f["video_pages"] = pages
+				}
+				pages[hit.Offset&0xc000]++
+			}
+		})
+		previous := o.VideoLayoutState()
+		displayChanges = append(displayChanges, map[string]any{"step": o.Steps(), "layout": previous})
+		o.SetStepGuard(func(_ *oracle.Oracle) error {
+			if o.Steps() < 220000000 || o.Steps() > 400000000 {
+				return nil
+			}
+			next := o.VideoLayoutState()
+			if next.DisplayStart != previous.DisplayStart || next.Mode != previous.Mode || next.Pitch != previous.Pitch || next.Unchained != previous.Unchained {
+				displayChanges = append(displayChanges, map[string]any{"step": o.Steps(), "layout": next})
+				previous = next
+			}
+			return nil
+		})
+	}
 	wrapperEntry := oracle.Addr{Seg: 0x0b72, Off: 0x0046}
 	if hex.EncodeToString(o.Bytes(wrapperEntry, 11)) != "558bec83ec60168d461250" {
 		panic("格式化入口不符")
@@ -551,6 +600,10 @@ func main() {
 					r := o.Regs()
 					if p.addr == target && p.ss == r.SS && p.sp == r.SP {
 						calls[p.index].Return = o.Steps()
+						if videoTrace {
+							layout := o.VideoLayoutState()
+							calls[p.index].ReturnLayout = &layout
+						}
 						pending = pending[:len(pending)-1]
 					}
 				})
@@ -650,6 +703,9 @@ func main() {
 		result["pending_boot_menus"] = len(bootMenuStack)
 	}
 	result["pending_wrappers"] = len(wrapperPending)
+	if videoTrace {
+		result["display_changes"] = displayChanges
+	}
 	writeJSON(filepath.Join(out, "receipt.json"), result)
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
 }

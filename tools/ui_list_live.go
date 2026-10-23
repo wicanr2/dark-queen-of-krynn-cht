@@ -313,6 +313,14 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			panic("未驗證的上層組句格式")
 		}
 		if f.UpperNative != nil || f.BackgroundOverride != nil || f.Color != nil {
+			nativeName := f.Pane == "callsite" && f.Group == "body" && f.RawX == 8004 && f.RawY == 8008 && f.Start == 0 && f.Length == 4 && f.Width == 0 &&
+				f.SHA256 == digest([]byte("Name")) && f.FormatSHA256 == digest([]byte("%s")) && f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) &&
+				f.UpperCaller == (oracle.Addr{Seg: 0x205e, Off: 0x2a0}) && f.UpperNative == nil && f.UpperFormatSHA256 == "" &&
+				f.Color != nil && *f.Color == 0x8c && f.BackgroundOverride != nil && *f.BackgroundOverride == 23
+			nativeReturn := f.Pane == "menu" && f.Group == "footer" && f.RawX == 112 && f.RawY == 189 && f.Start == 0 && f.Length == 6 && f.Width == 0 &&
+				f.SHA256 == digest([]byte("Return")) && f.FormatSHA256 == digest([]byte("Return")) && f.Caller == (oracle.Addr{Seg: 0xceb, Off: 0x1be}) &&
+				f.MenuSignature == "8f950eaf29b783d0b7fe41ad37f46380472d6c96b5cdc43d415f4384519f189f" && f.UpperNative == nil && f.UpperCaller == (oracle.Addr{}) &&
+				f.Color == nil && f.BackgroundOverride != nil && *f.BackgroundOverride == 23
 			prompt := f.UpperNative != nil && *f.UpperNative == ([2]int{56, 192}) && f.BackgroundOverride != nil && *f.BackgroundOverride == 7 &&
 				f.Color != nil && *f.Color == 0x70 && f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x4BD}) && f.Pane == "callsite" && f.Group == "footer" &&
 				f.RawX == 8032 && f.RawY == 189 && f.Width == 0 && ((f.Start == 0 && f.Length == 5) || (f.Start == 13 && f.Length == 12))
@@ -329,7 +337,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.BackgroundOverride != nil && *f.BackgroundOverride == 7 &&
 				(f.SHA256 == "27f835efb80b2af751f472f06171037b89065c6143ee753de6944a644900b081" || f.SHA256 == loadSourcePromptSHA256 || f.SHA256 == loadSlotPromptSHA256)) ||
 				(f.UpperCaller == (oracle.Addr{Seg: 0x2287, Off: 0x316A}) && f.UpperFormatSHA256 == "" && *f.Color == 0x8f && f.BackgroundOverride == nil && f.SHA256 == loadCaptionSHA256))
-			if !prompt && !purchase && !itemsLabel && !loadPrompt {
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
@@ -508,6 +516,9 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	// 使用 Machine 已有的視訊寫入 observer，包括 planar 路徑及同值寫入。
 	// 此固定 mode 13h 路徑須覆蓋每個舊字框的全部原生像素後才解除保留。
 	o.OnVideoWriteEvent(func(hit oracle.VideoWriteEvent) {
+		if g.cold != nil && g.cold.ui != nil {
+			g.cold.ui.videoWrite(hit)
+		}
 		if f := l.feedback; f != nil && f.Ready && hit.Unchained && hit.Mode == 0x13 && hit.Pitch == 80 {
 			p := int((hit.Offset - hit.DisplayStart) & 0xffff)
 			y, x := p/80, (p%80)*4
@@ -579,6 +590,9 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	})
 	o.SetStepGuard(func(_ *oracle.Oracle) error {
+		if g.cold != nil && g.cold.ui != nil {
+			g.cold.ui.syncPages()
+		}
 		if !l.awaitPageFlip && !l.clearPending {
 			return nil
 		}

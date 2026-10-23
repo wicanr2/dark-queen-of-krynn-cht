@@ -26,7 +26,7 @@ case "${1:-}" in
       -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" \
       -v "$MODULES:/modules:ro" -v "$PROBE/gocache:/gocache" -v "$PROBE:/out" \
       -w /src --entrypoint bash "$GO_IMAGE" -c \
-      'set -e; test ! -e /out/ui-context-probe || test "$(stat -c %u:%g /out/ui-context-probe)" = "$(id -u):$(id -g)"; go build -o /out/ui-context-probe /tools/ui_context_probe.go /tools/ui_menu_source.go'
+      'set -e; test ! -e /out/ui-context-probe || test "$(stat -c %u:%g /out/ui-context-probe)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/context-overlay.json; go build -overlay /tmp/context-overlay.json -o /out/ui-context-probe /tools/ui_context_probe.go /tools/ui_menu_source.go'
     ;;
   run)
     STATE="${2:?需指定 probe 內的快照相對路徑}"
@@ -64,6 +64,7 @@ case "${1:-}" in
     timeout "$RUN_TIMEOUT" docker run --rm --init --network none --user "$(id -u):$(id -g)" \
       --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
       "${boot_args[@]}" \
+      -e "DQK_CONTEXT_VIDEO=${DQK_CONTEXT_VIDEO:-0}" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" \
       --entrypoint /probe/ui-context-probe "$GO_IMAGE" \
       "$STATE_ARG" "/probe/$REQUEST" "/out/$(basename "$RESULT")" "$MODE" "${seed_args[@]}"

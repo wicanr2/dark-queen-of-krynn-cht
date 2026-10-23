@@ -149,21 +149,29 @@ def check(probe, output, en_name, zh_name, result_name="cold-check.json"):
     palettes={cp["step"]:cp["palette"] for cp in native["checkpoints"]}
     # 同一模式各選單的 EGA 色盤一致；僅在原版設定色盤後有中文事件。
     palette=palettes[326000000]
+    if a.get("cold_ui") and len(load(Path(a["cold_ui"]["input_root"])/"bindings.json")["Bindings"])==15:
+        assert all(cp["palette"][:16]==palette[:16] for cp in native["checkpoints"] if cp["step"]>=240000000)
     ui=None;ui_index=0;ui_words=[];ui_pending=False;ui_count=0
     if a.get("cold_ui") or b.get("cold_ui"):
         assert a.get("cold_ui") and b.get("cold_ui")
-        from load_prompt_check import model,paint
+        from load_prompt_check import model,paint,pending_at
         ui=model(probe,a,b)
     for f,g in zip(a["cold_frames"],b["cold_frames"]):
         assert (f["step"],f["events"],f["held"],f["active"])==(g["step"],g["events"],g["held"],g["active"])
         step=g["step"]
         if ui is not None:
-            while ui_index<len(ui["timeline"]) and ui["timeline"][ui_index][0]<=step:
-                _,ui_words,ui_pending,ui_count=ui["timeline"][ui_index];ui_index+=1
+            count=g.get("cold_ui_events",0)
+            assert ui_index<=count<=len(ui["timeline"])
+            assert count==0 or ui["timeline"][count-1][0]<=step
+            assert count==len(ui["timeline"]) or ui["timeline"][count][0]>=step
+            if count:_,ui_words,ui_pending,ui_count=ui["timeline"][count-1]
+            ui_index=count
             for frame in (f,g):
                 assert (frame.get("cold_ui_words") or [])==ui_words,("cold UI words",step)
                 assert frame.get("cold_ui_events",0)==ui_count
-                assert frame.get("cold_ui_pending",False)==ui_pending
+                expected_pending=pending_at(ui,frame,count,ui_words,ui_pending)
+                assert frame.get("cold_ui_pending",False)==expected_pending,("cold pending",step)
+                if expected_pending:assert frame["held"]
         # 依真實時間交錯清除與新標籤；相同 step 的邊界均早於 Draw。
         merged=[(e["step"],0,e) for e in bounds[boundary_index:] if e["step"]<=step]
         merged += [(e["step"],1,e) for e in events[last_count:g["events"]]]
@@ -207,6 +215,11 @@ def check(probe, output, en_name, zh_name, result_name="cold-check.json"):
         previous=pixels[1]
     assert changed>0 and held>0 and not active
     if ui is not None:assert all(ui["visible"].values()),ui["visible"]
+    if ui is not None:
+        for receipt in (a,b):
+            for lo,hi in ui["fine_windows"]:
+                gaps=[right["step"]-left["step"] for left,right in zip(receipt["cold_frames"],receipt["cold_frames"][1:]) if right["step"]>lo and left["step"]<hi]
+                assert gaps and max(gaps)<=2000,("cold caption observation gap",lo,hi,max(gaps) if gaps else None)
     windows=load(output/"native-fine-windows.json")
     trace=load(output/"observe-r1/receipt.json")
     for key,endkey in [("calls","return_step"),("wrappers","return_step"),
@@ -233,6 +246,10 @@ def check(probe, output, en_name, zh_name, result_name="cold-check.json"):
         result["cold_prompt_visible_frames"]=ui["visible"];result["cold_prompt_events"]=ui["events"]
         result["cold_prompt_model_sha256"]=sha(Path(__file__).with_name("load_prompt_check.py").read_bytes())
         result["limits"]="DRAFT role labels plus six load captions; original quiz and other unbound text remain; no all-game/interactive keyboard claim"
+        if len(ui["keys"])==15:
+            result["cold_caption_paint_windows"]=len(ui["fine_windows"])
+            result["cold_page_sync_verified"]=ui["page_sync"]
+            result["limits"]="DRAFT opening, load, name and quiz captions; English quiz heading, numbers and answer remain original; no all-game/interactive keyboard claim"
     write(output/result_name,result)
     print(json.dumps(result,ensure_ascii=False))
 

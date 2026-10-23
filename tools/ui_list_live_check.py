@@ -36,6 +36,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    startup = provenance.get("startup_extension")
     session = provenance.get("session_load_extension")
     role_alpha = None
     if session:
@@ -64,7 +65,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for name in ["glyphs-20.json","role.zh-TW.tsv"]:assert run["list_role_"+name+"_sha256"]==sha((inputs/name).read_bytes())
         added=[row["binding"] for row in session["added"]]
         assert len(added)==21 and sum(f.get("FontSize")==20 for f in added)==12
-        assert config["Fields"]==read(base/"inputs.json")["Fields"]+added
+        assert config["Fields"]==read(base/"inputs.json")["Fields"]+added+([row["binding"] for row in startup["added"]] if startup else [])
         for row in session["added"]:
             binding,origin=row["binding"],row["origin"]
             key=binding["Key"]
@@ -90,6 +91,30 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert origin["source"].rstrip(" ")==formal_en[origin["formal_key"]].rstrip(" ")
                 assert zh[key]==formal_zh[origin["formal_key"]]
             assert en[key]==origin["source"].rstrip(" ") and origin["translation"]==zh[key]
+    if startup:
+        base=inputs.parent.parent/startup["base"]
+        for name,digest in startup["base_files"].items():assert sha((base/name).read_bytes())==digest
+        base_config=read(base/"inputs.json");added=startup["added"]
+        assert len(added)==2 and config["Fields"]==base_config["Fields"]+[row["binding"] for row in added]
+        for name in ["Rows","Headers","Paragraphs","PaneLists","RowCallers","Background"]:assert config[name]==base_config[name]
+        path=inputs.parent.parent/startup["observed_path"]
+        assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==startup["observed_sha256"]
+        original=read(path);calls={c["step"]:c for c in original["calls"]}
+        formal_en,formal_zh=catalog(Path("/catalogs/en.tsv")),catalog(Path("/catalogs/zh-TW.tsv"))
+        for row in added:
+            binding=row["binding"];call=calls[row["call_step"]];key=binding["Key"]
+            source=call["vararg_1_candidate"]["text"] if call["format"]["text"]=="%s" else call["format"]["text"]
+            assert source==formal_en[row["formal_key"]] and zh[key]==formal_zh[row["formal_key"]]
+            assert binding["BackgroundOverride"]==23
+            assert en[key]==source and binding["SHA256"]==sha(source.encode())
+            assert binding["Caller"]==call["caller"] and [binding["RawY"],binding["RawX"]]==call["stack"][2:4]
+            if binding["Pane"]=="menu":
+                table=original["menus"][call["menu_index"]]
+                assert table["Count"]==1 and len(table["Buttons"])==1 and binding["MenuSignature"]==table["Signature"]
+            else:
+                assert source=="Name" and binding["UpperCaller"]==original["wrappers"][call["wrapper_index"]]["caller"]
+        old=read(base/"glyphs-16.json")
+        assert all(glyphs["glyphs"][key]==value for key,value in old["glyphs"].items())
     trade = provenance.get("trade_extension")
     trade_bindings = []
     if trade:
@@ -433,7 +458,24 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert source["text"]=="Loading...Please Wait" and f["UpperNative"]==[0,192]
                 assert c["stack"][2:5]==[189,8004,0x8f] and f["Color"]==0x8f and "BackgroundOverride" not in f
         background = f.get("BackgroundOverride",config["Background"])
-        if "BackgroundOverride" in f:
+        if "BackgroundOverride" in f and background==23:
+            if source["text"]=="Name":
+                assert f["UpperCaller"]=={"Seg":0x205E,"Off":0x2A0}
+                assert f["Pane"]=="callsite" and f["Group"]=="body" and (start,f["Length"])==(0,4)
+                assert c["stack"][2:5]==[8008,8004,0x8c] and f["Color"]==0x8c
+            else:
+                assert source["text"]=="Return" and f["Pane"]=="menu" and f["Group"]=="footer"
+                assert (start,f["Length"])==(0,6) and c["stack"][2:4]==[189,112]
+                assert f["MenuSignature"]=="8f950eaf29b783d0b7fe41ad37f46380472d6c96b5cdc43d415f4384519f189f"
+            if (f["Key"],background) not in verified_field_backgrounds:
+                checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
+                original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
+                x,y=native(c["stack"][3]),native(c["stack"][2])
+                colors=set(original.crop((x,y,x+f["Length"]*8,y+8)).getdata())
+                bg=tuple(checkpoint["palette"][23]);fg=tuple(checkpoint["palette"][c["stack"][4]&15])
+                assert bg in colors and colors<={bg,fg,tuple(checkpoint["palette"][0])}
+            verified_field_backgrounds.add((f["Key"],background))
+        elif "BackgroundOverride" in f:
             if f["UpperCaller"] == {"Seg":0xCEB,"Off":0x4BD}:
                 assert f["UpperNative"] == [56,192] and c["stack"][2:5] == [189,8032,0x70]
                 assert source["text"] == "Press        to continue." and (start,f["Length"]) in ((0,5),(13,12))
@@ -896,7 +938,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         verified_pngs.add((str(folder), name))
         return data
 
-    def compose(source, words, palette, page, reader_page):
+    def compose(source, words, palette, page, reader_page, cold_words=()):
         px = bytearray(source)
         rectangles = []
         if page is not None:
@@ -937,6 +979,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert all(x + width <= xx or xx + ww <= x or y + 16 <= yy or yy + hh <= y for xx, yy, ww, hh in rectangles)
             rectangles.append((x, y, width, 16))
             fg, bg = palette[w["Foreground"]], palette[w["Background"]]
+            if startup and w["Background"]==23 and (w["Key"]=="field.6b0143d03864993fdf69" or (w["Key"]=="field.dcd1d5223f73b3a965c0" and w["X"]==8 and w["Y"]==16)):
+                original_colors={tuple(source[(yy*640+xx)*4:(yy*640+xx)*4+3]) for yy in range(y,y+16) for xx in range(x,x+width)}
+                allowed={tuple(bg),tuple(fg),tuple(palette[0]),tuple(palette[15])}
+                assert tuple(bg) in original_colors and original_colors<=allowed,("native field background",w["Key"],original_colors-allowed)
             row = bytes([*bg, 255]) * width
             for yy in range(y, y + 16):
                 at = (yy * 640 + x) * 4
@@ -952,8 +998,14 @@ def check(en_run, zh_run, inputs, control, observed, output):
                         for channel in range(3):
                             px[at + channel] = (fg[channel] * value + px[at + channel] * (255 - value) + 127) // 255
         paint_reader(px,reader_page,palette,alpha,reader_images)
+        if cold_ui is not None:
+            cold_paint(px,cold_words,palette,cold_ui)
         return sha(px)
 
+    cold_ui=None;cold_index=0;cold_words=[];cold_pending=False;cold_count=0;cold_retained=0
+    if startup:
+        from load_prompt_check import model as cold_model,paint as cold_paint,pending_at as cold_pending_at
+        cold_ui=cold_model(inputs.parent.parent,a,b)
     previous, held, translated_frames, model_index = None, 0, 0, -1
     last_row_frame, copied_row_page, copied_row_pages = None, None, []
     service_row_keys = {span["Key"] for row in config["Rows"] if row["Pane"] in ("shop-stock","temple-spells") for span in row["Spans"]}
@@ -961,6 +1013,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert len(b["frames"]) == len(b["list_frames"])
     for frame, state in zip(b["frames"], b["list_frames"]):
         assert frame["step"] == state["step"] and frame["step"] in originals
+        if cold_ui is not None:
+            count=frame.get("cold_ui_events",0)
+            assert cold_index<=count<=len(cold_ui["timeline"])
+            assert count==0 or cold_ui["timeline"][count-1][0]<=frame["step"]
+            assert count==len(cold_ui["timeline"]) or cold_ui["timeline"][count][0]>=frame["step"]
+            if count:_,cold_words,cold_pending,cold_count=cold_ui["timeline"][count-1]
+            cold_index=count
+            for actual in (frame,originals[frame["step"]]):
+                assert (actual.get("cold_ui_words") or [])==cold_words and actual.get("cold_ui_events",0)==cold_count
+                expected_pending=cold_pending_at(cold_ui,actual,count,cold_words,cold_pending)
+                assert actual.get("cold_ui_pending",False)==expected_pending,("cold page pending",frame["step"])
+            if expected_pending:assert frame["held"]
+            if cold_words and not frame["held"]:cold_retained+=1
         if "list_event_count" in state:
             count = state["list_event_count"]
             assert model_index+1 <= count <= len(model)
@@ -1014,9 +1079,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for start, end, (x, y, width, height) in actor_headers:
                 if start <= frame["step"] < end:
                     assert all(w["X"]+w["Width"] <= x or x+width <= w["X"] or w["Y"]+8 <= y or y+height <= w["Y"] for w in state["words"] or [])
-            key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]),json.dumps(state.get("paragraph"),sort_keys=True),json.dumps(state.get("reader"),sort_keys=True))
+            key = (original["SHA256"], json.dumps(state["words"], sort_keys=True), json.dumps(state["palette"]),json.dumps(state.get("paragraph"),sort_keys=True),json.dumps(state.get("reader"),sort_keys=True),json.dumps(cold_words,sort_keys=True))
             if key not in cache:
-                cache[key] = compose(pixels(en_run, original), state["words"], state["palette"],state.get("paragraph"),state.get("reader"))
+                cache[key] = compose(pixels(en_run, original), state["words"], state["palette"],state.get("paragraph"),state.get("reader"),cold_words)
             expected_hash = cache[key]
             if state["words"]:
                 translated_frames += 1
@@ -1084,6 +1149,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
             reader["x11_windows"] = windows
         result["reader"] = reader
         result["reader_model_sha256"] = sha((Path(__file__).parent / "ui_journal_reader_check.py").read_bytes())
+    if startup:
+        assert cold_retained>0 and not cold_words and not cold_pending
+        result["cold_caption_carry_frames"]=cold_retained
+        result["cold_caption_model_sha256"]=sha(Path(__file__).with_name("load_prompt_check.py").read_bytes())
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
