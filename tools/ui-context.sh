@@ -33,21 +33,31 @@ case "${1:-}" in
     REQUEST="${3:?需指定 probe 內的 JSON 相對路徑}"
     RESULT="${4:?需指定 probe 內的全新輸出相對路徑}"
     MODE="${5:?需指定 observe 或 control}"
+    SEED="${6:-}"
+    seed_args=()
+    if [[ -n "$SEED" ]];then
+      [[ "$SEED" =~ ^[A-Za-z0-9][A-Za-z0-9/.-]*$ && "$SEED" != *..* ]]
+      test -f "$PROBE/$SEED/SavGamJ.qsv";test -f "$PROBE/$SEED/VaultJ.DAT"
+      seed_args=("/probe/$SEED")
+    fi
     relative "$STATE"; relative "$REQUEST"; relative "$RESULT"
     [[ "$MODE" = observe || "$MODE" = control ]]
     test -f "$PROBE/ui-context-probe"
-    test -f "$PROBE/$STATE"
+    STATE_ARG="/probe/$STATE"
+    if [[ "$STATE" = cold ]];then STATE_ARG=-;else test -f "$PROBE/$STATE";fi
     test -f "$PROBE/$REQUEST"
     test -f "$ORIG/DQK.EXE"
     PARENT="$(dirname "$PROBE/$RESULT")"
     test -d "$PARENT"
     test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
     test ! -e "$PROBE/$RESULT"
-    timeout 120s docker run --rm --init --network none --user "$(id -u):$(id -g)" \
+    RUN_TIMEOUT=120s
+    if [[ "$STATE" = cold ]];then RUN_TIMEOUT=240s;fi
+    timeout "$RUN_TIMEOUT" docker run --rm --init --network none --user "$(id -u):$(id -g)" \
       --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" \
       --entrypoint /probe/ui-context-probe "$GO_IMAGE" \
-      "/probe/$STATE" "/probe/$REQUEST" "/out/$(basename "$RESULT")" "$MODE"
+      "$STATE_ARG" "/probe/$REQUEST" "/out/$(basename "$RESULT")" "$MODE" "${seed_args[@]}"
     ;;
   check)
     OBS="${2:?需指定觀測組相對路徑}"

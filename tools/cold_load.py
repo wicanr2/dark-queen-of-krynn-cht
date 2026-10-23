@@ -129,7 +129,7 @@ def check(probe, output, en_name, zh_name, result_name="cold-check.json"):
         assert x["bridge_state_sha256"]==native["bridge_state_sha256"]==sha((output/"native-cold/handoff.state").read_bytes())
         assert x["cold_role_catalog_sha256"]==sha((roles/"zh-TW.tsv").read_bytes())
         assert x["cold_role_glyphs_sha256"]==sha((roles/"glyphs-20.json").read_bytes())
-        assert len(x["cold_checkpoints"])==len(native["checkpoints"])==12
+        assert len(x["cold_checkpoints"])==len(native["checkpoints"])==len(req["Actions"])
         for p,q in zip(x["cold_checkpoints"],native["checkpoints"]):
             assert all(p[f]==q[f] for f in fields),p["label"]
             assert not q["unimplemented"]
@@ -148,9 +148,21 @@ def check(probe, output, en_name, zh_name, result_name="cold-check.json"):
     palettes={cp["step"]:cp["palette"] for cp in native["checkpoints"]}
     # 同一模式各選單的 EGA 色盤一致；僅在原版設定色盤後有中文事件。
     palette=palettes[326000000]
+    ui=None;ui_index=0;ui_words=[];ui_pending=False;ui_count=0
+    if a.get("cold_ui") or b.get("cold_ui"):
+        assert a.get("cold_ui") and b.get("cold_ui")
+        from load_prompt_check import model,paint
+        ui=model(probe,a,b)
     for f,g in zip(a["cold_frames"],b["cold_frames"]):
         assert (f["step"],f["events"],f["held"],f["active"])==(g["step"],g["events"],g["held"],g["active"])
         step=g["step"]
+        if ui is not None:
+            while ui_index<len(ui["timeline"]) and ui["timeline"][ui_index][0]<=step:
+                _,ui_words,ui_pending,ui_count=ui["timeline"][ui_index];ui_index+=1
+            for frame in (f,g):
+                assert (frame.get("cold_ui_words") or [])==ui_words,("cold UI words",step)
+                assert frame.get("cold_ui_events",0)==ui_count
+                assert frame.get("cold_ui_pending",False)==ui_pending
         # 依真實時間交錯清除與新標籤；相同 step 的邊界均早於 Draw。
         merged=[(e["step"],0,e) for e in bounds[boundary_index:] if e["step"]<=step]
         merged += [(e["step"],1,e) for e in events[last_count:g["events"]]]
@@ -186,10 +198,14 @@ def check(probe, output, en_name, zh_name, result_name="cold-check.json"):
                             if not v:continue
                             at=((y-2+yy)*640+x+i*20+xx)*4
                             for c in range(3):expected[at+c]=(fg[c]*v+expected[at+c]*(255-v)+127)//255
+            if ui is not None:
+                paint(expected,ui_words,palette,ui)
+                for word in ui_words:ui["visible"][word["Key"]]+=1
             assert bytes(expected)==pixels[1],("cold pixels",step)
             changed+=pixels[0]!=pixels[1]
         previous=pixels[1]
     assert changed>0 and held>0 and not active
+    if ui is not None:assert all(ui["visible"].values()),ui["visible"]
     windows=load(output/"native-fine-windows.json")
     trace=load(output/"observe-r1/receipt.json")
     for key,endkey in [("calls","return_step"),("wrappers","return_step"),
@@ -205,13 +221,17 @@ def check(probe, output, en_name, zh_name, result_name="cold-check.json"):
     assert native["cold_boot"] and not native["snapshot_loaded"]
     assert native["source_commit"]=="f79eab6db8c64a524a06535e53e5d32b0bbcf7c8"
     assert native["go_version"]=="go1.24.13" and native["exe_sha256"]=="3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
-    result=dict(cold_boot=True,gui_snapshot_loaded=False,original_checkpoints_equal=12,
+    result=dict(cold_boot=True,gui_snapshot_loaded=False,original_checkpoints_equal=len(native["checkpoints"]),
                 gpu_frames_verified=len(b["cold_frames"]),translated_frames=changed,held_frames=held,
                 role_font_size=20,gameplay_font_size=16,save_files=req["SaveFiles"],
                 native_paint_windows=len(windows),maximum_paint_observation_step_gap=2000,
                 runs=[en_name,zh_name],receipt_sha256=[sha((output/n/"receipt.json").read_bytes()) for n in (en_name,zh_name)],
                 checker_sha256=sha(Path(__file__).read_bytes()),
                 limits="DRAFT role labels and post-load gameplay only; original load-source, slot and quiz prompts remain; no all-game/interactive keyboard claim")
+    if ui is not None:
+        result["cold_prompt_visible_frames"]=ui["visible"];result["cold_prompt_events"]=ui["events"]
+        result["cold_prompt_model_sha256"]=sha(Path(__file__).with_name("load_prompt_check.py").read_bytes())
+        result["limits"]="DRAFT role labels plus six load captions; original quiz and other unbound text remain; no all-game/interactive keyboard claim"
     write(output/result_name,result)
     print(json.dumps(result,ensure_ascii=False))
 

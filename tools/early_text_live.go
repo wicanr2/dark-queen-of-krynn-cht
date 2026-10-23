@@ -29,12 +29,15 @@ type liveEvent struct {
 	Source, Key, Text string
 }
 type liveFrame struct {
-	Step         uint64 `json:"step"`
-	Events       int    `json:"events"`
-	File, SHA256 string
-	Held         bool          `json:"held"`
-	Active       int           `json:"active"`
-	CampPalette  *[16][3]uint8 `json:"camp_palette,omitempty"`
+	Step          uint64 `json:"step"`
+	Events        int    `json:"events"`
+	File, SHA256  string
+	Held          bool          `json:"held"`
+	Active        int           `json:"active"`
+	CampPalette   *[16][3]uint8 `json:"camp_palette,omitempty"`
+	ColdUIWords   []listWord    `json:"cold_ui_words,omitempty"`
+	ColdUIEvents  int           `json:"cold_ui_events,omitempty"`
+	ColdUIPending bool          `json:"cold_ui_pending,omitempty"`
 }
 type paintReturn struct {
 	Addr   oracle.Addr
@@ -113,6 +116,7 @@ type coldLoad struct {
 	bridgeSHA                   string
 	fineWindowsPath             string
 	readerCatalog, readerImages string
+	ui                          *coldPromptUI
 }
 
 func (g *liveGame) updateCold() error {
@@ -120,6 +124,9 @@ func (g *liveGame) updateCold() error {
 	if o.Steps() == c.Handoff {
 		if g.transition || g.renderDepth != 0 || len(g.paints) != 0 {
 			panic("冷讀交接仍有未完成角色選單交易")
+		}
+		if c.ui != nil && (c.ui.held() || len(c.ui.Words) > 0 || len(c.ui.Await) > 0 || c.ui.Wrapper != nil) {
+			panic("冷讀提示交接尚未完成")
 		}
 		bridge := filepath.Join(g.out, "cold-handoff.state")
 		must(o.SaveStateFile(bridge))
@@ -175,7 +182,11 @@ func (g *liveGame) updateCold() error {
 	}
 	batch := uint64(500000)
 	if g.fine {
-		for _, at := range []uint64{241000000, 261000000, 281000000, 301000000, 327000000} {
+		for _, a := range c.Actions {
+			at := a.At
+			if at < 239000000 {
+				continue
+			}
 			if step >= at && step < at+1000000 {
 				batch = 2000
 			}
@@ -629,7 +640,14 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		g.composeList(px)
 		g.composeReader(px)
 	}
+	if g.translate && g.cold != nil && !g.cold.ready && g.cold.ui != nil {
+		u := g.cold.ui
+		g.composeWords(px, u.snapshot(), u.Catalog, u.Glyphs)
+	}
 	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
+	if g.cold != nil && !g.cold.ready && g.cold.ui != nil && g.cold.ui.held() {
+		held = true
+	}
 	if g.list != nil {
 		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition || g.list.clockReturn != nil || (g.list.feedback != nil && g.list.feedback.Restoring) || (g.list.serviceNotice != nil && g.list.serviceNotice.Restoring))
 	}
@@ -667,6 +685,13 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		must(f.Close())
 	}
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
+	if g.cold != nil && !g.cold.ready && g.cold.ui != nil {
+		u := g.cold.ui
+		f := &g.frames[len(g.frames)-1]
+		f.ColdUIWords = u.snapshot()
+		f.ColdUIEvents = len(u.Events)
+		f.ColdUIPending = u.held()
+	}
 	if g.list != nil {
 		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "list_event_count": len(g.list.events), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage, "paragraph": g.page})
 		if g.reader != nil {
@@ -738,6 +763,7 @@ func main() {
 	coldSave := flag.String("cold-save", "", "唯讀的中文 J 槽來源目錄")
 	coldRoles := flag.String("cold-role-inputs", "", "已核對的 20px 角色管理輸入目錄")
 	coldFine := flag.String("cold-fine-windows", "", "DRAFT：從獨立原版繪製事件衍生的細驗區間")
+	coldUIInputs := flag.String("cold-ui-inputs", "", "DRAFT：冷讀來源、槽位與讀取中提示")
 	camp := flag.Bool("camp", false, "DRAFT：正常旅店、營地與存檔 J 的底列短標籤")
 	campInputs := flag.String("camp-inputs", "", "營地原型的已觀測來源與座標索引")
 	listMode := flag.Bool("list", false, "DRAFT：依原版標題辨識 Shield 列表並處理捲動及退出")
@@ -752,6 +778,9 @@ func main() {
 	flag.Parse()
 	if *coldFine != "" && (*coldPath == "" || !*fine) {
 		panic("冷讀細驗區間需要冷讀及 fine 模式")
+	}
+	if *coldUIInputs != "" && *coldPath == "" {
+		panic("冷讀提示需要 MZ 冷讀模式")
 	}
 	if *readerIllustrations != "" && *readerCatalog == "" {
 		panic("圖文清單需要手札 TSV")
@@ -863,7 +892,7 @@ func main() {
 		must(err)
 		c := &coldLoad{catalog: g.catalog, glyphs: g.glyphs, inputs: *listInputs, request: *listRequest, sources: *sourceCatalog, fineWindowsPath: *coldFine, readerCatalog: *readerCatalog, readerImages: *readerIllustrations}
 		must(json.Unmarshal(data, c))
-		if c.Handoff != 355000000 || c.QuizStep != 355000000 || c.QuizSHA256 != "d7eec5b094e4265a627d2b61333d3bc7d339572431e281ac29b533e10c76ae67" || len(c.Actions) != 12 || len(c.SaveFiles) != 2 {
+		if c.Handoff != 355000000 || c.QuizStep != 355000000 || c.QuizSHA256 != "d7eec5b094e4265a627d2b61333d3bc7d339572431e281ac29b533e10c76ae67" || len(c.Actions) < 12 || len(c.Actions) > 32 || len(c.SaveFiles) != 2 {
 			panic("未知冷讀路徑")
 		}
 		last := uint64(0)
@@ -908,6 +937,9 @@ func main() {
 		}
 		g.installLifecycle()
 		g.installShortText()
+		if *coldUIInputs != "" {
+			g.installColdPrompts(*coldUIInputs)
+		}
 	} else if g.list != nil {
 		g.installList(*listInputs, *listRequest, *sourceCatalog)
 		if *readerCatalog != "" {
@@ -1104,6 +1136,7 @@ func main() {
 		}
 		result["scope"] = "DRAFT continuous MZ cold-load J: approved 20px role labels and existing 16px gameplay prototype; load-source/slot prompts remain original; no complete-game claim"
 		result["cold_boot"] = true
+		g.coldPromptsReceipt(result)
 		result["snapshot_loaded"] = false
 		result["bridge_state_sha256"] = c.bridgeSHA
 		result["cold_frames"], result["cold_events"], result["cold_checkpoints"], result["cold_boundaries"] = c.frames, c.events, c.checkpoints, c.boundaries

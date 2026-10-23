@@ -42,7 +42,7 @@ func main() {
 		}
 	}
 	must(json.Unmarshal(data, &req))
-	if req.QuizStep != 355000000 || req.Handoff != 355000000 || len(req.Actions) != 12 || len(req.SaveFiles) != 2 {
+	if req.QuizStep != 355000000 || req.Handoff != 355000000 || len(req.Actions) < 12 || len(req.Actions) > 32 || len(req.SaveFiles) != 2 {
 		panic("未知冷讀請求")
 	}
 	for _, name := range []string{"SavGamJ.qsv", "VaultJ.DAT"} {

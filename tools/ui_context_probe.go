@@ -69,16 +69,25 @@ type pendingCall struct {
 }
 
 func main() {
-	if len(os.Args) != 5 || (os.Args[4] != "observe" && os.Args[4] != "control") {
-		panic("用法：ui-context-probe 原版快照 request.json 全新輸出目錄 observe|control")
+	if (len(os.Args) != 5 && len(os.Args) != 6) || (os.Args[4] != "observe" && os.Args[4] != "control") {
+		panic("用法：ui-context-probe 原版快照 request.json 全新輸出目錄 observe|control [唯讀 J 槽目錄]")
 	}
-	stateBytes, err := os.ReadFile(os.Args[1])
-	must(err)
+	coldBoot := os.Args[1] == "-"
+	var stateBytes []byte
+	var err error
+	if !coldBoot {
+		stateBytes, err = os.ReadFile(os.Args[1])
+		must(err)
+	}
 	requestBytes, err := os.ReadFile(os.Args[2])
 	must(err)
 	var req request
 	must(json.Unmarshal(requestBytes, &req))
-	if digest(stateBytes) != req.StateSHA || len(req.Actions) == 0 {
+	stateSHA := ""
+	if !coldBoot {
+		stateSHA = digest(stateBytes)
+	}
+	if stateSHA != req.StateSHA || len(req.Actions) == 0 || (coldBoot && req.Start != 0) {
 		panic("輸入快照或動作不符")
 	}
 	last := req.Start
@@ -106,8 +115,38 @@ func main() {
 	o, err := oracle.Load("/orig/DQK.EXE", "/orig")
 	must(err)
 	defer o.Close()
-	must(o.LoadStateFile(os.Args[1]))
+	if coldBoot {
+		o.SetCmdLine("SB220 SI7 RB330")
+	} else {
+		must(o.LoadStateFile(os.Args[1]))
+	}
 	o.SetScratch(filepath.Join(out, "scratch"))
+	var seedFiles []map[string]any
+	if len(os.Args) == 6 {
+		for _, spec := range []struct {
+			name string
+			size int
+			sha  string
+		}{
+			{"SavGamJ.qsv", 7965, "72a45079a189126c3a96d4681fac846086a6edaf26748d260d3a73fbc8905488"},
+			{"VaultJ.DAT", 866, "2acc13fa21f319fac65ad823d7ca52f1ed02d13ce8708431f7ce5c116d9db7ba"},
+		} {
+			file := filepath.Join(os.Args[5], spec.name)
+			data, e := os.ReadFile(file)
+			must(e)
+			if len(data) != spec.size || digest(data) != spec.sha {
+				panic("觀測用 J 槽來源不符")
+			}
+			info, e := os.Stat(file)
+			must(e)
+			dir := filepath.Join(out, "scratch", "SAVE")
+			must(os.MkdirAll(dir, 0755))
+			target := filepath.Join(dir, spec.name)
+			must(os.WriteFile(target, data, 0644))
+			must(os.Chtimes(target, info.ModTime(), info.ModTime()))
+			seedFiles = append(seedFiles, map[string]any{"name": spec.name, "bytes": len(data), "sha256": spec.sha, "mtime_ns": info.ModTime().UnixNano()})
+		}
+	}
 	if o.Steps() != req.Start {
 		panic("快照步數不符")
 	}
@@ -151,6 +190,8 @@ func main() {
 	var scrollEvents []map[string]any
 	var fillEvents []map[string]any
 	var fillStack []pendingCall
+	var bootMenuEvents []map[string]any
+	var bootMenuStack []int
 	fillAudit := -1
 	var scrollPending []pendingCall
 	scrollRegistered := map[oracle.Addr]bool{}
@@ -251,6 +292,7 @@ func main() {
 				panic("未配對的填色座標")
 			}
 			p := fillStack[len(fillStack)-1]
+			fillEvents[p.index]["converted_step"] = o.Steps()
 			r := o.Regs()
 			if p.ss != r.SS || p.sp != r.BP+2 {
 				panic("填色座標堆疊不符")
@@ -470,7 +512,7 @@ func main() {
 				if c.Glyph == 0 {
 					c.Glyph = o.Steps()
 				}
-				if strings.Contains(strings.ToLower(c.Candidate1.Text), "shield") {
+				if strings.Contains(strings.ToLower(c.Candidate1.Text), "shield") || (coldBoot && o.Steps() >= 261000000 && o.Steps() < 302000000) {
 					if len(c.GlyphCalls) >= 64 {
 						panic("超出單列字元觀測上限")
 					}
@@ -480,9 +522,25 @@ func main() {
 						s[i] = o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + uint16(i*2)})
 					}
 					c.GlyphCalls = append(c.GlyphCalls, map[string]any{"step": o.Steps(), "regs": r, "stack": s,
-						"ds_ca12": o.Word(oracle.Addr{Seg: r.DS, Off: 0xca12}), "ds_ca14": o.Word(oracle.Addr{Seg: r.DS, Off: 0xca14})})
+						"ds_ca12": o.Word(oracle.Addr{Seg: r.DS, Off: 0xca12}), "ds_ca14": o.Word(oracle.Addr{Seg: r.DS, Off: 0xca14}),
+						"format_at_glyph": read(c.Format.Segment, c.Format.Offset), "candidate_at_glyph": read(c.Candidate1.Segment, c.Candidate1.Offset)})
 				}
 			}
+		})
+	}
+	if observe && coldBoot {
+		o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, func(_ *oracle.Oracle) {
+			menu, valid := readMenuSource(o)
+			bootMenuStack = append(bootMenuStack, len(bootMenuEvents))
+			bootMenuEvents = append(bootMenuEvents, map[string]any{"step": o.Steps(), "caller": o.Caller(), "valid": valid, "menu": menu})
+		})
+		o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, func(_ *oracle.Oracle) {
+			if len(bootMenuStack) == 0 {
+				panic("冷啟動選單返回未配對")
+			}
+			i := bootMenuStack[len(bootMenuStack)-1]
+			bootMenuStack = bootMenuStack[:len(bootMenuStack)-1]
+			bootMenuEvents[i]["return_step"] = o.Steps()
 		})
 	}
 	ramSnapshot := func() []byte {
@@ -517,8 +575,19 @@ func main() {
 			matches = append(matches, i)
 		}
 	}
-	result := map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "menu_refresh_sources": menuRefreshSources, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."}
+	result := map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": stateSHA, "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "menu_refresh_sources": menuRefreshSources, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."}
+	if coldBoot {
+		result["cold_boot"], result["snapshot_loaded"] = true, false
+		result["limits"] = "Original MZ cold boot with normal keys; observation only, no translation or GUI claim. Varargs and BP chain entries remain raw candidates."
+	}
 	result["paragraphs"], result["pending_paragraphs"] = paragraphs, len(paragraphPending)
+	if seedFiles != nil {
+		result["seed_save_files"] = seedFiles
+	}
+	if observe && coldBoot {
+		result["boot_menu_events"] = bootMenuEvents
+		result["pending_boot_menus"] = len(bootMenuStack)
+	}
 	result["pending_wrappers"] = len(wrapperPending)
 	writeJSON(filepath.Join(out, "receipt.json"), result)
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))

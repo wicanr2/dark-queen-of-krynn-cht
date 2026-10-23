@@ -998,9 +998,11 @@ func (g *liveGame) updateList() error {
 	return nil
 }
 func (g *liveGame) composeList(px []byte) {
-	l := g.list
+	g.composeWords(px, g.list.snapshot(), g.catalog, g.glyphs)
+}
+func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]string, glyphs glyphSet) {
 	pal := g.o.Palette()
-	for _, w := range l.snapshot() {
+	for _, w := range words {
 		x, y := w.X*2, w.Y*2
 		bg, fg := pal[w.Background], pal[w.Foreground]
 		for yy := 0; yy < 16; yy++ {
@@ -1008,8 +1010,8 @@ func (g *liveGame) composeList(px []byte) {
 				copy(px[((y+yy)*640+x+xx)*4:][:3], bg[:])
 			}
 		}
-		for i, ch := range []rune(g.catalog[w.Key]) {
-			alpha, ok := g.glyphs.Glyphs[string(ch)]
+		for i, ch := range []rune(catalog[w.Key]) {
+			alpha, ok := glyphs.Glyphs[string(ch)]
 			if !ok || len(alpha) != 320 {
 				panic("列表字型缺字")
 			}

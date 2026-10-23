@@ -77,6 +77,8 @@ case "${1:-}" in
     fine_args=()
     if test "$5" = true && test -f "/probe/$1/native-fine-windows.json"; then fine_args=(-cold-fine-windows "/probe/$1/native-fine-windows.json"); fi
     reader_args=()
+    ui_args=()
+    if test -f "/probe/$1/ui-inputs/bindings.json";then ui_args=(-cold-ui-inputs "/probe/$1/ui-inputs");fi
     if test -f "/probe/$3/reader.zh-TW.tsv"; then reader_args=(-reader-catalog "/probe/$3/reader.zh-TW.tsv"); fi
     if test -f "/probe/$3/illustrations.json"; then reader_args+=(-reader-illustrations "/probe/$3/illustrations.json"); fi
     status=0
@@ -86,6 +88,7 @@ case "${1:-}" in
       -catalog "/probe/$3/zh-TW.tsv" -source-catalog "/probe/$3/en.tsv" -glyphs "/probe/$3/glyphs-16.json" \
       "${fine_args[@]}" \
       "${reader_args[@]}" \
+      "${ui_args[@]}" \
       -translate="$4" -fine="$5" >"/out/$2.log" 2>&1 || status=$?
     cat /sys/fs/cgroup/memory.events >"/out/$2-memory-events.txt"
     exit "$status"' -- "$RUN" "$RESULT" "$INPUT" "$TRANSLATE" "$FINE"
@@ -148,7 +151,7 @@ case "${1:-}" in
   if test "$1" = check;then test ! -e "$PROBE/$RUN/cold-check.json";fi
   timeout 600s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" --memory 3g --cpus 1 --pids-limit 64 \
    --label project=dark-queen-of-krynn-cht -e PYTHONDONTWRITEBYTECODE=1 -v "$ROOT/tools:/tools:ro" \
-   -v "$PROBE:/probe:ro" -v "$PROBE/$RUN:/out" --entrypoint python3 "$PIL_IMAGE" \
+   -v "$PROBE:/probe:ro" -v "$PROBE/$RUN:/out" -v "$ROOT/workplace/translation:/catalogs:ro" --entrypoint python3 "$PIL_IMAGE" \
    /tools/cold_load.py "$1" /probe /out "$EN" "$ZH"
   ;;
  evidence)
