@@ -55,7 +55,7 @@ case "${1:-}" in
     RESULT="${4:?需指定全新比較 JSON 相對路徑}"
     ROLE="${5:-none}"
     relative "$OBS"; relative "$CONTROL"; relative "$RESULT"
-    [[ "$ROLE" = none || "$ROLE" = inventory || "$ROLE" = grimoire ]]
+    [[ "$ROLE" = none || "$ROLE" = inventory || "$ROLE" = grimoire || "$ROLE" = service ]]
     test -d "$PROBE/$OBS"
     test -d "$PROBE/$CONTROL"
     PARENT="$(dirname "$PROBE/$RESULT")"
@@ -90,5 +90,5 @@ case "${1:-}" in
       --entrypoint python3 "$PIL_IMAGE" /tools/ui_context_preview.py \
       "/probe/$OBS" "/probe/$COMPARISON" /text/glossary.tsv /font/jf-openhuninn-2.1.ttf "/out/$(basename "$RESULT")"
     ;;
-  *) printf '%s\n' '用法：ui-context.sh build | run STATE REQUEST RESULT observe|control | check OBS CONTROL RESULT [inventory|grimoire|none] | preview OBS COMPARISON RESULT' >&2; exit 2 ;;
+  *) printf '%s\n' '用法：ui-context.sh build | run STATE REQUEST RESULT observe|control | check OBS CONTROL RESULT [inventory|grimoire|none|service] | preview OBS COMPARISON RESULT' >&2; exit 2 ;;
 esac

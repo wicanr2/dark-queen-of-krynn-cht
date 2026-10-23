@@ -465,7 +465,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
 	if g.list != nil {
-		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition || g.list.clockReturn != nil)
+		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition || g.list.clockReturn != nil || (g.list.feedback != nil && g.list.feedback.Restoring))
 	}
 	if held {
 		if len(g.lastPixels) == 0 {
@@ -502,7 +502,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	g.frames = append(g.frames, liveFrame{Step: g.o.Steps(), Events: len(g.events), File: name, SHA256: digest(readback), Held: held, Active: len(g.active)})
 	if g.list != nil {
-		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage, "paragraph": g.page})
+		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "list_event_count": len(g.list.events), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage, "paragraph": g.page})
 		if g.reader != nil {
 			g.list.frames[len(g.list.frames)-1]["reader"] = g.reader.Page
 			g.reader.WaitDraw = false

@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 
 def sha(data):
@@ -96,11 +96,18 @@ def check(observed, control, output, role):
             sx1, sy1 = min(x1, x1 - dx), min(y1, y1 - dy)
             assert sx0 < sx1 and sy0 < sy1
             moved_pixels = pixels[0].crop((sx0, sy0, sx1, sy1)).tobytes()
-            assert moved_pixels == pixels[1].crop((sx0 + dx, sy0 + dy, sx1 + dx, sy1 + dy)).tobytes()
+            destination = pixels[1].crop((sx0 + dx, sy0 + dy, sx1 + dx, sy1 + dy))
+            equal = moved_pixels == destination.tobytes()
+            if not equal:
+                assert role == "service", "已驗列表的純搬移條件不符"
+            difference = ImageChops.difference(pixels[0].crop((sx0, sy0, sx1, sy1)), destination)
             scroll_geometry[i] = (x0, y0, x1, y1, dx, dy)
             scroll_checks.append({"scroll_index": i, "source_native_rect": [sx0, sy0, sx1 - sx0, sy1 - sy0],
-                                  "delta_native": [dx, dy], "copied_region_pixels_equal": True,
+                                  "delta_native": [dx, dy], "copied_region_pixels_equal": equal,
+                                  "difference_bounds_relative": difference.getbbox(),
+                                  "different_pixels": sum(value != 0 for value in difference.getdata()),
                                   "source_pixels_sha256": sha(moved_pixels),
+                                  "destination_pixels_sha256": sha(destination.tobytes()),
                                   "before_indexed_sha256": sha(pixels[0].tobytes()),
                                   "after_indexed_sha256": sha(pixels[1].tobytes())})
     if "list_events" in a:
@@ -117,6 +124,10 @@ def check(observed, control, output, role):
         assert not checkpoint["file_writes"] and not checkpoint["unimplemented"]
         label = checkpoint["label"]
         assert label and Path(label).name == label
+        if checkpoint.get("indexed_file"):
+            assert checkpoint["indexed_file"] == label + ".idx"
+            for folder in (observed, control):
+                assert sha((folder / checkpoint["indexed_file"]).read_bytes()) == checkpoint["indexed_sha256"]
         with Image.open(observed / (label + ".png")) as x, Image.open(control / (label + ".png")) as y:
             assert x.size == y.size == (320, 200)
             pixels = x.convert("RGB").tobytes()
@@ -199,12 +210,13 @@ def check(observed, control, output, role):
                           "word_after_list_native_rect": rect, "word_scrolls": moved,
                           "foreground": fg, "background_argument": bg})
         matches.append(match)
-    if role != "none":
+    if role in ("inventory", "grimoire"):
         assert matches, "沒有在指定玩家路徑觀測到 Shield"
     result = {"draft": True, "checkpoints_equal": len(images), "images_equal": images,
               "role": role, "native_list_transactions": len(lists),
               "native_scroll_transactions": len(scrolls), "shield_occurrences": matches,
               "scroll_copy_checks": scroll_checks,
+              "scroll_copy_scope": "service 保留原版捲動內的其他重繪差分，不宣稱整區純搬移；其他 role 維持逐色號純搬移要求",
               "paragraph_wrap_space_checks": paragraph_wrap_space_checks,
               "observed_receipt_sha256": sha((observed / "receipt.json").read_bytes()),
               "control_receipt_sha256": sha((control / "receipt.json").read_bytes()),
@@ -221,6 +233,6 @@ if __name__ == "__main__":
     parser.add_argument("observed", type=Path)
     parser.add_argument("control", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--role", choices=("inventory", "grimoire", "none"), default="none")
+    parser.add_argument("--role", choices=("inventory", "grimoire", "none", "service"), default="none")
     args = parser.parse_args()
     print(json.dumps(check(args.observed, args.control, args.output, args.role), ensure_ascii=False))

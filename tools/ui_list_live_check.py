@@ -160,23 +160,39 @@ def check(en_run, zh_run, inputs, control, observed, output):
     bindings = {(row["Pane"], row["SHA256"]): row for row in config["Rows"]}
     wrappers, pane = {}, ""
     timeline = []
+    raw_timeline = []
     for fill in trace["fill_events"]:
         x, y, w, h = fill["native_rect"]
         if not fill["within_list"] and x <= 8 and y <= 8 and x+w >= 312 and y+h >= 184:
-            timeline.append((fill["step"], ""))
+            raw_timeline.append((fill["step"], "clear", ""))
     for wrapper in trace["wrappers"]:
         if wrapper["stack"][3] & 255 == 1:
             found = [h["Pane"] for h in config["Headers"] if wrapper["format"]["segment"] == h["Segment"]
                      and wrapper["format"]["offset"] == h["Offset"] and sha(wrapper["format"]["text"].encode()) == h["SHA256"]]
-            timeline.append((wrapper["step"], found[0] if found else ""))
+            kind = "row-at-title" if wrapper["caller"] in config["RowCallers"] else "header"
+            raw_timeline.append((wrapper["step"], kind, found[0] if found else ""))
     contexts = []
     for original in trace["list_events"]:
+        matched = []
         for source in config["PaneLists"]:
             if source["DescriptorSHA256"] == sha(bytes.fromhex(original["descriptor_before_hex"])) \
                     and source["Caller"] == {"Seg": original["stack"][1], "Off": original["stack"][0]} \
                     and source["MenuSignature"] == original.get("menu_snapshot", {}).get("Signature"):
                 contexts.append((original["step"], source))
-                timeline.append((original["step"], source["Pane"]))
+                matched.append(source["Pane"])
+        assert len(matched) <= 1
+        raw_timeline.append((original["step"], "descriptor", matched[0] if matched else ""))
+    active_pane, descriptor_context = "", False
+    for step, kind, value in sorted(raw_timeline, key=lambda event: event[0]):
+        if kind == "descriptor":
+            if descriptor_context:
+                active_pane = ""
+            descriptor_context = bool(value)
+            if value:
+                active_pane = value
+        elif kind != "row-at-title" or not descriptor_context:
+            active_pane, descriptor_context = value, False
+        timeline.append((step, active_pane))
     hits = [e for e in b["list_events"] if e["Kind"] == "list-context"]
     assert len(hits) == len(contexts)
     for event, (step, source) in zip(hits, contexts):
@@ -184,7 +200,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert event["detail"] == {"descriptor_sha256": source["DescriptorSHA256"], "menu_signature": source["MenuSignature"], "caller": source["Caller"]}
     baselines = [e for e in b["list_events"] if e["Kind"] == "list-page-baseline"]
     pages = [e for e in b["list_events"] if e["Kind"] == "list-render-page"]
-    assert len(baselines) == len(pages) == sum(s["RowFillPage"] for _, s in contexts)
+    expected_baselines = []
+    for step, source in contexts:
+        listing = next(e for e in trace["list_events"] if e["step"] == step)
+        fills = [f for f in trace["fill_events"] if step <= f["step"] <= listing["return_instruction_step"] and f["native_rect"][2] > 0 and f["native_rect"][3] > 0]
+        if source["RowFillPage"] and fills:
+            expected_baselines.append(fills[0])
+    assert len(baselines) == len(pages) == len(expected_baselines)
     for baseline, page in zip(baselines, pages):
         fill = next(f for f in trace["fill_events"] if f["step"] <= baseline["Step"] <= f["return_instruction_step"]
                     and f["native_rect"] == baseline["detail"] and f["within_list"])
@@ -194,6 +216,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert page["detail"]["origin"] == [x, y]
         assert page["detail"]["target_page"] == (page["detail"]["first_write_offset"] - y*80-x//4) & 65535
         assert page["detail"]["target_page"] in (0, 16384)
+        assert page["detail"].get("pre_origin_writes", 0) >= 0
     timeline.sort()
     actor_headers = []
     for step, source in contexts:
@@ -218,6 +241,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         within_list = any(p["step"] <= wrapper["step"] <= p["return_instruction_step"] for p in trace["list_events"])
         if wrapper["format"]["text"] == "%s" and within_list and "\t" in source:
             assert row is not None, (pane, source)
+        if pane in ("shop-stock", "temple-spells") and wrapper["caller"] in config["RowCallers"] and wrapper["stack"][4] & 255 in (7, 11):
+            assert row is not None, ("untranslated observed service row", pane, source)
         if row and wrapper["stack"][4] & 255 in row["Foregrounds"]:
             assert wrapper["caller"] in config["RowCallers"], ("unregistered known-row caller", wrapper["caller"], source)
             wrappers[i] = row
@@ -257,7 +282,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                    and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite", "menu"))
                    and (f["Pane"] != "menu" or f["MenuSignature"] == menu_signature(c))
                    and (f["Pane"] != "callsite" or c["wrapper_index"] >= 0
-                        and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])]
+                        and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"]
+                        and (not f.get("UpperFormatSHA256") or sha(trace["wrappers"][c["wrapper_index"]]["format"]["text"].encode()) == f["UpperFormatSHA256"]))]
         assert len(matches) == 1
         f = matches[0]
         assert e["detail"]["menu_signature"] == f.get("MenuSignature", "")
@@ -269,18 +295,36 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert source["text"][start:start+f["Length"]] == en[f["Key"]]
         if f["Pane"] == "callsite":
             wrapper = trace["wrappers"][c["wrapper_index"]]
-            assert wrapper["step"] < c["step"] and wrapper["format"]["text"] == source["text"]
+            assert wrapper["step"] < c["step"]
+            if f.get("UpperFormatSHA256"):
+                assert sha(wrapper["format"]["text"].encode()) == f["UpperFormatSHA256"]
+                assert wrapper["format"]["text"] in ("%s", "%s%s")
+            else:
+                assert wrapper["format"]["text"] == source["text"]
             expected_upper = f.get("UpperNative",[native(c["stack"][3]),native(c["stack"][2])])
             assert [(wrapper["stack"][n]&255)*8 for n in (2,3)] == expected_upper
+            if f.get("UpperFormatSHA256") and "UpperNative" in f:
+                assert f["UpperNative"] == [0,192] and c["stack"][2:4] == [189,8004]
+                if f["UpperCaller"] == {"Seg":0x088e,"Off":0x1560}:
+                    assert c["stack"][4] == f["Color"] == 0x8f and "BackgroundOverride" not in f
+                else:
+                    assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995}
+                    assert c["stack"][4] == f["Color"] == 0x70 and f["BackgroundOverride"] == 7
+                    assert source["text"] == "items :" and (start,f["Length"]) == (0,5)
         background = f.get("BackgroundOverride",config["Background"])
         if "BackgroundOverride" in f:
-            assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x4BD} and f["UpperNative"] == [56,192]
-            assert c["stack"][2:5] == [189,8032,0x70] and f["Color"] == 0x70 and background == 7
-            assert source["text"] == "Press        to continue." and (start,f["Length"]) in ((0,5),(13,12))
+            if f["UpperCaller"] == {"Seg":0xCEB,"Off":0x4BD}:
+                assert f["UpperNative"] == [56,192] and c["stack"][2:5] == [189,8032,0x70]
+                assert source["text"] == "Press        to continue." and (start,f["Length"]) in ((0,5),(13,12))
+            else:
+                assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995} and f["UpperNative"] == [0,192]
+                assert c["stack"][2:5] == [189,8004,0x70] and source["text"] == "items :"
+                assert (start,f["Length"]) == (0,5)
+            assert f["Color"] == 0x70 and background == 7
             checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
             original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
             foreground=tuple(checkpoint["palette"][0]);bg=tuple(checkpoint["palette"][7])
-            left=64+start*8
+            left=native(c["stack"][3])+start*8
             assert set(original.crop((left,189,left+f["Length"]*8,197)).getdata())=={foreground,bg}
             verified_field_backgrounds.add((f["Key"],background))
         width = f.get("Width", f["Length"]*8)
@@ -325,7 +369,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                and ("Color" not in f or f["Color"] == (c["stack"][4]&255))
                and f["FormatSHA256"] == sha(c["format"]["text"].encode())
                and ((f["Pane"] == "callsite" and c["wrapper_index"] >= 0
-                     and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"])
+                     and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"]
+                     and (not f.get("UpperFormatSHA256") or sha(trace["wrappers"][c["wrapper_index"]]["format"]["text"].encode()) == f["UpperFormatSHA256"]))
                     or (f["Pane"] == "menu" and f["MenuSignature"] == menu_signature(c))
                     or (f["Pane"] not in ("callsite", "menu") and in_list))}
         actual_keys = {key for (step, key), event in field_by_id.items() if step == c["step"] and not event["detail"]["deferred"]}
@@ -349,6 +394,20 @@ def check(en_run, zh_run, inputs, control, observed, output):
 
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
     words, pending_suffix, model, row_positions = {}, None, [], set()
+    feedback, feedback_intervals, service_scroll_checks = None, [], []
+    feedback_proof = None
+    if any(e["Kind"] == "footer-feedback-capture" for e in b["list_events"]):
+        service = read(inputs / "provenance.json")["service_extension"]
+        proof = service["feedback_proof"]
+        proof_path = inputs.parent / proof["receipt"]
+        assert proof_path.resolve().is_relative_to(inputs.parent.resolve())
+        assert sha(proof_path.read_bytes()) == proof["sha256"]
+        feedback_proof = read(proof_path)
+        boundary = service["feedback_boundaries"]
+        boundary_path = inputs.parent / boundary["receipt"]
+        assert boundary_path.resolve().is_relative_to(inputs.parent.resolve())
+        assert sha(boundary_path.read_bytes()) == boundary["sha256"]
+        feedback_boundaries = read(boundary_path)
     page, page_history = None, []
     clear_baselines = []
     wrappers_by_step = {w["step"]: w for w in trace["wrappers"]}
@@ -432,6 +491,50 @@ def check(en_run, zh_run, inputs, control, observed, output):
             pending_suffix = None
         elif kind == "clock-source-reset":
             words = {pos: w for pos, w in words.items() if w["Key"] not in clock_keys}
+        elif kind == "footer-feedback-capture":
+            assert feedback is None and feedback_proof is not None
+            w = wrappers_by_step[e["Step"]]
+            assert w["caller"] == {"Seg": 0x088E, "Off": 0x1560} and w["format"]["text"] == "%s"
+            source = w["vararg_1_candidate"]["text"]
+            rect = [8, 189, len(source)*8, 8]
+            checkpoint = next(c for c in feedback_boundaries["checkpoints"] if c["step"] == e["Step"])
+            raw = (boundary_path.parent / checkpoint["indexed_file"]).read_bytes()
+            assert sha(raw) == checkpoint["indexed_sha256"]
+            before = b"".join(raw[y*320+rect[0]:y*320+rect[0]+rect[2]] for y in range(rect[1], rect[1]+rect[3]))
+            saved = sorted((w for w in words.values() if intersects(w, rect)), key=lambda w:(w["Y"],w["X"]))
+            assert e["detail"] == {"caller":w["caller"], "source_sha256":sha(source.encode()), "native_rect":rect,
+                                    "before_sha256":sha(before), "saved_words":saved or None}
+            feedback = {"entry":e["Step"], "rect":rect, "source_sha":sha(source.encode()), "before_sha":sha(before), "phase":"captured"}
+        elif kind == "footer-feedback-entry":
+            assert feedback is not None and feedback["phase"] == "captured"
+            c = calls_by_step[e["Step"]]
+            assert trace["wrappers"][c["wrapper_index"]]["step"] == feedback["entry"]
+            assert e["detail"] == {"entry_step":feedback["entry"], "native_rect":feedback["rect"], "source_sha256":feedback["source_sha"]}
+            erase(feedback["rect"])
+            feedback["phase"] = "painted"
+        elif kind == "footer-feedback-ready":
+            assert feedback is not None and feedback["phase"] == "painted"
+            w = next(w for w in feedback_proof["wrappers"] if w["step"] == feedback["entry"])
+            assert e["Step"] == w["return_step"]
+            assert e["detail"] == {"entry_step":feedback["entry"], "caller":w["caller"], "ss":w["return_ss"], "sp":w["return_sp"]}
+            feedback.update(phase="ready", ready=e["Step"])
+        elif kind == "footer-feedback-restore-begin":
+            assert feedback is not None and feedback["phase"] == "ready"
+            assert e["detail"]["entry_step"] == feedback["entry"] and e["detail"]["native_rect"] == feedback["rect"]
+            assert e["detail"]["map_mask"] in range(1,16)
+            feedback.update(phase="restoring", restoring=e["Step"])
+        elif kind == "footer-feedback-closed":
+            assert feedback is not None and feedback["phase"] == "restoring"
+            refresh = refresh_sources[e["Step"]]
+            assert refresh["valid"] and refresh["caller"] == {"Seg":0x0CEB,"Off":0x0E18}
+            signature = refresh["menu_snapshot"]["Signature"]
+            assert config["Menus"][signature] == "shop-stock"
+            assert e["detail"]["entry_step"] == feedback["entry"] and e["detail"]["native_rect"] == feedback["rect"]
+            assert e["detail"]["caller"] == refresh["caller"] and e["detail"]["menu_signature"] == signature
+            assert e["detail"]["native_sha256"] == feedback["before_sha"]
+            erase(feedback["rect"])
+            feedback_intervals.append({**feedback,"closed":e["Step"]})
+            feedback = None
         elif kind == "footer-render-entry":
             preserved = False
             if e.get("detail") is not None:
@@ -483,8 +586,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
             source, destination = (sx,sy,sw,sh), (sx+dx,sy+dy,sw,sh)
             before = (observed / original["indexed_before"]).read_bytes()
             after = (observed / original["indexed_after"]).read_bytes()
-            assert all(before[(sy+row)*320+sx:(sy+row)*320+sx+sw] ==
-                       after[(sy+dy+row)*320+sx+dx:(sy+dy+row)*320+sx+dx+sw] for row in range(sh))
+            source_pixels = b"".join(before[(sy+row)*320+sx:(sy+row)*320+sx+sw] for row in range(sh))
+            destination_pixels = b"".join(after[(sy+dy+row)*320+sx+dx:(sy+dy+row)*320+sx+dx+sw] for row in range(sh))
+            if e["Pane"] in ("shop-stock", "temple-spells"):
+                service_scroll_checks.append({"step":e["Step"],"source_sha256":sha(source_pixels),"destination_sha256":sha(destination_pixels),
+                                              "changed_pixels":sum(a!=b for a,b in zip(source_pixels,destination_pixels))})
+            else:
+                assert source_pixels == destination_pixels
             moved, moved_rows = [], set()
             for w in words.values():
                 if intersects(w, source):
@@ -500,6 +608,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
         model.append((e["Step"], expected_words, sorted(row_positions), page))
+    assert feedback is None
     for actual in (a,b):
         assert (actual.get("paragraphs") or []) == page_history
         assert actual.get("final_paragraph") == (model[-1][3] if model else None)
@@ -524,7 +633,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         # 原版仍保留的提示必須留在穩定畫面，不能因模型也把它清掉而通過。
         for checkpoint in actual["checkpoints"]:
             for f in config["Fields"]:
-                if "UpperNative" not in f:
+                if "UpperNative" not in f or f["UpperCaller"] == {"Seg":0x088E,"Off":0x1560}:
                     continue
                 candidates=[event for (step,key),event in field_by_id.items() if step<checkpoint["step"] and key==f["Key"]]
                 if not candidates:
@@ -615,11 +724,20 @@ def check(en_run, zh_run, inputs, control, observed, output):
         return sha(px)
 
     previous, held, translated_frames, model_index = None, 0, 0, -1
+    last_row_frame, copied_row_page, copied_row_pages = None, None, []
+    service_row_keys = {span["Key"] for row in config["Rows"] if row["Pane"] in ("shop-stock","temple-spells") for span in row["Spans"]}
     assert len(b["frames"]) == len(b["list_frames"])
     for frame, state in zip(b["frames"], b["list_frames"]):
         assert frame["step"] == state["step"] and frame["step"] in originals
-        while model_index + 1 < len(model) and model[model_index + 1][0] <= frame["step"]:
-            model_index += 1
+        if "list_event_count" in state:
+            count = state["list_event_count"]
+            assert model_index+1 <= count <= len(model)
+            assert count == 0 or model[count-1][0] <= frame["step"]
+            assert count == len(model) or model[count][0] >= frame["step"]
+            model_index = count-1
+        else:
+            while model_index + 1 < len(model) and model[model_index + 1][0] <= frame["step"]:
+                model_index += 1
         assert (state["words"] or []) == (model[model_index][1] if model_index >= 0 else []), frame["step"]
         expected_page = model[model_index][3] if model_index >= 0 else None
         assert state.get("paragraph") == expected_page, ("paragraph frame lifetime",frame["step"])
@@ -627,6 +745,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if any(start <= frame["step"] < end for start, end in clock_intervals):
             assert frame["held"], ("clock transaction exposed", frame["step"])
         native_state = native_layouts[frame["step"]]
+        if "list_event_count" in state:
+            assert state["list_event_count"] == native_state["list_event_count"]
         assert native_state.get("paragraph") == state.get("paragraph")
         for field in ("display_start", "render_page", "palette"):
             assert state[field] == native_state[field]
@@ -637,7 +757,27 @@ def check(en_run, zh_run, inputs, control, observed, output):
         else:
             # 此契約來自上層列表列；下層靜態標題／提示不共用列表的填色頁生命週期。
             if model_index >= 0 and model[model_index][2]:
-                assert state["display_start"] == state["render_page"]
+                row_words = [w for w in state["words"] if (w["X"],w["Y"]) in model[model_index][2]]
+                if state["display_start"] == state["render_page"]:
+                    last_row_frame, copied_row_page = (original,state,row_words), None
+                elif copied_row_page != (state["render_page"],state["display_start"]):
+                    # 服務返回可先複製整頁，重用列表不再填色。逐詞框驗原版畫格，不能只略過頁面條件。
+                    assert row_words and all(w["Key"] in service_row_keys for w in row_words)
+                    assert last_row_frame is not None
+                    prior_frame, prior_state, prior_words = last_row_frame
+                    assert prior_words == row_words and prior_state["display_start"] == state["render_page"]
+                    prior_pixels, current_pixels = pixels(en_run,prior_frame), pixels(en_run,original)
+                    checks = []
+                    for w in row_words:
+                        x,y,width = w["X"]*2,w["Y"]*2,w["Width"]*2
+                        crop = lambda data: b"".join(data[(yy*640+x)*4:(yy*640+x+width)*4] for yy in range(y,y+16))
+                        before,after = crop(prior_pixels),crop(current_pixels)
+                        assert before == after, ("service row page copy",frame["step"],w["Key"])
+                        checks.append({"key":w["Key"],"rect":[x,y,width,16],"pixels_sha256":sha(after)})
+                    copied_row_page = state["render_page"],state["display_start"]
+                    copied_row_pages.append({"step":frame["step"],"source_step":prior_frame["step"],"pages":list(copied_row_page),"rows":checks})
+            else:
+                last_row_frame, copied_row_page = None, None
             for start, end, (x, y, width, height) in actor_headers:
                 if start <= frame["step"] < end:
                     assert all(w["X"]+w["Width"] <= x or x+width <= w["X"] or w["Y"]+8 <= y or y+height <= w["Y"] for w in state["words"] or [])
@@ -652,6 +792,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
             pixels(zh_run, frame)
         previous = expected_hash
     assert translated_frames > 0
+    for interval in feedback_intervals:
+        visible = [f for f in b["frames"] if interval["ready"] <= f["step"] < interval["restoring"] and not f["held"]]
+        assert visible, "購買回報被過渡畫面遮住"
+        interval["visible_gpu_frames"] = len(visible)
     seen_steps = {f["step"] for f in b["frames"]}
     start = oracle["request"]["start_steps"]
     end = oracle["request"]["actions"][-1]["end"]
@@ -665,6 +809,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "single_row_events": sum(not e["detail"]["within_list"] for e in accepted),
               "list_context_events": len(contexts),
               "list_page_rebases": len(pages),
+              "purchase_feedback": feedback_intervals,
+              "service_scroll_copy_reports": service_scroll_checks,
+              "service_row_page_copy_checks": copied_row_pages,
               "preserved_actor_headers": len(actor_headers),
               "field_events": len(fields), "field_keys": sorted({e["detail"]["key"] for e in fields}),
               "clock_transactions": len(clock_intervals),

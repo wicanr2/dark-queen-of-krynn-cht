@@ -139,6 +139,8 @@ func main() {
 	}
 	var calls []call
 	var wrappers []map[string]any
+	var wrapperPending []pendingCall
+	wrapperRegistered := map[oracle.Addr]bool{}
 	var menus []menuSourceSnapshot
 	var menuRefreshSources []map[string]any
 	var paragraphs []map[string]any
@@ -392,6 +394,22 @@ func main() {
 			wrappers = append(wrappers, map[string]any{"step": o.Steps(), "regs": r, "stack": s,
 				"format": read(s[7], s[6]), "vararg_1_candidate": read(s[9], s[8]),
 				"caller": oracle.Addr{Seg: s[1], Off: s[0]}, "bp_chain_candidates": frames})
+			target := oracle.Addr{Seg: s[1], Off: s[0]}
+			wrapperPending = append(wrapperPending, pendingCall{len(wrappers) - 1, target, r.SS, r.SP + 4})
+			if !wrapperRegistered[target] {
+				wrapperRegistered[target] = true
+				o.OnCall(target, func(_ *oracle.Oracle) {
+					if len(wrapperPending) == 0 {
+						return
+					}
+					p, now := wrapperPending[len(wrapperPending)-1], o.Regs()
+					if p.addr == target && p.ss == now.SS && p.sp == now.SP {
+						wrappers[p.index]["return_step"] = o.Steps()
+						wrappers[p.index]["return_ss"], wrappers[p.index]["return_sp"] = now.SS, now.SP
+						wrapperPending = wrapperPending[:len(wrapperPending)-1]
+					}
+				})
+			}
 		})
 		o.OnCall(entry, func(_ *oracle.Oracle) {
 			if len(calls) >= 10000 {
@@ -484,7 +502,8 @@ func main() {
 		}
 		must(o.Run(a.End - o.Steps()))
 		must(o.WritePNG(filepath.Join(out, a.Label+".png")))
-		checkpoints = append(checkpoints, map[string]any{"label": a.Label, "step": o.Steps(), "regs": o.Regs(), "ram_sha256": digest(ramSnapshot()), "indexed_sha256": digest(o.Indexed()), "palette": o.Palette(), "keys_consumed": o.KeysConsumed(), "file_writes": o.Wrote(), "unimplemented": o.Unimplemented()})
+		must(os.WriteFile(filepath.Join(out, a.Label+".idx"), o.Indexed(), 0644))
+		checkpoints = append(checkpoints, map[string]any{"label": a.Label, "step": o.Steps(), "regs": o.Regs(), "ram_sha256": digest(ramSnapshot()), "indexed_sha256": digest(o.Indexed()), "indexed_file": a.Label + ".idx", "palette": o.Palette(), "keys_consumed": o.KeysConsumed(), "file_writes": o.Wrote(), "unimplemented": o.Unimplemented()})
 	}
 	must(o.SaveStateFile(filepath.Join(out, "final.state")))
 	must(os.WriteFile(filepath.Join(out, "ram.bin"), ramSnapshot(), 0644))
@@ -500,6 +519,7 @@ func main() {
 	}
 	result := map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": digest(stateBytes), "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "menu_refresh_sources": menuRefreshSources, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."}
 	result["paragraphs"], result["pending_paragraphs"] = paragraphs, len(paragraphPending)
+	result["pending_wrappers"] = len(wrapperPending)
 	writeJSON(filepath.Join(out, "receipt.json"), result)
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
 }
