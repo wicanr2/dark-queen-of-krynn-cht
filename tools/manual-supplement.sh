@@ -2,7 +2,7 @@
 # DRAFT：前言、安裝章及已校讀附錄表格的離線檢查。
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE="$ROOT/workplace/probe/manual-gameplay-20261023/supplement-r1"
+SOURCE="$ROOT/workplace/probe/manual-gameplay-20261023/appendix-r1/supplement-review"
 PRIOR=/home/anr2/cht/golden_box/death_knight_of_krynn
 NAME="${1:?全新檢查目錄名稱}"
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]

@@ -2,7 +2,7 @@
 # DRAFT：手冊文字校讀與離線量測，不接入遊戲。
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REVIEW="$ROOT/workplace/probe/manual-gameplay-20261023"
+REVIEW="$ROOT/workplace/probe/manual-gameplay-20261023/appendix-r1/core-review"
 PRIOR=/home/anr2/cht/golden_box/death_knight_of_krynn
 NAME="${1:?全新檢查目錄名稱}"
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]

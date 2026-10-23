@@ -53,7 +53,7 @@ def prepare(project, source, prior, font, output):
                 value=cells[cell];key=f'table.{tid}.row.{row}.{fid}';keys.add(key)
                 translated=text[key]
                 if field['kind']=='literal':
-                    assert re.fullmatch(r'[0-9+*/()%., -]+|—',value),'數值格式錯誤'
+                    assert re.fullmatch(r'[0-9+*/()%., \[\]-]+|[0-9]+d[0-9]+(?:\+[0-9]+)?|—',value),'數值格式錯誤'
                     assert translated==value,('數值變動',cell)
                     numeric+=1
                 elif field['kind']=='mapped':
