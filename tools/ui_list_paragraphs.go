@@ -17,12 +17,21 @@ type listParagraph struct {
 	JournalEntry                  int `json:",omitempty"`
 }
 
+type serviceNotice struct {
+	Entry            uint64
+	Ready, Restoring bool
+}
+
 func (g *liveGame) invalidateListParagraph(x, y, width, height int, reason string) {
 	if g.page == nil || len(g.list.paragraphPaints) > 0 {
 		return
 	}
 	b := g.page.Box
 	if x*2 < b[2] && (x+width)*2 > b[0] && y*2 < b[3] && (y+height)*2 > b[1] {
+		if notice := g.list.serviceNotice; notice != nil && notice.Ready && !notice.Restoring && reason == "native fill" {
+			notice.Restoring = true
+			g.listLog("service-notice-restore-begin", map[string]any{"entry_step": notice.Entry, "native_rect": [4]int{x, y, width, height}})
+		}
 		g.page = nil
 		g.listLog("paragraph-invalidated", map[string]any{"native_rect": [4]int{x, y, width, height}, "reason": reason})
 	}
@@ -38,14 +47,17 @@ func (g *liveGame) installListParagraphs() {
 		suffix := digest([]byte(source))[:20]
 		literal := p.Key == "ecl."+suffix
 		message := p.Key == "message."+suffix && p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x3320}) && p.Foreground == 7 && p.Clear == 1
+		service := p.Key == "service-message."+suffix && p.Caller.Seg == 0x291a &&
+			(p.Caller.Off == 0x0eee || p.Caller.Off == 0x0fd0 || p.Caller.Off == 0x0c7f) &&
+			p.NativeBox == ([4]int{8, 168, 312, 184}) && p.Foreground == 11 && p.Background == 0 && p.Clear == 1 && l.config.Background == 23
 		if p.JournalEntry != 0 && (!message || p.JournalEntry < 1 || p.JournalEntry > 99 ||
 			digest([]byte(l.sources[journalTemplateKey]))[:20] != strings.TrimPrefix(journalTemplateKey, "ui.") ||
 			strings.Count(l.sources[journalTemplateKey], "%s") != 1 ||
 			strings.Replace(l.sources[journalTemplateKey], "%s", strconv.Itoa(p.JournalEntry), 1) != source) {
 			panic("手札編號與完整原文不符")
 		}
-		if source == "" || !(literal || message) || p.SHA256 != digest([]byte(source)) ||
-			g.catalog[p.Key] == "" || p.NativeBox != ([4]int{8, 136, 312, 184}) || p.Foreground > 15 || p.Background != 0 || p.Clear > 1 {
+		if source == "" || !(literal || message || service) || p.SHA256 != digest([]byte(source)) ||
+			g.catalog[p.Key] == "" || (!service && p.NativeBox != ([4]int{8, 136, 312, 184})) || p.Foreground > 15 || p.Background != 0 || p.Clear > 1 {
 			panic("段落來源或安全框不符")
 		}
 	}
@@ -80,7 +92,9 @@ func (g *liveGame) installListParagraphs() {
 			fallback("source or context mismatch")
 			return
 		}
-		if bg == 0 {
+		if strings.HasPrefix(binding.Key, "service-message.") {
+			bg = byte(l.config.Background)
+		} else if bg == 0 {
 			bg = 8
 		}
 		text := g.catalog[binding.Key]
@@ -140,6 +154,13 @@ func (g *liveGame) installListParagraphs() {
 		r := o.Regs()
 		l.paragraphPaints = append(l.paragraphPaints, paintReturn{caller, r.SS, r.SP + 4})
 		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("paragraph-before-glyph", map[string]any{"page": page, "caller": caller, "source_pointer": ptr}))
+		if strings.HasPrefix(binding.Key, "service-message.") && caller == (oracle.Addr{Seg: 0x291a, Off: 0x0fd0}) {
+			if l.serviceNotice != nil {
+				panic("服務段落回報尚未返回")
+			}
+			l.serviceNotice = &serviceNotice{Entry: o.Steps()}
+			g.listLog("service-notice-entry", map[string]any{"key": binding.Key, "caller": caller})
+		}
 		g.openReader(binding)
 		if !registered[caller] {
 			registered[caller] = true
@@ -151,6 +172,15 @@ func (g *liveGame) installListParagraphs() {
 				if p.Addr == caller && p.SS == r.SS && p.SP == r.SP {
 					l.paragraphPaints = l.paragraphPaints[:len(l.paragraphPaints)-1]
 					g.listLog("paragraph-return", map[string]any{"caller": caller, "ss": r.SS, "sp": r.SP})
+					if notice := l.serviceNotice; notice != nil && !notice.Ready && caller == (oracle.Addr{Seg: 0x291a, Off: 0x0fd0}) {
+						menu, ok := readMenuSource(o)
+						if !ok || l.config.Menus[menu.Signature] != "confirm" || !l.footerCompatible(menu.Signature) {
+							panic("服務回報的原版確認底列不符")
+						}
+						notice.Ready = true
+						l.footerTransition = false
+						g.listLog("service-notice-ready", map[string]any{"entry_step": notice.Entry, "caller": caller, "ss": r.SS, "sp": r.SP, "menu_signature": menu.Signature})
+					}
 				}
 			})
 		}

@@ -35,6 +35,60 @@ def check(en_run, zh_run, inputs, control, observed, output):
     zh = catalog(inputs / "zh-TW.tsv")
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
+    provenance = read(inputs / "provenance.json")
+    trade = provenance.get("trade_extension")
+    trade_bindings = []
+    if trade:
+        base = inputs.parent.parent / trade["base"]
+        assert base.resolve().is_relative_to(inputs.parent.parent.resolve())
+        for name, value in trade["base_files"].items():
+            assert Path(name).name == name and sha((base/name).read_bytes()) == value
+        base_en, base_zh = catalog(base/"en.tsv"), catalog(base/"zh-TW.tsv")
+        base_config = read(base/"inputs.json")
+        item_keys = {s["Key"] for row in base_config["Rows"] if row["Pane"] in ("inventory","shop-stock") for s in row["Spans"]}
+        for key, template in trade["formal_templates"].items():
+            assert key == "ui."+sha(template["en"].encode())[:20]
+        for origin in trade["added"]["words"]:
+            key, origin = origin["key"], origin["origin"]
+            if "formal_key" in origin:
+                template = trade["formal_templates"][origin["formal_key"]]
+                expected_source = template["en"].rstrip() if origin.get("lexical_slice") else template["en"]
+                assert (en[key],zh[key]) == (expected_source,template["zh"])
+            else:
+                prefix = trade["formal_templates"][origin["prefix_key"]]
+                suffix = trade["formal_templates"][origin["suffix_key"]]
+                expected_source = suffix["en"] % prefix["en"]
+                if origin.get("lexical_slice"): expected_source = expected_source.rstrip()
+                assert (en[key],zh[key]) == (expected_source,suffix["zh"] % prefix["zh"])
+        boundary = trade["feedback_boundaries"]
+        boundary_path = inputs.parent / boundary["receipt"]
+        assert boundary_path.resolve().is_relative_to(inputs.parent.resolve()) and sha(boundary_path.read_bytes()) == boundary["sha256"]
+        native_boundaries = read(boundary_path)
+        owners = {0xEEE:"ui.a5f32753448bc7d88ee9",0xFD0:"ui.b7bfe11c801993157e68",0xC7F:"ui.7dcd9be2f67dc050f7b6"}
+        for message in trade["messages"]:
+            binding = message["binding"]
+            assert binding["Caller"]["Seg"] == 0x291A and owners[binding["Caller"]["Off"]] == message["template_key"]
+            template = trade["formal_templates"][message["template_key"]]
+            original_args, translated_args = [], []
+            for arg in message["args"]:
+                if arg["kind"] == "integer":
+                    assert type(arg["value"]) is int and arg["value"] >= 0
+                    original_args.append(arg["value"]);translated_args.append(arg["value"])
+                else:
+                    assert arg["kind"] == "term" and arg["key"] in item_keys
+                    assert (en[arg["key"]],zh[arg["key"]]) == (base_en[arg["key"]],base_zh[arg["key"]])
+                    original_args.append(base_en[arg["key"]]);translated_args.append(base_zh[arg["key"]])
+            source = template["en"] % tuple(original_args)+" "
+            translated = template["zh"] % tuple(translated_args)
+            assert binding["Key"] == "service-message."+sha(source.encode())[:20] and binding["SHA256"] == sha(source.encode())
+            assert (en[binding["Key"]],zh[binding["Key"]]) == (source,translated)
+            assert binding["NativeBox"] == [8,168,312,184] and [binding[k] for k in ("Foreground","Background","Clear")] == [11,0,1]
+            cp = next(c for c in native_boundaries["checkpoints"] if c["step"] == message["native_painted_step"])
+            raw = (boundary_path.parent / cp["indexed_file"]).read_bytes()
+            assert sha(raw) == cp["indexed_sha256"]
+            crop = b"".join(raw[y*320+8:y*320+312] for y in range(168,184))
+            assert set(crop) == {11,23} and sha(crop) == message["native_pixels_sha256"]
+            trade_bindings.append(binding)
     messages = [f for f in config.get("Paragraphs",[]) if f["Key"].startswith("message.")]
     if messages:
         provenance = read(inputs / "provenance.json")
@@ -310,7 +364,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 else:
                     assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995}
                     assert c["stack"][4] == f["Color"] == 0x70 and f["BackgroundOverride"] == 7
-                    assert source["text"] == "items :" and (start,f["Length"]) == (0,5)
+                    assert (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
+                        source["text"] in ("Is It a Deal? ","Will you sell it? ") and start == 0 and f["Length"] == len(source["text"].rstrip()))
         background = f.get("BackgroundOverride",config["Background"])
         if "BackgroundOverride" in f:
             if f["UpperCaller"] == {"Seg":0xCEB,"Off":0x4BD}:
@@ -318,8 +373,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert source["text"] == "Press        to continue." and (start,f["Length"]) in ((0,5),(13,12))
             else:
                 assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995} and f["UpperNative"] == [0,192]
-                assert c["stack"][2:5] == [189,8004,0x70] and source["text"] == "items :"
-                assert (start,f["Length"]) == (0,5)
+                assert c["stack"][2:5] == [189,8004,0x70]
+                assert (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
+                    source["text"] in ("Is It a Deal? ","Will you sell it? ") and start == 0 and f["Length"] == len(source["text"].rstrip()))
             assert f["Color"] == 0x70 and background == 7
             checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
             original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
@@ -395,9 +451,23 @@ def check(en_run, zh_run, inputs, control, observed, output):
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
     words, pending_suffix, model, row_positions = {}, None, [], set()
     feedback, feedback_intervals, service_scroll_checks = None, [], []
+    notice, notice_intervals = None, []
+    expected_notices = {p["step"] for p in native_paragraphs if p["caller"] == {"Seg":0x291A,"Off":0xFD0}
+                        and any(f in trade_bindings for f in paragraph_bindings(p))}
+    assert {e["Step"] for e in b["list_events"] if e["Kind"] == "service-notice-entry"} == expected_notices
     feedback_proof = None
+    feedback_candidates = {w["step"]:w for w in trace["wrappers"] if w["caller"] == {"Seg":0x088E,"Off":0x1560}
+                         and w["format"]["text"] == "%s" and any(
+                             f["Pane"] == "callsite" and f["UpperCaller"] == w["caller"]
+                             and f.get("UpperFormatSHA256") == sha(b"%s") and f["SHA256"] == sha(w["vararg_1_candidate"]["text"].encode())
+                             for f in config["Fields"])}
+    def feedback_pane(step):
+        return next((pane for when,pane in reversed(timeline) if when <= step),"")
+    expected_feedback = {step for step in feedback_candidates if feedback_pane(step) in ("shop-stock","inventory")}
+    assert {e["Step"] for e in b["list_events"] if e["Kind"] == "unknown-feedback-original"} == set(feedback_candidates)-expected_feedback
+    assert {e["Step"] for e in b["list_events"] if e["Kind"] == "footer-feedback-capture"} == expected_feedback
     if any(e["Kind"] == "footer-feedback-capture" for e in b["list_events"]):
-        service = read(inputs / "provenance.json")["service_extension"]
+        service = trade or provenance["service_extension"]
         proof = service["feedback_proof"]
         proof_path = inputs.parent / proof["receipt"]
         assert proof_path.resolve().is_relative_to(inputs.parent.resolve())
@@ -427,7 +497,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
             components = [binding["Key"]]
             component_colors = [p["foreground"]]
             box = [v*2 for v in p["native_box"]]
-            bg = p["background"] or 8
+            if binding["Key"].startswith("service-message."):
+                assert binding in trade_bindings
+                bg = 23
+            else:
+                bg = p["background"] or 8
             if not p["clear"]:
                 assert page is not None and page["Box"] == box and page["Background"] == bg
                 component_colors = page.get("ComponentColors",[page["Foreground"]]*len(page["Components"]))+component_colors
@@ -489,22 +563,64 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert not targets, ("missing clear baseline", e["Step"])
             words = {pos: w for pos, w in words.items() if w["Group"] == "footer"}
             pending_suffix = None
+        elif kind == "service-notice-entry":
+            assert notice is None
+            p = paragraph_by_step[e["Step"]]
+            binding = paragraph_bindings(p)[0]
+            assert binding in trade_bindings and p["caller"] == {"Seg":0x291A,"Off":0xFD0}
+            assert e["detail"] == {"key":binding["Key"],"caller":p["caller"]}
+            notice = {"entry":p["step"],"phase":"painted"}
+        elif kind == "service-notice-ready":
+            assert notice is not None and notice["phase"] == "painted"
+            p = paragraph_by_step[notice["entry"]]
+            assert e["Step"] == p["return_step"]
+            button = next(c for c in reversed(trace["calls"]) if c["step"] < e["Step"] and c["caller"] == {"Seg":0xCEB,"Off":0x1BE})
+            signature = menu_signature(button)
+            assert config["Menus"][signature] == "confirm"
+            assert e["detail"] == {"entry_step":notice["entry"],"caller":p["caller"],"ss":p["regs"]["SS"],
+                                    "sp":(p["regs"]["SP"]+4)&65535,"menu_signature":signature}
+            notice.update(phase="ready",ready=e["Step"])
+        elif kind == "service-notice-restore-begin":
+            assert notice is not None and notice["phase"] == "ready"
+            rect = e["detail"]["native_rect"]
+            assert e["detail"]["entry_step"] == notice["entry"]
+            assert any(f["step"] <= e["Step"] <= f["return_instruction_step"] and f["native_rect"] == rect for f in trace["fill_events"])
+            p = paragraph_by_step[notice["entry"]];left,top,right,bottom = p["native_box"];x,y,width,height = rect
+            assert x<right and x+width>left and y<bottom and y+height>top
+            notice.update(phase="restoring",restoring=e["Step"])
+        elif kind == "service-notice-closed":
+            assert notice is not None and notice["phase"] == "restoring"
+            refresh = refresh_sources[e["Step"]]
+            signature = refresh["menu_snapshot"]["Signature"]
+            assert refresh["valid"] and refresh["caller"] == {"Seg":0xCEB,"Off":0xE18} and config["Menus"][signature] == "inventory"
+            assert e["detail"] == {"entry_step":notice["entry"],"caller":refresh["caller"],"menu_signature":signature}
+            erase((8,189,304,8))
+            notice_intervals.append({**notice,"closed":e["Step"]});notice = None
         elif kind == "clock-source-reset":
             words = {pos: w for pos, w in words.items() if w["Key"] not in clock_keys}
+        elif kind == "unknown-feedback-original":
+            w = feedback_candidates[e["Step"]]
+            assert feedback_pane(e["Step"]) not in ("shop-stock","inventory") and e["Pane"] == feedback_pane(e["Step"])
+            assert e["detail"] == {"caller":w["caller"],"source_sha256":sha(w["vararg_1_candidate"]["text"].encode()),"native_rect":[8,189,304,8],"reason":"unrecognized return context"}
+            erase((8,189,304,8))
         elif kind == "footer-feedback-capture":
             assert feedback is None and feedback_proof is not None
             w = wrappers_by_step[e["Step"]]
             assert w["caller"] == {"Seg": 0x088E, "Off": 0x1560} and w["format"]["text"] == "%s"
             source = w["vararg_1_candidate"]["text"]
-            rect = [8, 189, len(source)*8, 8]
+            return_pane = e["detail"].get("return_pane","shop-stock")
+            assert return_pane == e["Pane"] and return_pane in ("shop-stock","inventory")
+            rect = [8, 189, 304 if return_pane == "inventory" else len(source)*8, 8]
             checkpoint = next(c for c in feedback_boundaries["checkpoints"] if c["step"] == e["Step"])
             raw = (boundary_path.parent / checkpoint["indexed_file"]).read_bytes()
             assert sha(raw) == checkpoint["indexed_sha256"]
             before = b"".join(raw[y*320+rect[0]:y*320+rect[0]+rect[2]] for y in range(rect[1], rect[1]+rect[3]))
             saved = sorted((w for w in words.values() if intersects(w, rect)), key=lambda w:(w["Y"],w["X"]))
-            assert e["detail"] == {"caller":w["caller"], "source_sha256":sha(source.encode()), "native_rect":rect,
-                                    "before_sha256":sha(before), "saved_words":saved or None}
-            feedback = {"entry":e["Step"], "rect":rect, "source_sha":sha(source.encode()), "before_sha":sha(before), "phase":"captured"}
+            expected = {"caller":w["caller"], "source_sha256":sha(source.encode()), "native_rect":rect,
+                        "before_sha256":sha(before), "saved_words":saved or None}
+            if "return_pane" in e["detail"]: expected["return_pane"] = return_pane
+            assert e["detail"] == expected
+            feedback = {"entry":e["Step"], "rect":rect, "source_sha":sha(source.encode()), "before_sha":sha(before), "return_pane":return_pane, "phase":"captured"}
         elif kind == "footer-feedback-entry":
             assert feedback is not None and feedback["phase"] == "captured"
             c = calls_by_step[e["Step"]]
@@ -528,7 +644,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             refresh = refresh_sources[e["Step"]]
             assert refresh["valid"] and refresh["caller"] == {"Seg":0x0CEB,"Off":0x0E18}
             signature = refresh["menu_snapshot"]["Signature"]
-            assert config["Menus"][signature] == "shop-stock"
+            assert config["Menus"][signature] == feedback["return_pane"]
             assert e["detail"]["entry_step"] == feedback["entry"] and e["detail"]["native_rect"] == feedback["rect"]
             assert e["detail"]["caller"] == refresh["caller"] and e["detail"]["menu_signature"] == signature
             assert e["detail"]["native_sha256"] == feedback["before_sha"]
@@ -608,7 +724,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
         model.append((e["Step"], expected_words, sorted(row_positions), page))
-    assert feedback is None
+    assert feedback is None and notice is None
     for actual in (a,b):
         assert (actual.get("paragraphs") or []) == page_history
         assert actual.get("final_paragraph") == (model[-1][3] if model else None)
@@ -678,7 +794,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         rectangles = []
         if page is not None:
             x,y,right,bottom = page["Box"]
-            assert [x,y,right,bottom] == [16,272,624,368]
+            if page["Key"].startswith("service-message."):
+                assert [x,y,right,bottom] == [16,336,624,368] and page["Background"] == 23 and page["Foreground"] == 11
+            else:
+                assert [x,y,right,bottom] == [16,272,624,368]
             width,height = right-x,bottom-y
             rectangles.append((x,y,width,height))
             fg,bg = palette[page["Foreground"]],palette[page["Background"]]
@@ -726,6 +845,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     previous, held, translated_frames, model_index = None, 0, 0, -1
     last_row_frame, copied_row_page, copied_row_pages = None, None, []
     service_row_keys = {span["Key"] for row in config["Rows"] if row["Pane"] in ("shop-stock","temple-spells") for span in row["Spans"]}
+    inventory_row_keys = {span["Key"] for row in config["Rows"] if row["Pane"] == "inventory" for span in row["Spans"]}
     assert len(b["frames"]) == len(b["list_frames"])
     for frame, state in zip(b["frames"], b["list_frames"]):
         assert frame["step"] == state["step"] and frame["step"] in originals
@@ -762,7 +882,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     last_row_frame, copied_row_page = (original,state,row_words), None
                 elif copied_row_page != (state["render_page"],state["display_start"]):
                     # 服務返回可先複製整頁，重用列表不再填色。逐詞框驗原版畫格，不能只略過頁面條件。
-                    assert row_words and all(w["Key"] in service_row_keys for w in row_words)
+                    allowed = service_row_keys | inventory_row_keys if trade else service_row_keys
+                    assert row_words and all(w["Key"] in allowed for w in row_words), ("unproved row page",frame["step"])
                     assert last_row_frame is not None
                     prior_frame, prior_state, prior_words = last_row_frame
                     assert prior_words == row_words and prior_state["display_start"] == state["render_page"]
@@ -796,6 +917,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         visible = [f for f in b["frames"] if interval["ready"] <= f["step"] < interval["restoring"] and not f["held"]]
         assert visible, "購買回報被過渡畫面遮住"
         interval["visible_gpu_frames"] = len(visible)
+    for interval in notice_intervals:
+        visible = [f for f in b["frames"] if interval["ready"] <= f["step"] < interval["restoring"] and not f["held"]]
+        assert visible, "鑑定回報被過渡畫面遮住"
+        interval["visible_gpu_frames"] = len(visible)
     seen_steps = {f["step"] for f in b["frames"]}
     start = oracle["request"]["start_steps"]
     end = oracle["request"]["actions"][-1]["end"]
@@ -810,6 +935,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
               "list_context_events": len(contexts),
               "list_page_rebases": len(pages),
               "purchase_feedback": feedback_intervals,
+              "service_notices": notice_intervals,
               "service_scroll_copy_reports": service_scroll_checks,
               "service_row_page_copy_checks": copied_row_pages,
               "preserved_actor_headers": len(actor_headers),
