@@ -29,6 +29,12 @@ def write(path,data):
     path.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
 
+def prompt_mask_width(source,button=False):
+    width=len(source if button else source.rstrip(" "))*8
+    if not button and source=="load which game:":width-=4
+    return width
+
+
 def prepare(text,study,output,observe_name):
     assert not output.exists()
     observed=study/observe_name/"receipt.json"
@@ -68,7 +74,7 @@ def prepare(text,study,output,observe_name):
         binding=dict(Key=key,Group=group,SourceSHA256=sha(source.encode()),FormatSHA256=sha(call["format"]["text"].encode()),
                      Caller=call["caller"],UpperCaller=dict(Seg=0,Off=0),UpperFormatSHA256="",MenuSignature="",
                      RawX=call["stack"][3],RawY=call["stack"][2],X=first["stack"][3],Y=first["stack"][2],
-                     Width=len(source)*8,Background=(call["stack"][4]>>4)&15,Button=button)
+                     Width=prompt_mask_width(source,button),Background=(call["stack"][4]>>4)&15,Button=button)
         if button:
             menu=trace["menus"][call["menu_index"]]
             binding["MenuSignature"]=menu["Signature"];menus[menu["Signature"]]="source"

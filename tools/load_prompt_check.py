@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+from PIL import Image
 
 
 def sha(data):return hashlib.sha256(data).hexdigest()
@@ -48,11 +49,18 @@ def model(probe,a,b):
         key=binding["Key"]
         call=calls_by_step[evidence[key]["call_step"]]
         assert call["glyph_calls"]==evidence[key]["glyph_calls"]
-        assert binding["SourceSHA256"]==sha(en[key].encode()) and binding["Width"]==len(en[key])*8
+        width=len(en[key] if binding["Button"] else en[key].rstrip(" "))*8
+        if not binding["Button"] and en[key]=="load which game:":width-=4
+        assert binding["SourceSHA256"]==sha(en[key].encode()) and binding["Width"]==width
         assert binding["X"]==native(binding["RawX"]) and binding["Y"]==native(binding["RawY"])==189
         assert len(zh[key])*8<=binding["Width"]
         assert binding["Caller"]==call["caller"] and [binding["RawY"],binding["RawX"]]==call["stack"][2:4]
         assert binding["Background"]==(call["stack"][4]>>4)&15
+        if not binding["Button"] and binding["Background"]==7:
+            cp=next(cp for cp in trace["checkpoints"] if cp["step"]>=call["return_step"])
+            original=Image.open(trace_path.parent/(cp["label"]+".png")).convert("RGB")
+            colors=set(original.crop((binding["X"],189,binding["X"]+width,197)).getdata())
+            assert colors=={tuple(cp["palette"][0]),tuple(cp["palette"][7])},("native prompt border",key)
         assert [binding["Y"],binding["X"]]==call["glyph_calls"][0]["stack"][2:4]
         assert binding["FormatSHA256"]==sha(call["format"]["text"].encode())
         if binding["Button"]:

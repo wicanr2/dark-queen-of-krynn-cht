@@ -34,6 +34,13 @@ case "${1:-}" in
     RESULT="${4:?需指定 probe 內的全新輸出相對路徑}"
     MODE="${5:?需指定 observe 或 control}"
     SEED="${6:-}"
+    BOOT="${7:-}"
+    boot_args=()
+    if [[ -n "$BOOT" ]];then
+      relative "$BOOT";test -f "$PROBE/$BOOT"
+      [[ "$STATE" = cold ]]
+      boot_args=(-e "DQK_CONTEXT_BOOT_REQUEST=/probe/$BOOT")
+    fi
     seed_args=()
     if [[ -n "$SEED" ]];then
       [[ "$SEED" =~ ^[A-Za-z0-9][A-Za-z0-9/.-]*$ && "$SEED" != *..* ]]
@@ -51,10 +58,12 @@ case "${1:-}" in
     test -d "$PARENT"
     test "$(stat -c %u:%g "$PARENT")" = "$(id -u):$(id -g)"
     test ! -e "$PROBE/$RESULT"
-    RUN_TIMEOUT=120s
-    if [[ "$STATE" = cold ]];then RUN_TIMEOUT=240s;fi
+    RUN_TIMEOUT="${DQK_CONTEXT_TIMEOUT:-120s}"
+    if [[ "$STATE" = cold && -z "${DQK_CONTEXT_TIMEOUT:-}" ]];then RUN_TIMEOUT=240s;fi
+    [[ "$RUN_TIMEOUT" = 120s || "$RUN_TIMEOUT" = 240s || "$RUN_TIMEOUT" = 300s || "$RUN_TIMEOUT" = 600s ]]
     timeout "$RUN_TIMEOUT" docker run --rm --init --network none --user "$(id -u):$(id -g)" \
       --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
+      "${boot_args[@]}" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" \
       --entrypoint /probe/ui-context-probe "$GO_IMAGE" \
       "$STATE_ARG" "/probe/$REQUEST" "/out/$(basename "$RESULT")" "$MODE" "${seed_args[@]}"

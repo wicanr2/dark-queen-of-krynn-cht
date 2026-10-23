@@ -36,6 +36,60 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    session = provenance.get("session_load_extension")
+    role_alpha = None
+    if session:
+        base = inputs.parent.parent / session["base"]
+        for name,value in session["base_files"].items():
+            assert Path(name).name==name and sha((base/name).read_bytes())==value
+        source_path=inputs.parent.parent/session["observed_path"]
+        assert source_path.resolve().is_relative_to(inputs.parent.parent.resolve())
+        assert session["observed_sha256"]==sha(source_path.read_bytes())
+        source_trace=read(source_path)
+        source_calls={c["step"]:c for c in source_trace["calls"]}
+        formal=Path("/catalogs")
+        for name,value in session["formal_files"].items():assert sha((formal/name).read_bytes())==value
+        formal_en,formal_zh=catalog(formal/"en.tsv"),catalog(formal/"zh-TW.tsv")
+        short_en,short_zh=catalog(inputs.parent/"ui-inputs/en.tsv"),catalog(inputs.parent/"ui-inputs/zh-TW.tsv")
+        roles=inputs.parent.parent/"interactive-menu-inputs-20261022"
+        for name,value in session["role_files"].items():assert sha((roles/name).read_bytes())==value
+        assert (inputs/"role.zh-TW.tsv").read_bytes()==(roles/"zh-TW.tsv").read_bytes()
+        assert (inputs/"glyphs-20.json").read_bytes()==(roles/"glyphs-20.json").read_bytes()
+        role_zh=catalog(inputs/"role.zh-TW.tsv")
+        bank=read(inputs/"glyphs-20.json")
+        assert bank["size"]==20 and bank["height"]==24
+        role_alpha={key:base64.b64decode(value) for key,value in bank["glyphs"].items()}
+        assert all(len(value)==480 for value in role_alpha.values())
+        for run in (a,b):
+            for name in ["glyphs-20.json","role.zh-TW.tsv"]:assert run["list_role_"+name+"_sha256"]==sha((inputs/name).read_bytes())
+        added=[row["binding"] for row in session["added"]]
+        assert len(added)==21 and sum(f.get("FontSize")==20 for f in added)==12
+        assert config["Fields"]==read(base/"inputs.json")["Fields"]+added
+        for row in session["added"]:
+            binding,origin=row["binding"],row["origin"]
+            key=binding["Key"]
+            call=source_calls[row["call_step"]]
+            text=call["vararg_1_candidate"]["text"] if call["format"]["text"]=="%s" else call["format"]["text"]
+            assert text==origin["source"] and binding["SHA256"]==sha(text.encode())
+            assert binding["Caller"]==call["caller"] and [binding["RawY"],binding["RawX"]]==call["stack"][2:4]
+            assert binding["FormatSHA256"]==sha(call["format"]["text"].encode())
+            if binding["Pane"]=="menu":
+                assert binding["MenuSignature"]==source_trace["menus"][call["menu_index"]]["Signature"]
+            else:
+                upper=source_trace["wrappers"][call["wrapper_index"]]
+                assert binding["UpperCaller"]==upper["caller"]
+                assert binding["UpperNative"]==[(upper["stack"][i]&255)*8 for i in (2,3)]
+                assert binding["Color"]==call["stack"][4]
+                assert binding.get("BackgroundOverride",8)==(call["stack"][4]>>4)&15
+            if "role_key" in origin:
+                assert binding["FontSize"]==20 and origin["role_key"]==sha(origin["source"].encode())
+                assert zh[key]==role_zh[origin["role_key"]]
+            elif "short_key" in origin:
+                assert (origin["source"],zh[key])==(short_en[origin["short_key"]],short_zh[origin["short_key"]])
+            else:
+                assert origin["source"].rstrip(" ")==formal_en[origin["formal_key"]].rstrip(" ")
+                assert zh[key]==formal_zh[origin["formal_key"]]
+            assert en[key]==origin["source"].rstrip(" ") and origin["translation"]==zh[key]
     trade = provenance.get("trade_extension")
     trade_bindings = []
     if trade:
@@ -200,6 +254,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert "initial_state_sha256" not in actual
             assert actual["bridge_state_sha256"] == oracle["state_sha256"]
             assert sha((en_run if actual is a else zh_run).joinpath("cold-handoff.state").read_bytes()) == oracle["state_sha256"]
+            if oracle.get("cold_boot"):
+                assert not oracle["snapshot_loaded"] and actual["cold_request_sha256"]==oracle["boot_request_sha256"]
         else:
             assert actual["initial_state_sha256"] == oracle["state_sha256"]
         assert actual["list_request_sha256"] == oracle["request_sha256"]
@@ -211,7 +267,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert len(actual["checkpoints"]) == len(oracle["checkpoints"])
         for x, y in zip(actual["checkpoints"], oracle["checkpoints"]):
             for field in ("label", "step", "regs", "ram_sha256", "indexed_sha256", "palette", "keys_consumed", "file_writes"):
-                offset = actual["cold_checkpoints"][-1]["keys_consumed"] if field == "keys_consumed" and actual.get("cold_boot") else 0
+                offset = actual["cold_checkpoints"][-1]["keys_consumed"] if field == "keys_consumed" and actual.get("cold_boot") and not oracle.get("cold_boot") else 0
                 expected = y[field]+offset if offset else y[field]
                 assert x[field] == expected, (field, x["step"])
         for field in ("regs", "ram_sha256", "indexed_sha256", "palette"):
@@ -372,7 +428,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995}
                     assert c["stack"][4] == f["Color"] == 0x70 and f["BackgroundOverride"] == 7
                     assert (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
-                        source["text"] in ("Is It a Deal? ","Will you sell it? ") and start == 0 and f["Length"] == len(source["text"].rstrip()))
+                        source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip()))
+            if f.get("UpperCaller")=={"Seg":0x2287,"Off":0x316A}:
+                assert source["text"]=="Loading...Please Wait" and f["UpperNative"]==[0,192]
+                assert c["stack"][2:5]==[189,8004,0x8f] and f["Color"]==0x8f and "BackgroundOverride" not in f
         background = f.get("BackgroundOverride",config["Background"])
         if "BackgroundOverride" in f:
             if f["UpperCaller"] == {"Seg":0xCEB,"Off":0x4BD}:
@@ -382,16 +441,22 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995} and f["UpperNative"] == [0,192]
                 assert c["stack"][2:5] == [189,8004,0x70]
                 assert (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
-                    source["text"] in ("Is It a Deal? ","Will you sell it? ") and start == 0 and f["Length"] == len(source["text"].rstrip()))
+                    source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip()))
             assert f["Color"] == 0x70 and background == 7
             checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
             original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
             foreground=tuple(checkpoint["palette"][0]);bg=tuple(checkpoint["palette"][7])
             left=native(c["stack"][3])+start*8
-            assert set(original.crop((left,189,left+f["Length"]*8,197)).getdata())=={foreground,bg}
+            assert set(original.crop((left,189,left+f.get("Width",f["Length"]*8),197)).getdata())=={foreground,bg}
             verified_field_backgrounds.add((f["Key"],background))
         width = f.get("Width", f["Length"]*8)
-        if "Width" in f:
+        if "Width" in f and source["text"]=="load which game:":
+            assert (f["Width"],f["Length"],start)==(124,16,0)
+            assert f["UpperCaller"]=={"Seg":0xCEB,"Off":0x995} and c["stack"][2:5]==[189,8004,0x70]
+            checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
+            original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
+            assert set(original.crop((132,189,136,197)).getdata()).isdisjoint({tuple(checkpoint["palette"][0]),tuple(checkpoint["palette"][7])})
+        elif "Width" in f:
             # 唯一已量測擴框是 AC／HP 的欄間及面板留白，不准任意擴框。
             assert f["UpperCaller"] == {"Seg": 0x205E, "Off": 0x2B9}
             assert source["text"] == "AC\tHP" and (f["Start"], f["Length"], width) in ((0, 2, 24), (3, 2, 24))
@@ -410,6 +475,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 "Background": background}
         if typed_buttons and f["Pane"] == "menu":
             word["Button"] = True
+        if f.get("FontSize"):
+            assert f["FontSize"]==20 and f["MenuSignature"]=="191c0ba49dc03bfaceb8be1ab19c0d92efb10341e05b2c851e46682a74451ed1"
+            assert role_alpha is not None
+            word["FontSize"]=20
         assert e["detail"]["word"] == word
         verified_field_widths.add((f["Key"], width))
         identity = e["Step"], f["Key"]
@@ -487,6 +556,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         feedback_boundaries = read(boundary_path)
     page, page_history = None, []
     clear_baselines = []
+    pending_clear_index = None
     wrappers_by_step = {w["step"]: w for w in trace["wrappers"]}
     def intersects(w, rect):
         x, y, width, height = rect
@@ -558,14 +628,32 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert e["detail"]["reason"] == "field overwrite"
                 assert any(step==e["Step"] and [event["detail"]["word"][k] for k in ("X","Y","Width")]+[8]==rect for (step,key),event in field_by_id.items())
             page = None
+        elif kind == "clear-write-restarted":
+            assert pending_clear_index is not None
+            previous=clear_baselines[pending_clear_index][1]
+            added=sorted((w for w in words.values() if w["Group"]!="footer"),key=lambda w:(w["Y"],w["X"]))
+            assert e["detail"]["previous_targets"]==previous and (e["detail"]["added_targets"] or [])==added
+            merged={}
+            for word in previous+added:merged.setdefault((word["X"],word["Y"],word["Width"]),word)
+            targets=sorted(merged.values(),key=lambda w:(w["Y"],w["X"],w["Width"]))
+            assert e["detail"]["targets"]==targets
+            assert any(f["step"]<=e["Step"]<=f["return_instruction_step"] and f["native_rect"]==e["detail"]["native_rect"] and not f["within_list"] for f in trace["fill_events"])
+            clear_baselines[pending_clear_index]=(e["Step"],targets)
+            words={pos:w for pos,w in words.items() if w["Group"]=="footer"}
+        elif kind == "pane-cleared":
+            assert pending_clear_index is not None
+            assert e["detail"]["targets"]==clear_baselines[pending_clear_index][1]
+            pending_clear_index=None
         elif kind in ("pane-invalidate", "clear-write-baseline"):
             targets = sorted((w for w in words.values() if w["Group"] != "footer"), key=lambda w:(w["Y"],w["X"]))
             if kind == "clear-write-baseline":
+                assert pending_clear_index is None,("dropped pending clear",e["Step"])
                 assert targets and e["detail"]["targets"] == targets
                 assert any(f["step"] <= e["Step"] <= f["return_instruction_step"] and not f["within_list"]
                            and f["native_rect"][0] <= 8 and f["native_rect"][1] <= 8
                            and f["native_rect"][0]+f["native_rect"][2] >= 312 and f["native_rect"][1]+f["native_rect"][3] >= 184 for f in trace["fill_events"])
                 clear_baselines.append((e["Step"], targets))
+                pending_clear_index=len(clear_baselines)-1
             else:
                 assert not targets, ("missing clear baseline", e["Step"])
             words = {pos: w for pos, w in words.items() if w["Group"] == "footer"}
@@ -658,6 +746,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
             erase(feedback["rect"])
             feedback_intervals.append({**feedback,"closed":e["Step"]})
             feedback = None
+        elif kind == "load-caption-ready":
+            loading_wrappers=[w for w in trace["wrappers"] if w["return_step"]==e["Step"] and w["caller"]=={"Seg":0x2287,"Off":0x316A}]
+            assert len(loading_wrappers)==1
+            w=loading_wrappers[0]
+            assert w["format"]["text"]=="Loading...Please Wait"
+            assert e["detail"]=={"caller":w["caller"],"ss":w["return_ss"],"sp":w["return_sp"],"source_sha256":sha(w["format"]["text"].encode())}
         elif kind == "footer-render-entry":
             preserved = False
             if e.get("detail") is not None:
@@ -731,7 +825,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
         model.append((e["Step"], expected_words, sorted(row_positions), page))
-    assert feedback is None and notice is None
+    assert feedback is None and notice is None and pending_clear_index is None
     for actual in (a,b):
         assert (actual.get("paragraphs") or []) == page_history
         assert actual.get("final_paragraph") == (model[-1][3] if model else None)
@@ -783,7 +877,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert cleared or any(p["Clear"] for p in page_history), "沒有列表清除或段落替換"
     for event, (start, targets) in zip(cleared, clear_baselines):
         assert start < event["Step"] and event["detail"]["targets"] == targets
-    assert all(e["detail"]["pixels"] == sum(w["Width"] * 8 for w in e["detail"]["targets"]) for e in cleared)
+    assert all(e["detail"]["pixels"] == len({y*320+x for w in e["detail"]["targets"] for y in range(w["Y"],w["Y"]+8) for x in range(w["X"],w["X"]+w["Width"])}) for e in cleared)
     assert all(e["detail"]["target_page"] == e["detail"]["visible_page"] for e in cleared)
     originals = {}
     native_layouts = {s["step"]: s for s in a["list_frames"]}
@@ -837,7 +931,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert (w["Width"] == len(en[w["Key"]])*8 or (w["Key"], w["Width"]) in verified_field_widths)
             assert w["Background"] == config["Background"] or (w["Key"],w["Background"]) in verified_field_backgrounds
             assert 0 <= x < x + width <= 640 and 0 <= y < y + 16 <= 400
-            assert len(zh[w["Key"]]) * 16 <= width
+            size=w.get("FontSize",16)
+            assert size in (16,20) and (size==16 or role_alpha is not None)
+            assert len(zh[w["Key"]]) * size <= width
             assert all(x + width <= xx or xx + ww <= x or y + 16 <= yy or yy + hh <= y for xx, yy, ww, hh in rectangles)
             rectangles.append((x, y, width, 16))
             fg, bg = palette[w["Foreground"]], palette[w["Background"]]
@@ -845,11 +941,14 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for yy in range(y, y + 16):
                 at = (yy * 640 + x) * 4
                 px[at:at + width * 4] = row
+            text_y=y-2 if size==20 else y
+            assert 0<=text_y and text_y+(24 if size==20 else 16)<=400
+            selected_alpha=role_alpha if size==20 else alpha
             for col, ch in enumerate(zh[w["Key"]]):
-                for off, value in enumerate(alpha[ch][:256]):
+                for off, value in enumerate(selected_alpha[ch] if size==20 else selected_alpha[ch][:256]):
                     if value:
-                        yy, xx = divmod(off, 16)
-                        at = ((y + yy) * 640 + x + col * 16 + xx) * 4
+                        yy, xx = divmod(off, size)
+                        at = ((text_y + yy) * 640 + x + col * size + xx) * 4
                         for channel in range(3):
                             px[at + channel] = (fg[channel] * value + px[at + channel] * (255 - value) + 127) // 255
         paint_reader(px,reader_page,palette,alpha,reader_images)
@@ -934,12 +1033,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         visible = [f for f in b["frames"] if interval["ready"] <= f["step"] < interval["restoring"] and not f["held"]]
         assert visible, "鑑定回報被過渡畫面遮住"
         interval["visible_gpu_frames"] = len(visible)
-    seen_steps = {f["step"] for f in b["frames"]}
     start = oracle["request"]["start_steps"]
     end = oracle["request"]["actions"][-1]["end"]
-    for lo, hi in config["fine_windows"]:
-        if start <= lo < hi <= end:
-            assert all(step in seen_steps for step in range(lo + 2000, hi + 1, 2000)), (lo, hi)
+    for receipt in (a,b):
+        for lo,hi in config["fine_windows"]:
+            if start<=lo<hi<=end:
+                gaps=[right["step"]-left["step"] for left,right in zip(receipt["frames"],receipt["frames"][1:]) if right["step"]>lo and left["step"]<hi]
+                assert gaps and max(gaps)<=2000,("paint observation gap",lo,hi,max(gaps) if gaps else None)
     result = {"draft": True, "real_gpu_readback_frames": len(b["frames"]), "held_frames": held,
               "translated_frames": translated_frames, "original_checkpoints_equal": len(b["checkpoints"]),
               "observed_unique_rows": len({e["detail"]["source_sha256"] for e in accepted}),

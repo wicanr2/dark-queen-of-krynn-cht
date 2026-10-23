@@ -55,11 +55,12 @@ def gameplay(output):
 def fine_windows(output):
     trace=load(output/"observe-r1/receipt.json")
     intervals=[]
+    limit=load(output/"gameplay-request.json")["Actions"][-1]["End"]
     for key,endkey in [("calls","return_step"),("wrappers","return_step"),
                        ("fill_events","return_instruction_step"),("paragraphs","return_step")]:
         for e in trace[key] or []:
             assert e[endkey]>e["step"]
-            intervals.append([max(355000000,e["step"]-2000),min(500000000,e[endkey]+2000)])
+            intervals.append([max(355000000,e["step"]-2000),min(limit,e[endkey]+2000)])
     merged=[]
     for start,end in sorted(intervals):
         if merged and start<=merged[-1][1]:merged[-1][1]=max(merged[-1][1],end)

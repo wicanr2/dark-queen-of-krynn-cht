@@ -90,7 +90,14 @@ func (g *liveGame) installColdPrompts(path string) {
 	}
 	for _, b := range u.Config.Bindings {
 		source, ok := u.Sources[b.Key]
-		if !ok || digest([]byte(source)) != b.SourceSHA256 || u.Catalog[b.Key] == "" || len(source)*8 != b.Width || len([]rune(u.Catalog[b.Key]))*8 > b.Width ||
+		width := len(source) * 8
+		if !b.Button && b.SourceSHA256 == loadSourcePromptSHA256 && b.Group == "source" {
+			width -= 8
+		}
+		if !b.Button && b.SourceSHA256 == loadSlotPromptSHA256 && b.Group == "slots" {
+			width -= 4
+		}
+		if !ok || digest([]byte(source)) != b.SourceSHA256 || u.Catalog[b.Key] == "" || width != b.Width || len([]rune(u.Catalog[b.Key]))*8 > b.Width ||
 			b.X < 0 || b.Y != 189 || b.X+b.Width > 312 || b.Background > 15 ||
 			(b.Button && (b.Caller != (oracle.Addr{Seg: 0xceb, Off: 0x1be}) || u.Config.Menus[b.MenuSignature] == "")) ||
 			(!b.Button && (b.Caller != (oracle.Addr{Seg: 0xb72, Off: 0x27c}) || b.UpperCaller == (oracle.Addr{}))) {

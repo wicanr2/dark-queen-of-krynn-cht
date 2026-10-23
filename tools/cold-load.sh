@@ -66,8 +66,8 @@ case "${1:-}" in
   TRANSLATE=true; FINE=false
   case "$1" in en|fine-en) TRANSLATE=false;; esac
   case "$1" in fine-*) FINE=true;; esac
-  timeout --kill-after=10s 1800s docker run --rm --pull never --init --network none --user "$(id -u):$(id -g)" --memory 3g --cpus 2 --pids-limit 128 \
-   --label project=dark-queen-of-krynn-cht -e GOMAXPROCS=2 -e GOMEMLIMIT=1GiB \
+  timeout --kill-after=10s 2200s docker run --rm --pull never --init --network none --user "$(id -u):$(id -g)" --memory 6g --cpus 2 --pids-limit 128 \
+   --label project=dark-queen-of-krynn-cht -e GOMAXPROCS=2 -e GOMEMLIMIT=2GiB \
    -v "$PROBE:/probe:ro" -v "$PROBE/$RUN:/out" -v "$ORIG:/orig:ro" --entrypoint bash "$GO_IMAGE" -c '
     set -e
     Xvfb :99 -screen 0 800x600x24 -nolisten tcp >/tmp/xvfb.log 2>&1 & xvfb_pid=$!
@@ -82,7 +82,7 @@ case "${1:-}" in
     if test -f "/probe/$3/reader.zh-TW.tsv"; then reader_args=(-reader-catalog "/probe/$3/reader.zh-TW.tsv"); fi
     if test -f "/probe/$3/illustrations.json"; then reader_args+=(-reader-illustrations "/probe/$3/illustrations.json"); fi
     status=0
-    /probe/ui-list-live -list -cold-load "/probe/$1/boot.json" \
+    timeout --kill-after=10s 2100s /probe/ui-list-live -list -cold-load "/probe/$1/boot.json" \
       -cold-save /probe/camp-live-zh-fine-20261022/scratch/SAVE -cold-role-inputs /probe/interactive-menu-inputs-20261022 \
       -out "/out/$2" -list-request "/probe/$1/gameplay-request.json" -list-inputs "/probe/$3/inputs.json" \
       -catalog "/probe/$3/zh-TW.tsv" -source-catalog "/probe/$3/en.tsv" -glyphs "/probe/$3/glyphs-16.json" \
@@ -135,13 +135,17 @@ case "${1:-}" in
   EN="${3:?英文子目錄}"; ZH="${4:?中文子目錄}"
   [[ "$EN" =~ ^[a-z0-9][a-z0-9-]+$ && "$ZH" =~ ^[a-z0-9][a-z0-9-]+$ ]]
   PREFIX=""; REPORT=gameplay-check.json
+  INPUT="${5:-services-trade-20261023/inputs-r2}"
+  [[ "$INPUT" =~ ^[a-z0-9][a-z0-9/.-]*$ && "$INPUT" != *..* ]]
+  test -f "$PROBE/$INPUT/inputs.json"
   if test "$1" = check-legacy;then PREFIX=legacy-;REPORT=legacy-check.json;fi
   test -f "$PROBE/$RUN/$EN/receipt.json";test -f "$PROBE/$RUN/$ZH/receipt.json"
   test -f "$PROBE/$RUN/${PREFIX}control-r1/receipt.json";test -f "$PROBE/$RUN/${PREFIX}observe-r1/receipt.json"
   test ! -e "$PROBE/$RUN/$REPORT"
-  timeout 600s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" --memory 3g --cpus 1 --pids-limit 64 \
+  timeout 600s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" --memory 8g --cpus 1 --pids-limit 64 \
    --label project=dark-queen-of-krynn-cht -e PYTHONDONTWRITEBYTECODE=1 -v "$ROOT/tools:/tools:ro" -v "$PROBE:/probe:ro" -v "$PROBE/$RUN:/out" \
-   --entrypoint python3 "$PIL_IMAGE" /tools/ui_list_live_check.py "/out/$EN" "/out/$ZH" /probe/services-trade-20261023/inputs-r2 \
+   -v "$ROOT/workplace/translation:/catalogs:ro" \
+   --entrypoint python3 "$PIL_IMAGE" /tools/ui_list_live_check.py "/out/$EN" "/out/$ZH" "/probe/$INPUT" \
    "/out/${PREFIX}control-r1" "/out/${PREFIX}observe-r1" "/out/$REPORT"
   ;;
  check|negative)
@@ -149,7 +153,7 @@ case "${1:-}" in
   [[ "$EN" =~ ^[a-z0-9][a-z0-9-]+$ && "$ZH" =~ ^[a-z0-9][a-z0-9-]+$ ]]
   test -f "$PROBE/$RUN/$EN/receipt.json"; test -f "$PROBE/$RUN/$ZH/receipt.json"
   if test "$1" = check;then test ! -e "$PROBE/$RUN/cold-check.json";fi
-  timeout 600s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" --memory 3g --cpus 1 --pids-limit 64 \
+  timeout 600s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" --memory 8g --cpus 1 --pids-limit 64 \
    --label project=dark-queen-of-krynn-cht -e PYTHONDONTWRITEBYTECODE=1 -v "$ROOT/tools:/tools:ro" \
    -v "$PROBE:/probe:ro" -v "$PROBE/$RUN:/out" -v "$ROOT/workplace/translation:/catalogs:ro" --entrypoint python3 "$PIL_IMAGE" \
    /tools/cold_load.py "$1" /probe /out "$EN" "$ZH"

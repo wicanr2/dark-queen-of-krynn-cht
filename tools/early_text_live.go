@@ -1134,7 +1134,7 @@ func main() {
 		if !c.ready {
 			panic("冷讀未接回遊戲")
 		}
-		result["scope"] = "DRAFT continuous MZ cold-load J: approved 20px role labels and existing 16px gameplay prototype; load-source/slot prompts remain original; no complete-game claim"
+		result["scope"] = "DRAFT continuous MZ cold-load J: approved 20px role labels and existing 16px gameplay prototype; translated captions are identified by cold_ui and list_events; no complete-game claim"
 		result["cold_boot"] = true
 		g.coldPromptsReceipt(result)
 		result["snapshot_loaded"] = false

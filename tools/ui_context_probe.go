@@ -26,6 +26,13 @@ func writeJSON(path string, value any) {
 	must(err)
 	must(os.WriteFile(path, append(b, '\n'), 0644))
 }
+func probeRAM(o *oracle.Oracle) []byte {
+	ram := make([]byte, 1<<20)
+	for i := range ram {
+		ram[i] = o.Byte(oracle.Addr{Seg: uint16(i >> 4), Off: uint16(i & 15)})
+	}
+	return ram
+}
 
 type action struct {
 	At    uint64 `json:"at"`
@@ -72,7 +79,8 @@ func main() {
 	if (len(os.Args) != 5 && len(os.Args) != 6) || (os.Args[4] != "observe" && os.Args[4] != "control") {
 		panic("用法：ui-context-probe 原版快照 request.json 全新輸出目錄 observe|control [唯讀 J 槽目錄]")
 	}
-	coldBoot := os.Args[1] == "-"
+	bootPath := os.Getenv("DQK_CONTEXT_BOOT_REQUEST")
+	coldBoot := os.Args[1] == "-" || bootPath != ""
 	var stateBytes []byte
 	var err error
 	if !coldBoot {
@@ -87,7 +95,10 @@ func main() {
 	if !coldBoot {
 		stateSHA = digest(stateBytes)
 	}
-	if stateSHA != req.StateSHA || len(req.Actions) == 0 || (coldBoot && req.Start != 0) {
+	if coldBoot && bootPath != "" {
+		stateSHA = req.StateSHA // 稍後以真正 MZ 冷啟動重生快照驗證，沒有載入它。
+	}
+	if stateSHA != req.StateSHA || len(req.Actions) == 0 || (coldBoot && bootPath == "" && req.Start != 0) {
 		panic("輸入快照或動作不符")
 	}
 	last := req.Start
@@ -145,6 +156,51 @@ func main() {
 			must(os.WriteFile(target, data, 0644))
 			must(os.Chtimes(target, info.ModTime(), info.ModTime()))
 			seedFiles = append(seedFiles, map[string]any{"name": spec.name, "bytes": len(data), "sha256": spec.sha, "mtime_ns": info.ModTime().UnixNano()})
+		}
+	}
+	var bootSHA string
+	var bootCheckpoints []map[string]any
+	if bootPath != "" {
+		data, e := os.ReadFile(bootPath)
+		must(e)
+		bootSHA = digest(data)
+		var boot struct {
+			Actions []struct {
+				At, End          uint64
+				Kind, Key, Label string
+			}
+			Handoff, QuizStep uint64
+			QuizSHA256        string
+		}
+		must(json.Unmarshal(data, &boot))
+		if o.Steps() != 0 || req.Start != 355000000 || len(boot.Actions) != 12 || boot.Handoff != req.Start || boot.QuizStep != req.Start || len(stateSHA) != 64 {
+			panic("未知 MZ 前段請求")
+		}
+		for _, a := range boot.Actions {
+			if a.At < o.Steps() || a.End <= a.At || a.End > req.Start {
+				panic("MZ 前段順序不符")
+			}
+			must(o.Run(a.At - o.Steps()))
+			if a.Kind == "text" {
+				must(o.TypeKeys(a.Key))
+			} else if a.Kind == "named" {
+				must(o.SendKeys(a.Key))
+			} else {
+				panic("未知 MZ 前段按鍵")
+			}
+			must(o.Run(a.End - o.Steps()))
+			// 沿既有冷啟動控制組的觀測順序；讀 VGA 記憶體會更新鎖存器。
+			bootCheckpoints = append(bootCheckpoints, map[string]any{"step": o.Steps(), "label": a.Label, "ram_sha256": digest(probeRAM(o))})
+		}
+		if digest(o.Indexed()) != boot.QuizSHA256 {
+			panic("MZ 查驗頁不符")
+		}
+		file := filepath.Join(out, "cold-handoff.state")
+		must(o.SaveStateFile(file))
+		raw, e := os.ReadFile(file)
+		must(e)
+		if digest(raw) != stateSHA {
+			panic("MZ 前段快照不符")
 		}
 	}
 	if o.Steps() != req.Start {
@@ -578,6 +634,11 @@ func main() {
 	result := map[string]any{"draft": true, "observe": observe, "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "exe_sha256": digest(exe), "state_sha256": stateSHA, "request_sha256": digest(requestBytes), "probe_sha256": digest(binary), "request": req, "calls": calls, "wrappers": wrappers, "menus": menus, "menu_refresh_sources": menuRefreshSources, "list_events": listEvents, "pending_lists": len(listStack), "scroll_events": scrollEvents, "pending_scrolls": len(scrollPending), "fill_events": fillEvents, "pending_fills": len(fillStack), "shield_candidate_indices": matches, "pending_calls": len(pending), "checkpoints": checkpoints, "limits": "Original normal key input from a normal-route snapshot; no translation or GUI claim. Varargs and BP chain entries are raw candidates, not a complete formatter or verified frame walker."}
 	if coldBoot {
 		result["cold_boot"], result["snapshot_loaded"] = true, false
+		if bootPath != "" {
+			result["boot_request_sha256"] = bootSHA
+			result["handoff_sha256"] = stateSHA
+			result["cold_checkpoints"] = bootCheckpoints
+		}
 		result["limits"] = "Original MZ cold boot with normal keys; observation only, no translation or GUI claim. Varargs and BP chain entries remain raw candidates."
 	}
 	result["paragraphs"], result["pending_paragraphs"] = paragraphs, len(paragraphPending)

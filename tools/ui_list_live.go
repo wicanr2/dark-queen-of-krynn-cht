@@ -12,6 +12,12 @@ import (
 	"github.com/wicanr2/dosgolem/oracle"
 )
 
+const (
+	loadCaptionSHA256      = "e920b38b45dd6a828b466a06f4c4c4f63645f1c6a82e488599dc3da46b5280f2"
+	loadSlotPromptSHA256   = "bdfc8bea7098ec4c1ac58a223e1413f9515e3b431ff3a1ae4443ed7d310c2ab5"
+	loadSourcePromptSHA256 = "182163c56c8454b5fc30c381a74bd6a710bc0d0bdbc991e1a12e05ad8206c271"
+)
+
 type listAction struct {
 	At, End          uint64
 	Kind, Key, Label string
@@ -53,6 +59,7 @@ type listField struct {
 	Caller, UpperCaller                    oracle.Addr
 	UpperNative                            *[2]int
 	BackgroundOverride, Color              *byte
+	FontSize                               int `json:",omitempty"`
 }
 type listFieldWrapper struct {
 	Return paintReturn
@@ -75,6 +82,7 @@ type listWord struct {
 	Group                  string
 	Foreground, Background byte
 	Button                 bool `json:"Button,omitempty"`
+	FontSize               int  `json:",omitempty"`
 }
 type listTextEvent struct {
 	Step       uint64
@@ -94,9 +102,11 @@ type listFeedback struct {
 	Started, Ready, Restoring bool
 }
 type listState struct {
+	inputsPath             string
 	request                listRequest
 	config                 listConfig
 	sources                map[string]string
+	roleGlyphs             glyphSet
 	pane                   string
 	words                  map[[2]int]listWord
 	events                 []listTextEvent
@@ -104,6 +114,7 @@ type listState struct {
 	paints, fills, scrolls []paintReturn
 	clearTargets           []listWord
 	clearCovered           map[int]bool
+	clearExpected          int
 	clearPending           bool
 	awaitGlyphs            []int
 	videoSample            []map[string]any
@@ -231,6 +242,7 @@ func (l *listState) footerCompatible(signature string) bool {
 }
 func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	l := g.list
+	l.inputsPath = inputs
 	o := g.o
 	l.words = map[[2]int]listWord{}
 	l.clockKeys = map[string]bool{}
@@ -277,6 +289,25 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	}
 	for _, f := range l.config.Fields {
+		slotWidth := f.Pane == "callsite" && f.Group == "footer" && f.SHA256 == loadSlotPromptSHA256 && f.RawX == 8004 && f.RawY == 189 &&
+			f.Start == 0 && f.Length == 16 && f.Width == 124 && f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x995}) &&
+			f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
+			f.Color != nil && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7
+		if f.FontSize != 0 {
+			if f.FontSize != 20 || f.Pane != "menu" || f.MenuSignature != "191c0ba49dc03bfaceb8be1ab19c0d92efb10341e05b2c851e46682a74451ed1" ||
+				f.Group != "footer" || f.Caller != (oracle.Addr{Seg: 0xCEB, Off: 0x1BE}) || f.RawY < 119 || f.RawY > 189 {
+				panic("未驗證的角色字級綁定")
+			}
+			if l.roleGlyphs.Size == 0 {
+				raw, err := os.ReadFile(filepath.Join(filepath.Dir(inputs), "glyphs-20.json"))
+				must(err)
+				must(json.Unmarshal(raw, &l.roleGlyphs))
+			}
+			roles := readLiveCatalog(filepath.Join(filepath.Dir(inputs), "role.zh-TW.tsv"))
+			if l.roleGlyphs.Size != 20 || l.roleGlyphs.Height != 24 || roles[f.SHA256] != g.catalog[f.Key] || len([]rune(g.catalog[f.Key]))*10 > f.Length*8 {
+				panic("角色管理需沿用已確認的 20px 輸入")
+			}
+		}
 		if f.UpperFormatSHA256 != "" && (f.Pane != "callsite" || len(f.UpperFormatSHA256) != 64 ||
 			(f.UpperFormatSHA256 != digest([]byte("%s")) && f.UpperFormatSHA256 != digest([]byte("%s%s")))) {
 			panic("未驗證的上層組句格式")
@@ -293,7 +324,12 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.Width == 0 && f.Start == 0 && f.UpperFormatSHA256 == digest([]byte("%s")) &&
 				((f.Length == 5 && l.sources[f.Key] == "items") ||
 					(f.Length == len(l.sources[f.Key]) && (l.sources[f.Key] == "Is It a Deal?" || l.sources[f.Key] == "Will you sell it?")))
-			if !prompt && !purchase && !itemsLabel {
+			loadPrompt := f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.Pane == "callsite" && f.Group == "footer" && f.RawX == 8004 && f.RawY == 189 &&
+				f.Start == 0 && (f.Width == 0 || slotWidth) && f.Length == len(l.sources[f.Key]) && f.Color != nil && ((f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x995}) && f.UpperFormatSHA256 == digest([]byte("%s")) && *f.Color == 0x70 &&
+				f.BackgroundOverride != nil && *f.BackgroundOverride == 7 &&
+				(f.SHA256 == "27f835efb80b2af751f472f06171037b89065c6143ee753de6944a644900b081" || f.SHA256 == loadSourcePromptSHA256 || f.SHA256 == loadSlotPromptSHA256)) ||
+				(f.UpperCaller == (oracle.Addr{Seg: 0x2287, Off: 0x316A}) && f.UpperFormatSHA256 == "" && *f.Color == 0x8f && f.BackgroundOverride == nil && f.SHA256 == loadCaptionSHA256))
+			if !prompt && !purchase && !itemsLabel && !loadPrompt {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
@@ -307,7 +343,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		if width == 0 {
 			width = f.Length * 8
 		}
-		if f.Start < 0 || f.Length <= 0 || len(l.sources[f.Key]) != f.Length || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key]))*8 > width || width < f.Length*8 || width > 320 || width%8 != 0 ||
+		if f.Start < 0 || f.Length <= 0 || len(l.sources[f.Key]) != f.Length || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key]))*8 > width || (width < f.Length*8 && !slotWidth) || width > 320 || (width%8 != 0 && !slotWidth) ||
 			(f.Group != "header" && f.Group != "body" && f.Group != "footer") ||
 			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix" && f.Pane != "callsite" && f.Pane != "menu") ||
 			(f.Pane == "menu" && (len(f.MenuSignature) != 64 || l.config.Menus[f.MenuSignature] == "")) ||
@@ -390,14 +426,34 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		x, y, w, h := v[1], v[0], v[3]-v[1], v[2]-v[0]
 		g.invalidateListParagraph(x, y, w, h, "native fill")
 		if len(l.paints) == 0 && x <= 8 && y <= 8 && x+w >= 312 && y+h >= 184 {
+			previous := append([]listWord(nil), l.clearTargets...)
+			restarting := l.clearPending
 			l.awaitPageFlip = true
 			l.renderPageKnown = false
 			l.renderOrigin = [2]int{x, y}
-			l.clearTargets = nil
+			var added []listWord
 			for p, word := range l.words {
 				if word.Group != "footer" {
-					l.clearTargets = append(l.clearTargets, word)
+					added = append(added, word)
 					delete(l.words, p)
+				}
+			}
+			sort.Slice(added, func(i, j int) bool {
+				if added[i].Y != added[j].Y {
+					return added[i].Y < added[j].Y
+				}
+				return added[i].X < added[j].X
+			})
+			l.clearTargets = nil
+			seen := map[[3]int]bool{}
+			if !restarting {
+				previous = nil
+			}
+			for _, word := range append(append([]listWord(nil), previous...), added...) {
+				key := [3]int{word.X, word.Y, word.Width}
+				if !seen[key] {
+					l.clearTargets = append(l.clearTargets, word)
+					seen[key] = true
 				}
 			}
 			// 固定順序才能與控制組逐事件比較。
@@ -405,12 +461,28 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				if l.clearTargets[i].Y != l.clearTargets[j].Y {
 					return l.clearTargets[i].Y < l.clearTargets[j].Y
 				}
-				return l.clearTargets[i].X < l.clearTargets[j].X
+				if l.clearTargets[i].X != l.clearTargets[j].X {
+					return l.clearTargets[i].X < l.clearTargets[j].X
+				}
+				return l.clearTargets[i].Width < l.clearTargets[j].Width
 			})
 			if len(l.clearTargets) > 0 {
 				l.clearCovered = map[int]bool{}
+				pixels := map[int]bool{}
+				for _, word := range l.clearTargets {
+					for yy := word.Y; yy < word.Y+8; yy++ {
+						for xx := word.X; xx < word.X+word.Width; xx++ {
+							pixels[yy*320+xx] = true
+						}
+					}
+				}
+				l.clearExpected = len(pixels)
 				l.clearPending = true
-				g.listLog("clear-write-baseline", map[string]any{"targets": l.clearTargets})
+				if restarting {
+					g.listLog("clear-write-restarted", map[string]any{"previous_targets": previous, "added_targets": added, "targets": l.clearTargets, "native_rect": [4]int{x, y, w, h}})
+				} else {
+					g.listLog("clear-write-baseline", map[string]any{"targets": l.clearTargets})
+				}
 			}
 			l.pendingHeader = nil
 			l.headerTransition = false
@@ -517,17 +589,14 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		if layout.DisplayStart != l.renderPage {
 			return nil
 		}
-		pixels := 0
-		for _, w := range l.clearTargets {
-			pixels += w.Width * 8
-		}
-		if l.clearPending && len(l.clearCovered) != pixels {
+		if l.clearPending && len(l.clearCovered) != l.clearExpected {
 			return nil
 		}
 		if l.clearPending {
 			l.clearPending = false
 			g.listLog("pane-cleared", map[string]any{"pixels": len(l.clearCovered), "targets": l.clearTargets, "target_page": l.renderPage, "visible_page": layout.DisplayStart})
 			l.clearTargets = nil
+			l.clearExpected = 0
 		}
 		if l.awaitPageFlip {
 			l.awaitPageFlip = false
@@ -649,6 +718,10 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				o.OnCall(at, func(_ *oracle.Oracle) {
 					p, r := l.fieldWrapper, o.Regs()
 					if p != nil && p.Return.Addr == at && p.Return.SS == r.SS && p.Return.SP == r.SP {
+						if at == (oracle.Addr{Seg: 0x2287, Off: 0x316A}) && digest([]byte(p.Source)) == loadCaptionSHA256 {
+							l.footerTransition = false
+							g.listLog("load-caption-ready", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP, "source_sha256": digest([]byte(p.Source))})
+						}
 						if feedback := l.feedback; feedback != nil && feedback.Upper == p.Return {
 							feedback.Ready = true
 							l.footerTransition = false
@@ -924,7 +997,7 @@ func (g *liveGame) installListFields() {
 				width = f.Length * 8
 			}
 			w := listWord{X: native(s[3]) + start*8, Y: native(s[2]), Width: width, Key: f.Key,
-				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background, Button: f.Pane == "menu"}
+				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background, Button: f.Pane == "menu", FontSize: f.FontSize}
 			if f.BackgroundOverride != nil {
 				w.Background = *f.BackgroundOverride
 			}
@@ -992,18 +1065,29 @@ func (g *liveGame) updateList() error {
 	if g.o.Steps() == a.End {
 		g.capture()
 		g.checkpoints[len(g.checkpoints)-1]["label"] = a.Label
+		fmt.Printf("checkpoint=%s step=%d frames=%d\n", a.Label, g.o.Steps(), len(g.frames))
 		l.action++
 		l.sent = false
 	}
 	return nil
 }
 func (g *liveGame) composeList(px []byte) {
-	g.composeWords(px, g.list.snapshot(), g.catalog, g.glyphs)
+	for _, word := range g.list.snapshot() {
+		glyphs := g.glyphs
+		if word.FontSize == 20 {
+			glyphs = g.list.roleGlyphs
+		}
+		g.composeWords(px, []listWord{word}, g.catalog, glyphs)
+	}
 }
 func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]string, glyphs glyphSet) {
 	pal := g.o.Palette()
 	for _, w := range words {
 		x, y := w.X*2, w.Y*2
+		textY := y
+		if w.FontSize == 20 {
+			textY -= 2
+		}
 		bg, fg := pal[w.Background], pal[w.Foreground]
 		for yy := 0; yy < 16; yy++ {
 			for xx := 0; xx < w.Width*2; xx++ {
@@ -1012,19 +1096,19 @@ func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]
 		}
 		for i, ch := range []rune(catalog[w.Key]) {
 			alpha, ok := glyphs.Glyphs[string(ch)]
-			if !ok || len(alpha) != 320 {
+			if !ok || len(alpha) != glyphs.Size*glyphs.Height {
 				panic("列表字型缺字")
 			}
-			for yy := 0; yy < 20; yy++ {
-				for xx := 0; xx < 16; xx++ {
-					a := uint32(alpha[yy*16+xx])
+			for yy := 0; yy < glyphs.Height; yy++ {
+				for xx := 0; xx < glyphs.Size; xx++ {
+					a := uint32(alpha[yy*glyphs.Size+xx])
 					if a == 0 {
 						continue
 					}
-					if yy >= 16 {
+					if w.FontSize != 20 && yy >= 16 {
 						panic("列表字墨超出列高")
 					}
-					d := ((y+yy)*640 + x + i*16 + xx) * 4
+					d := ((textY+yy)*640 + x + i*glyphs.Size + xx) * 4
 					for c := 0; c < 3; c++ {
 						px[d+c] = byte((uint32(fg[c])*a + uint32(px[d+c])*(255-a) + 127) / 255)
 					}
@@ -1051,4 +1135,11 @@ func (g *liveGame) listReceipt(result map[string]any) {
 	result["paragraphs"] = g.pages
 	result["final_paragraph"] = g.page
 	result["video_write_layout_samples"] = l.videoSample
+	if l.roleGlyphs.Size != 0 {
+		for _, name := range []string{"glyphs-20.json", "role.zh-TW.tsv"} {
+			raw, err := os.ReadFile(filepath.Join(filepath.Dir(l.inputsPath), name))
+			must(err)
+			result["list_role_"+name+"_sha256"] = digest(raw)
+		}
+	}
 }
