@@ -37,17 +37,83 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    equipment=provenance.get("equipment_extension")
+    equipment_fields=[r["binding"] for r in equipment["fields"]] if equipment else []
+    equipment_rows=[r["binding"] for r in equipment["rows"]] if equipment else []
     creation=provenance.get("creation_extension")
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
+    page_proof=(equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    if equipment:
+        base=inputs.parent.parent/equipment["base"]
+        for name,h in equipment["base_files"].items():
+            assert Path(name).name==name and sha((base/name).read_bytes())==h
+        base_config=read(base/"inputs.json")
+        assert config["Fields"]==base_config["Fields"]+equipment_fields
+        assert config["Rows"]==base_config["Rows"]+equipment_rows
+        menus=dict(base_config["Menus"])
+        menus.update({m["Signature"]:"inventory" for m in equipment["menus"]})
+        assert config["Menus"]==menus
+        assert all(m["Signature"] in menus for m in trace["menus"]),"equipment route contains untranslated menu shape"
+        inventory_header=next(h for h in config["Headers"] if h["Pane"]=="inventory")
+        for c in trace["calls"]:
+            if c["wrapper_index"]<0:continue
+            w=trace["wrappers"][c["wrapper_index"]]
+            if w["format"]["segment"]==inventory_header["Segment"] and w["format"]["offset"]==inventory_header["Offset"] and w["stack"][3]&255==1:
+                assert any(f["Pane"]=="inventory" and f["Group"]=="header" and f["SHA256"]==sha(c["vararg_1_candidate"]["text"].encode())
+                           and [f["RawY"],f["RawX"]]==c["stack"][2:4] and f["Caller"]==c["caller"] for f in config["Fields"]),"equipment title remains untranslated"
+        for name in ("en.tsv","zh-TW.tsv","glyphs-16.json","glyphs-20.json","reader.zh-TW.tsv"):
+            assert (inputs/name).read_bytes()==(base/name).read_bytes()
+        source=inputs.parent.parent/equipment["source_path"]
+        assert source.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(source.read_bytes())==equipment["source_sha256"]
+        original=read(source)
+        for row in equipment["fields"]:
+            f=row["binding"]
+            assert f["Start"]==0 and f["Length"]==len(en[f["Key"]]),"equipment lexical mask mismatch"
+            if f["Pane"]=="callsite":
+                c=next(c for c in original["calls"] if c["step"]==row["call_step"])
+                text=c["vararg_1_candidate"]["text"]
+                assert f["Group"]=="body" and original["wrappers"][c["wrapper_index"]]["caller"]==f["UpperCaller"]=={"Seg":0x88E,"Off":0x71D}
+                assert c["caller"]==f["Caller"]=={"Seg":0xB72,"Off":0x27C}
+                assert f["SHA256"]==sha(text.encode()) and f["FormatSHA256"]==sha(b"%s")
+                assert text.startswith(en[f["Key"]]) and re.fullmatch(r"(?: \+[0-9]+)? *",text[f["Length"]:])
+                assert c["stack"][4]==0x87
+                assert [f["RawY"],f["RawX"]]==c["stack"][2:4]
+                assert (row["first_glyph"],row["return_step"])==(c["first_glyph"],c["return_step"])
+            elif f["Pane"] in ("suffix","inventory"):
+                c=next(c for c in original["calls"] if c["step"]==row["call_step"])
+                assert f["Group"]=="header" and c["caller"]==f["Caller"]=={"Seg":0xB72,"Off":0x27C}
+                assert c["vararg_1_candidate"]["text"]==en[f["Key"]]==("'s" if f["Pane"]=="suffix" else "Items") and c["format"]["text"]=="%s"
+                assert f["SHA256"]==sha(en[f["Key"]].encode()) and f["FormatSHA256"]==sha(b"%s")
+                assert [f["RawY"],f["RawX"]]==c["stack"][2:4] and f["RawY"]==8004
+                assert (row["first_glyph"],row["return_step"])==(c["first_glyph"],c["return_step"])
+            else:
+                assert f["Pane"]=="menu" and f["Group"]=="footer" and f["Caller"]=={"Seg":0xCEB,"Off":0x1BE}
+                menu=original["menus"][row["menu_index"]]
+                button=next(b for b in menu["Buttons"] if b["Index"]==row["button_index"])
+                assert bytes.fromhex(button["SourceHex"]).decode()==en[f["Key"]]
+                assert f["SHA256"]==f["FormatSHA256"]==button["SHA256"]
+                native_coord=lambda v:v if v<400 else (v-8000)*2
+                assert [f["RawX"],f["RawY"]]==[native_coord(button["RawX"]),native_coord(button["RawY"])+1]
+                assert menu in equipment["menus"] and menu["Signature"]==f["MenuSignature"]
+                assert menu["Count"] in (7,9) and len(menu["Buttons"])==6
+        for row in equipment["rows"]:
+            f=row["binding"];w=next(w for w in original["wrappers"] if w["step"]==row["wrapper_step"])
+            text=w["vararg_1_candidate"]["text"]
+            assert w["format"]["text"]=="%s" and text==row["source"] and f["SHA256"]==sha(text.encode())
+            assert any(p["step"]<=w["step"]<=p["return_instruction_step"] for p in original["list_events"])
+            assert f["Pane"]=="inventory" and f["Foregrounds"]==[7,11] and len(f["Spans"])==2
+            for span in f["Spans"]:
+                assert text[span["Start"]:span["Start"]+span["Length"]]==en[span["Key"]]
+            assert f["Spans"][0]["Start"]==1 and en[f["Spans"][0]["Key"]] in ("Yes","No")
     if creation:
         base=inputs.parent.parent/creation["base"]
         source=inputs.parent.parent/creation["source_path"]
         assert source.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(source.read_bytes())==creation["source_sha256"]
         creation_source=read(source)
-        if creation.get("page_validation"):
-            proof=creation["page_validation"]
+        if page_proof:
+            proof=page_proof
             path=inputs.parent.parent/proof["source_path"]
             assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==proof["sha256"]
             assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
@@ -56,7 +122,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         for f in removed_age:
             assert f in read(base/"inputs.json")["Fields"] and f["Pane"]=="callsite" and base_en[f["Key"]]=="years"
             assert f["UpperCaller"]=={"Seg":0x2C4A,"Off":0xD3} and (f["RawX"],f["RawY"],f["Length"])==(8032,8012,5)
-        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"])+creation_added
+        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"])+creation_added+equipment_fields
         bank=Path("/catalogs/creation-ui-review.tsv")
         assert sha(bank.read_bytes())==creation["review_sha256"]
         review={r["key"]:r for r in csv.DictReader(bank.open(),delimiter="\t")}
@@ -110,7 +176,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for name in ["glyphs-20.json","role.zh-TW.tsv"]:assert run["list_role_"+name+"_sha256"]==sha((inputs/name).read_bytes())
         added=[row["binding"] for row in session["added"]]
         assert len(added)==21 and sum(f.get("FontSize")==20 for f in added)==12
-        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"]+added+([row["binding"] for row in startup["added"]] if startup else []))+creation_added
+        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"]+added+([row["binding"] for row in startup["added"]] if startup else []))+creation_added+equipment_fields
         for row in session["added"]:
             binding,origin=row["binding"],row["origin"]
             key=binding["Key"]
@@ -140,8 +206,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         base=inputs.parent.parent/startup["base"]
         for name,digest in startup["base_files"].items():assert sha((base/name).read_bytes())==digest
         base_config=read(base/"inputs.json");added=startup["added"]
-        assert len(added)==2 and config["Fields"]==retain_creation(base_config["Fields"]+[row["binding"] for row in added])+creation_added
-        for name in ["Rows","Headers","Paragraphs","PaneLists","RowCallers","Background"]:assert config[name]==base_config[name]
+        assert len(added)==2 and config["Fields"]==retain_creation(base_config["Fields"]+[row["binding"] for row in added])+creation_added+equipment_fields
+        assert config["Rows"]==base_config["Rows"]+equipment_rows
+        for name in ["Headers","Paragraphs","PaneLists","RowCallers","Background"]:assert config[name]==base_config[name]
         path=inputs.parent.parent/startup["observed_path"]
         assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==startup["observed_sha256"]
         original=read(path);calls={c["step"]:c for c in original["calls"]}
@@ -1173,13 +1240,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if any(start <= frame["step"] < end for start, end in clock_intervals):
             assert frame["held"], ("clock transaction exposed", frame["step"])
         native_state = native_layouts[frame["step"]]
-        if creation and creation.get("page_validation"):
+        if page_proof:
             layout=next(v["layout"] for v in reversed(trace["display_changes"]) if v["step"]<=frame["step"])
             assert native_state["display_start"]==layout["DisplayStart"]
             if not frame["held"]:
                 for word in state["words"] or []:
                     events=[e for e in fields if e["Step"]<=frame["step"] and e["detail"]["word"]==word]
-                    assert events
+                    if not events:
+                        assert model_index>=0 and (word["X"],word["Y"]) in model[model_index][2],("unproved word origin",frame["step"],word)
+                        continue
                     call=calls_by_step[events[-1]["Step"]]
                     pages=call.get("video_pages")
                     assert pages and len(pages)==1
@@ -1307,6 +1376,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["creation_added_fields"]=len(creation_added)
         result["creation_replaced_age_fields"]=len(removed_age)
         if name_calls:result["limits"]="正常 MZ 角色管理狀態後的人類戰士建角、命名、造型、實際保存、加入及檢視；未驗其他職業、重擲、修改、正式入口或全遊戲中文化。"
+    if equipment:
+        result["equipment_added_fields"]=len(equipment_fields)
+        result["equipment_added_rows"]=len(equipment_rows)
+        result["limits"]="正常建角後狀態及一般背包按鍵，或原建角路徑回歸；只驗已觀測裝備名稱與裝卸，不含任意物品、所有拒絕回報、正式入口或全遊戲中文化。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
