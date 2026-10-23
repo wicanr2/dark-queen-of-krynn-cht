@@ -1,5 +1,6 @@
 """核對列表原型的自動選譯、原版狀態及實際 GPU 提交畫格。"""
 import base64
+import csv
 import hashlib
 import json
 import re
@@ -36,6 +37,50 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    creation=provenance.get("creation_extension")
+    creation_added=[r["binding"] for r in creation["added"]] if creation else []
+    removed_age=creation.get("removed_age_fields",[]) if creation else []
+    retain_creation=lambda fields:[f for f in fields if f not in removed_age]
+    if creation:
+        base=inputs.parent.parent/creation["base"]
+        source=inputs.parent.parent/creation["source_path"]
+        assert source.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(source.read_bytes())==creation["source_sha256"]
+        creation_source=read(source)
+        if creation.get("page_validation"):
+            proof=creation["page_validation"]
+            path=inputs.parent.parent/proof["source_path"]
+            assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==proof["sha256"]
+            assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
+        base_en,base_zh=catalog(base/"en.tsv"),catalog(base/"zh-TW.tsv")
+        assert all(en[k]==v for k,v in base_en.items()) and all(zh[k]==v for k,v in base_zh.items())
+        for f in removed_age:
+            assert f in read(base/"inputs.json")["Fields"] and f["Pane"]=="callsite" and base_en[f["Key"]]=="years"
+            assert f["UpperCaller"]=={"Seg":0x2C4A,"Off":0xD3} and (f["RawX"],f["RawY"],f["Length"])==(8032,8012,5)
+        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"])+creation_added
+        bank=Path("/catalogs/creation-ui-review.tsv")
+        assert sha(bank.read_bytes())==creation["review_sha256"]
+        review={r["key"]:r for r in csv.DictReader(bank.open(),delimiter="\t")}
+        formal_en,formal_zh=catalog(Path("/catalogs/en.tsv")),catalog(Path("/catalogs/zh-TW.tsv"))
+        for key,origin in creation["origins"].items():
+            if "review" in origin:
+                assert origin["review"]==review[key] and (en[key],zh[key])==(review[key]["en"],review[key]["zh-TW"])
+            elif "base_key" in origin:assert (en[key],zh[key])==(base_en[origin["base_key"]],base_zh[origin["base_key"]])
+            else:assert (en[key],zh[key])==(formal_en[origin["formal_key"]],formal_zh[origin["formal_key"]])
+        for row in creation["added"]:
+            original=creation_source
+            if row.get("source_path"):
+                path=inputs.parent.parent/row["source_path"]
+                assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==row["source_sha256"]
+                original=read(path)
+            binding=row["binding"];call=next(c for c in original["calls"] if c["step"]==row["call_step"])
+            text=call["vararg_1_candidate"]["text"] if call["format"]["text"]=="%s" else call["format"]["text"]
+            assert (row["first_glyph"],row["return_step"])==(call["first_glyph"],call["return_step"])
+            assert call["step"]<call["first_glyph"]<call["return_step"]
+            assert binding["Caller"]==call["caller"] and (binding["RawY"],binding["RawX"])==tuple(call["stack"][2:4])
+            assert en[binding["Key"]]==("Save" if binding.get("SourcePattern")=="created-name" else "years" if binding.get("SourcePattern")=="age-unit" else text)
+            if binding["Pane"] in ("menu","menu-text"):
+                assert binding["MenuSignature"]==original["menus"][call["menu_index"]]["Signature"]
+            if binding["Pane"]=="menu-text":assert binding["Caller"]!={"Seg":0xCEB,"Off":0x1BE} and not binding.get("FontSize")
     startup = provenance.get("startup_extension")
     session = provenance.get("session_load_extension")
     role_alpha = None
@@ -65,7 +110,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for name in ["glyphs-20.json","role.zh-TW.tsv"]:assert run["list_role_"+name+"_sha256"]==sha((inputs/name).read_bytes())
         added=[row["binding"] for row in session["added"]]
         assert len(added)==21 and sum(f.get("FontSize")==20 for f in added)==12
-        assert config["Fields"]==read(base/"inputs.json")["Fields"]+added+([row["binding"] for row in startup["added"]] if startup else [])
+        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"]+added+([row["binding"] for row in startup["added"]] if startup else []))+creation_added
         for row in session["added"]:
             binding,origin=row["binding"],row["origin"]
             key=binding["Key"]
@@ -95,7 +140,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         base=inputs.parent.parent/startup["base"]
         for name,digest in startup["base_files"].items():assert sha((base/name).read_bytes())==digest
         base_config=read(base/"inputs.json");added=startup["added"]
-        assert len(added)==2 and config["Fields"]==base_config["Fields"]+[row["binding"] for row in added]
+        assert len(added)==2 and config["Fields"]==retain_creation(base_config["Fields"]+[row["binding"] for row in added])+creation_added
         for name in ["Rows","Headers","Paragraphs","PaneLists","RowCallers","Background"]:assert config[name]==base_config[name]
         path=inputs.parent.parent/startup["observed_path"]
         assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==startup["observed_sha256"]
@@ -227,6 +272,16 @@ def check(en_run, zh_run, inputs, control, observed, output):
     def field_start(field, text):
         if not field.get("SourcePattern"):
             return field["Start"] if sha(text.encode()) == field["SHA256"] else None
+        if field["SourcePattern"]=="created-name":
+            assert creation and field["Pane"]=="callsite" and field["Group"]=="footer"
+            assert en[field["Key"]]=="Save" and field["SHA256"]==sha(b"Save")
+            assert field["UpperCaller"]=={"Seg":0xCEB,"Off":0x995} and field["Caller"]=={"Seg":0xB72,"Off":0x27C}
+            assert (field["RawX"],field["RawY"],field["Start"],field["Length"])==(8004,189,0,4)
+            return 0 if re.fullmatch(r"Save [ -~]{1,15}\? ",text) else None
+        if field["SourcePattern"]=="age-unit":
+            assert creation and field["Pane"]=="callsite" and field["Group"]=="body" and en[field["Key"]]=="years"
+            assert field["UpperCaller"]=={"Seg":0x2C4A,"Off":0xD3} and (field["RawX"],field["RawY"],field["Length"])==(8032,8012,5)
+            return len(text)-5 if re.fullmatch(r"[0-9]+ years",text) else None
         assert field["SourcePattern"] == "clock-period"
         assert field["Pane"] == "callsite" and field["Group"] == "body"
         assert field["UpperCaller"] == {"Seg": 0x205E, "Off": 0x53C}
@@ -298,6 +353,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
         for field in ("regs", "ram_sha256", "indexed_sha256", "palette"):
             assert actual[field] == oracle["checkpoints"][-1][field]
     assert a["list_events"] == b["list_events"]
+    if creation:
+        name_calls=[c for c in trace["calls"] if c["caller"]=={"Seg":0x266D,"Off":0x11F} and c["vararg_1_candidate"]["text"]=="Character name:"]
+        entries=[e for e in b["list_events"] if e["Kind"]=="creation-name-entry"]
+        ready=[e for e in b["list_events"] if e["Kind"]=="creation-name-ready"]
+        assert len(entries)==len(ready)==len(name_calls)
+        for call,entry,done in zip(name_calls,entries,ready):
+            assert entry["Step"]==call["step"] and done["Step"]==call["return_step"]
+            assert done["detail"]==dict(caller=call["caller"],ss=call["ss"],sp=(call["sp"]+4)&65535)
+        if name_calls:
+            stable={f["step"]:f for f in b["frames"]}
+            assert not stable[320000000]["held"] and not stable[322000000]["held"]
+            assert stable[320000000]["SHA256"]!=stable[322000000]["SHA256"],"命名輸入必須在 Return 前可見"
     accepted = [e for e in b["list_events"] if e["Kind"] == "row-before-glyph"]
     bindings = {(row["Pane"], row["SHA256"]): row for row in config["Rows"]}
     wrappers, pane = {}, ""
@@ -390,7 +457,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             wrappers[i] = row
     expected = [c for c in trace["calls"] if c["wrapper_index"] in wrappers]
     assert len(accepted) == len(expected)
-    assert accepted or paragraph_entries, "沒有列表列或完整段落接入"
+    assert accepted or paragraph_entries or (creation and any(e["Kind"]=="field-before-glyph" for e in b["list_events"])), "沒有列表列、段落或建角欄位接入"
     for event, original in zip(accepted, expected):
         wrapper = trace["wrappers"][original["wrapper_index"]]
         assert event["Step"] == wrapper["step"] < event["first_glyph"] == original["first_glyph"]
@@ -421,8 +488,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                    and f["Caller"] == c["caller"] and field_start(f, source["text"]) is not None
                    and ("Color" not in f or f["Color"] == (c["stack"][4]&255))
                    and f["FormatSHA256"] == sha(c["format"]["text"].encode())
-                   and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite", "menu"))
-                   and (f["Pane"] != "menu" or f["MenuSignature"] == menu_signature(c))
+                   and (f["Pane"] == e["Pane"] or f["Pane"] in ("suffix", "callsite", "menu", "menu-text"))
+                   and (f["Pane"] not in ("menu","menu-text") or f["MenuSignature"] == menu_signature(c))
                    and (f["Pane"] != "callsite" or c["wrapper_index"] >= 0
                         and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"]
                         and (not f.get("UpperFormatSHA256") or sha(trace["wrappers"][c["wrapper_index"]]["format"]["text"].encode()) == f["UpperFormatSHA256"]))]
@@ -453,13 +520,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995}
                     assert c["stack"][4] == f["Color"] == 0x70 and f["BackgroundOverride"] == 7
                     assert (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
-                        source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip()))
+                        source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip())) or (creation and (
+                        (source["text"] in ("add from where? ","add a character:") and start==0 and f["Length"]==16) or
+                        (f.get("SourcePattern")=="created-name" and start==0 and f["Length"]==4 and re.fullmatch(r"Save [ -~]{1,15}\? ",source["text"]))))
             if f.get("UpperCaller")=={"Seg":0x2287,"Off":0x316A}:
                 assert source["text"]=="Loading...Please Wait" and f["UpperNative"]==[0,192]
                 assert c["stack"][2:5]==[189,8004,0x8f] and f["Color"]==0x8f and "BackgroundOverride" not in f
         background = f.get("BackgroundOverride",config["Background"])
         if "BackgroundOverride" in f and background==23:
-            if source["text"]=="Name":
+            if creation and source["text"]=="Character name:":
+                assert f["Pane"]=="menu-text" and f["Group"]=="footer" and f["Caller"]=={"Seg":0x266D,"Off":0x11F}
+                assert c["stack"][2:5]==[189,8004,0x80] and f["Color"]==0x80 and (start,f["Length"])==(0,15)
+            elif source["text"]=="Name":
                 assert f["UpperCaller"]=={"Seg":0x205E,"Off":0x2A0}
                 assert f["Pane"]=="callsite" and f["Group"]=="body" and (start,f["Length"])==(0,4)
                 assert c["stack"][2:5]==[8008,8004,0x8c] and f["Color"]==0x8c
@@ -467,14 +539,28 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert source["text"]=="Return" and f["Pane"]=="menu" and f["Group"]=="footer"
                 assert (start,f["Length"])==(0,6) and c["stack"][2:4]==[189,112]
                 assert f["MenuSignature"]=="8f950eaf29b783d0b7fe41ad37f46380472d6c96b5cdc43d415f4384519f189f"
-            if (f["Key"],background) not in verified_field_backgrounds:
+            word=e["detail"]["word"]
+            gpu_frames={v["step"]:v for v in b["frames"]}
+            visible=any(not gpu_frames[v["step"]]["held"] and word in (v["words"] or []) for v in b["list_frames"])
+            if visible and (f["Key"],background) not in verified_field_backgrounds:
                 checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
                 original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
                 x,y=native(c["stack"][3]),native(c["stack"][2])
                 colors=set(original.crop((x,y,x+f["Length"]*8,y+8)).getdata())
+                rect=(x,y,f["Length"]*8,8)
+                overlap=lambda box: box[0]<x+rect[2] and box[0]+box[2]>x and box[1]<y+8 and box[1]+box[3]>y
+                changes=[v["step"] for v in trace["fill_events"] if c["return_step"]<v["step"]<=checkpoint["step"] and overlap(v["native_rect"])]
+                changes += [v["step"] for v in trace["calls"] if c["return_step"]<v["step"]<=checkpoint["step"]
+                            and v["format"]["text"]!="%c" and overlap((native(v["stack"][3]),native(v["stack"][2]),8*len(v["vararg_1_candidate"]["text"] if v["format"]["text"]=="%s" else v["format"]["text"]),8))]
+                if changes:
+                    # 終點已換頁時，取覆寫前的獨立原版色號快照。
+                    sample=next(v for v in trace["fill_events"] if c["return_step"]<v["return_instruction_step"]<min(changes) and v.get("indexed_after"))
+                    data=(observed/sample["indexed_after"]).read_bytes()
+                    indices={data[yy*320+xx] for yy in range(y,y+8) for xx in range(x,x+rect[2])}
+                    colors={tuple(checkpoint["palette"][v]) for v in indices}
                 bg=tuple(checkpoint["palette"][23]);fg=tuple(checkpoint["palette"][c["stack"][4]&15])
-                assert bg in colors and colors<={bg,fg,tuple(checkpoint["palette"][0])}
-            verified_field_backgrounds.add((f["Key"],background))
+                assert bg in colors and colors<={bg,fg,tuple(checkpoint["palette"][0]),tuple(checkpoint["palette"][15])}, ("background sample",source["text"],c["step"],checkpoint["label"],colors,bg,fg)
+                verified_field_backgrounds.add((f["Key"],background))
         elif "BackgroundOverride" in f:
             if f["UpperCaller"] == {"Seg":0xCEB,"Off":0x4BD}:
                 assert f["UpperNative"] == [56,192] and c["stack"][2:5] == [189,8032,0x70]
@@ -483,7 +569,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995} and f["UpperNative"] == [0,192]
                 assert c["stack"][2:5] == [189,8004,0x70]
                 assert (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
-                    source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip()))
+                    source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip())) or (creation and (
+                    (source["text"] in ("add from where? ","add a character:") and start==0 and f["Length"]==16) or
+                    (f.get("SourcePattern")=="created-name" and start==0 and f["Length"]==4 and re.fullmatch(r"Save [ -~]{1,15}\? ",source["text"]))))
             assert f["Color"] == 0x70 and background == 7
             checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
             original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
@@ -495,6 +583,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if "Width" in f and source["text"]=="load which game:":
             assert (f["Width"],f["Length"],start)==(124,16,0)
             assert f["UpperCaller"]=={"Seg":0xCEB,"Off":0x995} and c["stack"][2:5]==[189,8004,0x70]
+            checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
+            original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
+            assert set(original.crop((132,189,136,197)).getdata()).isdisjoint({tuple(checkpoint["palette"][0]),tuple(checkpoint["palette"][7])})
+        elif creation and f.get("Width")==124 and source["text"] in ("add from where? ","add a character:"):
+            assert f["Pane"]=="callsite" and f["Group"]=="footer" and f["UpperCaller"]=={"Seg":0xCEB,"Off":0x995}
+            assert (start,f["Length"])==(0,16) and c["stack"][2:5]==[189,8004,0x70]
             checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=c["return_step"])
             original=Image.open(observed/(checkpoint["label"]+".png")).convert("RGB")
             assert set(original.crop((132,189,136,197)).getdata()).isdisjoint({tuple(checkpoint["palette"][0]),tuple(checkpoint["palette"][7])})
@@ -545,8 +639,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                and ((f["Pane"] == "callsite" and c["wrapper_index"] >= 0
                      and trace["wrappers"][c["wrapper_index"]]["caller"] == f["UpperCaller"]
                      and (not f.get("UpperFormatSHA256") or sha(trace["wrappers"][c["wrapper_index"]]["format"]["text"].encode()) == f["UpperFormatSHA256"]))
-                    or (f["Pane"] == "menu" and f["MenuSignature"] == menu_signature(c))
-                    or (f["Pane"] not in ("callsite", "menu") and in_list))}
+                    or (f["Pane"] in ("menu","menu-text") and f["MenuSignature"] == menu_signature(c))
+                    or (f["Pane"] not in ("callsite", "menu","menu-text") and in_list))}
         actual_keys = {key for (step, key), event in field_by_id.items() if step == c["step"] and not event["detail"]["deferred"]}
         assert actual_keys == expected_keys, (c["step"], expected_keys, actual_keys)
     assert len([e for e in b["list_events"] if e["Kind"] == "title-suffix-attached"]) == len(title_wrappers)
@@ -810,6 +904,34 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert any(f["step"] <= e["Step"] <= f["return_instruction_step"]
                        and f["native_rect"] == e["detail"] for f in trace["fill_events"])
             erase(e["detail"])
+        elif kind == "creation-pane-redraw":
+            assert creation and e["detail"]==[8,8,304,104]
+            assert any(f["step"]<=e["Step"]<=f["return_instruction_step"] and f["native_rect"]==e["detail"] for f in trace["fill_events"])
+        elif kind == "creation-name-leave":
+            assert creation
+            assert any(f["step"]<=e["Step"]<=f["return_instruction_step"] and f["native_rect"]==e["detail"] for f in trace["fill_events"])
+            prompt=next(w for w in words.values() if w["X"]==8 and w["Y"]==189 and en[w["Key"]]=="Character name:")
+            assert prompt["Group"]=="footer"
+        elif kind == "creation-footer-entry":
+            assert creation
+            c=calls_by_step[e["Step"]]
+            assert e["detail"]["call_step"]==c["step"]
+            assert any(f["Key"]==e["detail"]["key"] and f["Caller"]==c["caller"] and (f["RawY"],f["RawX"])==tuple(c["stack"][2:4]) for f in config["Fields"])
+        elif kind == "creation-footer-page":
+            assert creation
+            c=next(c for c in trace["calls"] if c.get("first_glyph",e["Step"]+1)<=e["Step"]<c["return_step"])
+            if c.get("video_first"):
+                assert c["video_first"]["Step"]==e["Step"]
+                assert e["detail"]=={"target_page":int(next(iter(c["video_pages"]))),"first_write_offset":c["video_first"]["Offset"]}
+            else:
+                assert e["detail"]["target_page"]==e["detail"]["first_write_offset"]&0x4000
+                assert 0<=e["detail"]["first_write_offset"]<0x8000
+        elif kind == "creation-footer-visible":
+            assert creation
+            if trace.get("display_changes"):
+                layout=next(v["layout"] for v in reversed(trace["display_changes"]) if v["step"]<=e["Step"])
+                assert e["detail"]=={"target_page":layout["DisplayStart"]}
+            else:assert e["detail"]["target_page"] in (0,0x4000)
         elif kind in ("row-before-glyph", "unknown-row-original"):
             w = wrappers_by_step[e["Step"]]
             source = w["vararg_1_candidate"]["text"]
@@ -893,6 +1015,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
             if signature not in config["Menus"]:
                 continue
             expected_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == signature}
+            # 命名使用原版輸入框，先完整清掉上一個擲值選單；表指標暫未換掉。
+            prompts = [c for c in trace["calls"] if button["step"] < c["step"] < checkpoint["step"]
+                       and c["caller"] == {"Seg":0x266D,"Off":0x11F}
+                       and c["format"]["text"] == "%s" and c["vararg_1_candidate"]["text"] == "Character name:"]
+            if creation and prompts:
+                prompt = prompts[-1]
+                assert any(button["return_step"] < fill["step"] < prompt["step"]
+                           and fill["native_rect"] == [8,189,304,8] for fill in trace["fill_events"])
+                expected_keys = set()
             actual_keys = {w["Key"] for w in layouts[checkpoint["step"]]["words"] or [] if w["Group"] == "footer" and (w.get("Button") if typed_buttons else w["Key"] in menu_field_keys)}
             assert actual_keys == expected_keys, ("checkpoint footer incomplete", checkpoint["label"], expected_keys-actual_keys, actual_keys-expected_keys)
         # 原版仍保留的提示必須留在穩定畫面，不能因模型也把它清掉而通過。
@@ -982,7 +1113,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             if startup and w["Background"]==23 and (w["Key"]=="field.6b0143d03864993fdf69" or (w["Key"]=="field.dcd1d5223f73b3a965c0" and w["X"]==8 and w["Y"]==16)):
                 original_colors={tuple(source[(yy*640+xx)*4:(yy*640+xx)*4+3]) for yy in range(y,y+16) for xx in range(x,x+width)}
                 allowed={tuple(bg),tuple(fg),tuple(palette[0]),tuple(palette[15])}
-                assert tuple(bg) in original_colors and original_colors<=allowed,("native field background",w["Key"],original_colors-allowed)
+                assert tuple(bg) in original_colors and original_colors<=allowed,("native field background",frame["step"],w,original_colors-allowed)
             row = bytes([*bg, 255]) * width
             for yy in range(y, y + 16):
                 at = (yy * 640 + x) * 4
@@ -1003,7 +1134,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         return sha(px)
 
     cold_ui=None;cold_index=0;cold_words=[];cold_pending=False;cold_count=0;cold_retained=0
-    if startup:
+    if startup and a.get("cold_ui"):
         from load_prompt_check import model as cold_model,paint as cold_paint,pending_at as cold_pending_at
         cold_ui=cold_model(inputs.parent.parent,a,b)
     previous, held, translated_frames, model_index = None, 0, 0, -1
@@ -1042,6 +1173,24 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if any(start <= frame["step"] < end for start, end in clock_intervals):
             assert frame["held"], ("clock transaction exposed", frame["step"])
         native_state = native_layouts[frame["step"]]
+        if creation and creation.get("page_validation"):
+            layout=next(v["layout"] for v in reversed(trace["display_changes"]) if v["step"]<=frame["step"])
+            assert native_state["display_start"]==layout["DisplayStart"]
+            if not frame["held"]:
+                for word in state["words"] or []:
+                    events=[e for e in fields if e["Step"]<=frame["step"] and e["detail"]["word"]==word]
+                    assert events
+                    call=calls_by_step[events[-1]["Step"]]
+                    pages=call.get("video_pages")
+                    assert pages and len(pages)==1
+                    if int(next(iter(pages)))!=native_state["display_start"]:
+                        # 原版也會將已畫好的頁複製到另一頁，逐詞框核對真正原版像素。
+                        checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=call["return_step"])
+                        x,y,width=word["X"]*2,word["Y"]*2,word["Width"]*2
+                        expected=Image.open(observed/(checkpoint["label"]+".png")).convert("RGBA").resize((640,400),Image.Resampling.NEAREST).crop((x,y,x+width,y+16)).tobytes()
+                        source=pixels(en_run,originals[frame["step"]])
+                        actual=b"".join(source[(yy*640+x)*4:(yy*640+x+width)*4] for yy in range(y,y+16))
+                        assert actual==expected,("field before native page or unproved copy",frame["step"],word["Key"])
         if "list_event_count" in state:
             assert state["list_event_count"] == native_state["list_event_count"]
         assert native_state.get("paragraph") == state.get("paragraph")
@@ -1149,10 +1298,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
             reader["x11_windows"] = windows
         result["reader"] = reader
         result["reader_model_sha256"] = sha((Path(__file__).parent / "ui_journal_reader_check.py").read_bytes())
-    if startup:
+    if cold_ui is not None:
         assert cold_retained>0 and not cold_words and not cold_pending
         result["cold_caption_carry_frames"]=cold_retained
         result["cold_caption_model_sha256"]=sha(Path(__file__).with_name("load_prompt_check.py").read_bytes())
+    if creation:
+        result["creation_name_input_visible"]=bool(name_calls)
+        result["creation_added_fields"]=len(creation_added)
+        result["creation_replaced_age_fields"]=len(removed_age)
+        if name_calls:result["limits"]="正常 MZ 角色管理狀態後的人類戰士建角、命名、造型、實際保存、加入及檢視；未驗其他職業、重擲、修改、正式入口或全遊戲中文化。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

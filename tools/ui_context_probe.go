@@ -298,7 +298,7 @@ func main() {
 		previous := o.VideoLayoutState()
 		displayChanges = append(displayChanges, map[string]any{"step": o.Steps(), "layout": previous})
 		o.SetStepGuard(func(_ *oracle.Oracle) error {
-			if o.Steps() < 220000000 || o.Steps() > 400000000 {
+			if o.Steps() < 220000000 || o.Steps() > last {
 				return nil
 			}
 			next := o.VideoLayoutState()
@@ -573,7 +573,7 @@ func main() {
 				wrapper = len(wrappers) - 1
 			}
 			menu := -1
-			if target == (oracle.Addr{Seg: 0x0ceb, Off: 0x01be}) {
+			if target == (oracle.Addr{Seg: 0x0ceb, Off: 0x01be}) || os.Getenv("DQK_CONTEXT_ALL_MENUS") == "1" {
 				if snapshot, ok := readMenuSource(o); ok {
 					var found bool
 					menu, found = menuIndices[snapshot.Signature]

@@ -65,6 +65,7 @@ case "${1:-}" in
       --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
       "${boot_args[@]}" \
       -e "DQK_CONTEXT_VIDEO=${DQK_CONTEXT_VIDEO:-0}" \
+      -e "DQK_CONTEXT_ALL_MENUS=${DQK_CONTEXT_ALL_MENUS:-0}" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" \
       --entrypoint /probe/ui-context-probe "$GO_IMAGE" \
       "$STATE_ARG" "/probe/$REQUEST" "/out/$(basename "$RESULT")" "$MODE" "${seed_args[@]}"

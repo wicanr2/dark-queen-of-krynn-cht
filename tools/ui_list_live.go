@@ -140,6 +140,11 @@ type listState struct {
 	rowPagePrelude         int
 	feedback               *listFeedback
 	serviceNotice          *serviceNotice
+	creationNameReturn     *paintReturn
+	creationFooterPending  bool
+	creationFooterKnown    bool
+	creationFooterPage     uint32
+	creationPageTracking   bool
 }
 
 func listRectPixels(pixels []byte, rect [4]int) []byte {
@@ -196,6 +201,30 @@ func (l *listState) fieldStart(f listField, source string) (int, bool) {
 	if f.SourcePattern == "" {
 		return f.Start, f.SHA256 == digest([]byte(source))
 	}
+	if f.SourcePattern == "created-name" {
+		prefix := l.sources[f.Key]
+		if len(source) < len(prefix)+4 || len(source) > len(prefix)+18 || source[:len(prefix)] != prefix || source[len(prefix)] != ' ' || source[len(source)-2:] != "? " {
+			return 0, false
+		}
+		for _, c := range []byte(source[len(prefix)+1 : len(source)-2]) {
+			if c < 32 || c > 126 {
+				return 0, false
+			}
+		}
+		return 0, digest([]byte(prefix)) == f.SHA256
+	}
+	if f.SourcePattern == "age-unit" {
+		unit := l.sources[f.Key]
+		if len(source) <= len(unit)+1 || source[len(source)-len(unit)-1:] != " "+unit {
+			return 0, false
+		}
+		for _, c := range []byte(source[:len(source)-len(unit)-1]) {
+			if c < '0' || c > '9' {
+				return 0, false
+			}
+		}
+		return len(source) - len(unit), digest([]byte(unit)) == f.SHA256
+	}
 	if f.SourcePattern != "clock-period" || len(source) < 7 || len(source) > 8 {
 		return 0, false
 	}
@@ -250,6 +279,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	b, e := os.ReadFile(inputs)
 	must(e)
 	must(json.Unmarshal(b, &l.config))
+	for _, f := range l.config.Fields {
+		if f.Pane == "menu-text" && f.Caller == (oracle.Addr{Seg: 0x1bb6, Off: 0x1be}) {
+			l.creationPageTracking = true
+		}
+	}
 	b, e = os.ReadFile(requestPath)
 	must(e)
 	must(json.Unmarshal(b, &l.request))
@@ -289,10 +323,26 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 	}
 	for _, f := range l.config.Fields {
+		creationText := f.Pane == "menu-text" && validCreationText(f, l.sources[f.Key])
+		if f.Pane == "menu-text" && !creationText {
+			panic("未驗證的建角文字欄位")
+		}
+		createdName := f.SourcePattern == "created-name" && f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Length == 4 && f.Width == 0 &&
+			f.RawX == 8004 && f.RawY == 189 && f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0xceb, Off: 0x995}) &&
+			f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.FormatSHA256 == digest([]byte("%s")) &&
+			f.Color != nil && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7 && f.SHA256 == digest([]byte("Save"))
+		ageUnit := f.SourcePattern == "age-unit" && f.Pane == "callsite" && f.Group == "body" && f.RawX == 8032 && f.RawY == 8012 && f.Start == 0 && f.Length == 5 && f.Width == 0 &&
+			f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0xd3}) && f.UpperNative == nil && f.UpperFormatSHA256 == "" && f.Color == nil && f.BackgroundOverride == nil &&
+			f.SHA256 == digest([]byte("years")) && f.FormatSHA256 == digest([]byte("%s"))
+		creationPrompt := f.SourcePattern == "" && f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Length == 16 && f.Width == 124 &&
+			f.RawX == 8004 && f.RawY == 189 && f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0xceb, Off: 0x995}) &&
+			f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.FormatSHA256 == digest([]byte("%s")) &&
+			f.Color != nil && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7 &&
+			(f.SHA256 == digest([]byte("add from where? ")) || f.SHA256 == digest([]byte("add a character:")))
 		slotWidth := f.Pane == "callsite" && f.Group == "footer" && f.SHA256 == loadSlotPromptSHA256 && f.RawX == 8004 && f.RawY == 189 &&
 			f.Start == 0 && f.Length == 16 && f.Width == 124 && f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x995}) &&
 			f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
-			f.Color != nil && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7
+			f.Color != nil && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7 || creationPrompt
 		if f.FontSize != 0 {
 			if f.FontSize != 20 || f.Pane != "menu" || f.MenuSignature != "191c0ba49dc03bfaceb8be1ab19c0d92efb10341e05b2c851e46682a74451ed1" ||
 				f.Group != "footer" || f.Caller != (oracle.Addr{Seg: 0xCEB, Off: 0x1BE}) || f.RawY < 119 || f.RawY > 189 {
@@ -337,11 +387,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.BackgroundOverride != nil && *f.BackgroundOverride == 7 &&
 				(f.SHA256 == "27f835efb80b2af751f472f06171037b89065c6143ee753de6944a644900b081" || f.SHA256 == loadSourcePromptSHA256 || f.SHA256 == loadSlotPromptSHA256)) ||
 				(f.UpperCaller == (oracle.Addr{Seg: 0x2287, Off: 0x316A}) && f.UpperFormatSHA256 == "" && *f.Color == 0x8f && f.BackgroundOverride == nil && f.SHA256 == loadCaptionSHA256))
-			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn {
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
-		if f.SourcePattern != "" {
+		if f.SourcePattern != "" && !createdName && !ageUnit {
 			if f.SourcePattern != "clock-period" || f.Pane != "callsite" || f.Group != "body" || f.UpperCaller != (oracle.Addr{Seg: 0x205e, Off: 0x53c}) || f.RawX != 8104 || f.RawY != 8060 || f.Start != 0 || f.Length != 2 || f.Width != 0 {
 				panic("未知時間欄位契約")
 			}
@@ -353,8 +403,8 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 		if f.Start < 0 || f.Length <= 0 || len(l.sources[f.Key]) != f.Length || g.catalog[f.Key] == "" || len([]rune(g.catalog[f.Key]))*8 > width || (width < f.Length*8 && !slotWidth) || width > 320 || (width%8 != 0 && !slotWidth) ||
 			(f.Group != "header" && f.Group != "body" && f.Group != "footer") ||
-			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix" && f.Pane != "callsite" && f.Pane != "menu") ||
-			(f.Pane == "menu" && (len(f.MenuSignature) != 64 || l.config.Menus[f.MenuSignature] == "")) ||
+			(f.Pane != "inventory" && f.Pane != "grimoire" && f.Pane != "suffix" && f.Pane != "callsite" && f.Pane != "menu" && f.Pane != "menu-text") ||
+			((f.Pane == "menu" || f.Pane == "menu-text") && (len(f.MenuSignature) != 64 || l.config.Menus[f.MenuSignature] == "")) ||
 			(f.Pane == "callsite" && f.UpperCaller == (oracle.Addr{})) {
 			panic("列表欄位綁定無效")
 		}
@@ -434,6 +484,14 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		x, y, w, h := v[1], v[0], v[3]-v[1], v[2]-v[0]
 		g.invalidateListParagraph(x, y, w, h, "native fill")
 		if len(l.paints) == 0 && x <= 8 && y <= 8 && x+w >= 312 && y+h >= 184 {
+			for _, f := range l.config.Fields {
+				if f.Pane == "menu-text" && f.Caller == (oracle.Addr{Seg: 0x266d, Off: 0x11f}) {
+					if word, ok := l.words[[2]int{8, 189}]; ok && word.Key == f.Key {
+						l.footerTransition = true
+						g.listLog("creation-name-leave", [4]int{x, y, w, h})
+					}
+				}
+			}
 			previous := append([]listWord(nil), l.clearTargets...)
 			restarting := l.clearPending
 			l.awaitPageFlip = true
@@ -500,6 +558,17 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			l.trackListPage, l.rowPagePending = false, false
 			g.listLog("pane-invalidate", [4]int{x, y, w, h})
 		} else {
+			// 加入角色返回時只重畫上半部，仍可能畫在尚未顯示的另一頁。
+			if len(l.paints) == 0 && v == [4]int{8, 8, 112, 312} {
+				for _, f := range l.config.Fields {
+					if f.Pane == "menu-text" && f.Caller == (oracle.Addr{Seg: 0x1bb6, Off: 0x1be}) {
+						l.awaitPageFlip, l.renderPageKnown = true, false
+						l.renderOrigin = [2]int{x, y}
+						g.listLog("creation-pane-redraw", [4]int{x, y, w, h})
+						break
+					}
+				}
+			}
 			if l.trackListPage && len(l.paints) > 0 && w > 0 && h > 0 {
 				if l.clearPending || l.awaitPageFlip {
 					panic("列表繪製頁尚未脫離整頁清除")
@@ -516,6 +585,13 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	// 使用 Machine 已有的視訊寫入 observer，包括 planar 路徑及同值寫入。
 	// 此固定 mode 13h 路徑須覆蓋每個舊字框的全部原生像素後才解除保留。
 	o.OnVideoWriteEvent(func(hit oracle.VideoWriteEvent) {
+		if l.creationFooterPending && !l.creationFooterKnown {
+			if !hit.Unchained || hit.Mode != 0x13 || hit.Pitch != 80 || hit.LineCompare < 400 || hit.Offset >= 0x8000 {
+				panic("未驗證的建角底列顯存寫入")
+			}
+			l.creationFooterPage, l.creationFooterKnown = hit.Offset&0x4000, true
+			g.listLog("creation-footer-page", map[string]any{"target_page": l.creationFooterPage, "first_write_offset": hit.Offset})
+		}
 		if g.cold != nil && g.cold.ui != nil {
 			g.cold.ui.videoWrite(hit)
 		}
@@ -592,6 +668,10 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	o.SetStepGuard(func(_ *oracle.Oracle) error {
 		if g.cold != nil && g.cold.ui != nil {
 			g.cold.ui.syncPages()
+		}
+		if l.creationFooterPending && l.creationFooterKnown && o.VideoLayoutState().DisplayStart == l.creationFooterPage {
+			l.creationFooterPending = false
+			g.listLog("creation-footer-visible", map[string]any{"target_page": l.creationFooterPage})
 		}
 		if !l.awaitPageFlip && !l.clearPending {
 			return nil
@@ -832,6 +912,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	})
 }
 func (g *liveGame) installListFields() {
+	creationNameReturns := map[oracle.Addr]bool{}
 	l, o := g.list, g.o
 	for _, point := range []struct {
 		a     oracle.Addr
@@ -980,7 +1061,7 @@ func (g *liveGame) installListFields() {
 					l.erase(feedback.Rect[0], feedback.Rect[1], feedback.Rect[2], feedback.Rect[3])
 					g.listLog("footer-feedback-entry", map[string]any{"entry_step": feedback.Entry, "native_rect": feedback.Rect, "source_sha256": feedback.SourceSHA})
 				}
-			} else if f.Pane == "menu" {
+			} else if f.Pane == "menu" || f.Pane == "menu-text" {
 				menu, ok := readMenuSource(o)
 				if !ok || menu.Signature != f.MenuSignature {
 					continue
@@ -996,6 +1077,10 @@ func (g *liveGame) installListFields() {
 			}
 			if start+f.Length > len(source) || source[start:start+f.Length] != l.sources[f.Key] {
 				panic("欄位詞框來源不符")
+			}
+			if l.creationPageTracking {
+				l.creationFooterPending, l.creationFooterKnown = true, false
+				g.listLog("creation-footer-entry", map[string]any{"call_step": o.Steps(), "key": f.Key})
 			}
 			if f.Pane == "callsite" {
 				expected := [2]int{native(s[3]), native(s[2])}
@@ -1028,6 +1113,23 @@ func (g *liveGame) installListFields() {
 			}
 			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": digest([]byte(source)), "source_start": start,
 				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix", "menu_signature": f.MenuSignature}))
+			if f.Pane == "menu-text" && f.Caller == (oracle.Addr{Seg: 0x266d, Off: 0x11f}) {
+				r, at := o.Regs(), o.Caller()
+				p := paintReturn{at, r.SS, r.SP + 4}
+				l.creationNameReturn = &p
+				g.listLog("creation-name-entry", map[string]any{"key": f.Key, "caller": at, "ss": r.SS, "sp": r.SP})
+				if !creationNameReturns[at] {
+					creationNameReturns[at] = true
+					o.OnCall(at, func(_ *oracle.Oracle) {
+						p, r := l.creationNameReturn, o.Regs()
+						if p != nil && p.Addr == at && p.SS == r.SS && p.SP == r.SP {
+							l.creationNameReturn = nil
+							l.footerTransition = false
+							g.listLog("creation-name-ready", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP})
+						}
+					})
+				}
+			}
 		}
 	})
 }
@@ -1094,6 +1196,38 @@ func (g *liveGame) composeList(px []byte) {
 		g.composeWords(px, []listWord{word}, g.catalog, glyphs)
 	}
 }
+
+// DRAFT：只接已由原版建角路徑觀測到的文字。文字框不作可點按鈕。
+func validCreationText(f listField, source string) bool {
+	if f.Start != 0 || f.Width != 0 || f.FontSize != 0 || f.UpperCaller != (oracle.Addr{}) || f.UpperNative != nil || f.UpperFormatSHA256 != "" || f.SourcePattern != "" || f.SHA256 != digest([]byte(source)) {
+		return false
+	}
+	if f.Caller == (oracle.Addr{Seg: 0x266d, Off: 0x11f}) {
+		return source == "Character name:" && f.Group == "footer" && f.RawX == 8004 && f.RawY == 189 && f.FormatSHA256 == digest([]byte("%s")) &&
+			f.MenuSignature == "8cfc774be167be0c498cbefd184a23646ba15e94bfce58eec13c0711f89ac3ab" && f.Color != nil && *f.Color == 0x80 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23
+	}
+	if f.Color != nil || f.BackgroundOverride != nil {
+		return false
+	}
+	if f.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x09dd}) {
+		return source == "ready    action" && f.Group == "header" && f.RawX == 8094 && f.RawY == 8008 && f.FormatSHA256 == digest([]byte(source)) && f.MenuSignature == "8cfc774be167be0c498cbefd184a23646ba15e94bfce58eec13c0711f89ac3ab"
+	}
+	if f.FormatSHA256 != f.SHA256 {
+		return false
+	}
+	if f.Caller == (oracle.Addr{Seg: 0x1bb6, Off: 0x1be}) {
+		return f.Group == "body" && (f.RawX == 24 || f.RawX == 160) && f.RawY >= 24 && f.RawY <= 172 && f.RawY%4 == 0 && f.MenuSignature == "41379ee14e976113f484db8425a3fc4ce60822edb6957699b088a019c6f7dda1"
+	}
+	if f.Caller.Seg != 0x26b4 || f.Group != "header" || f.MenuSignature != "191c0ba49dc03bfaceb8be1ab19c0d92efb10341e05b2c851e46682a74451ed1" {
+		return false
+	}
+	titles := map[uint16]struct {
+		text string
+		x, y uint16
+	}{0x2918: {"PICK RACE", 8006, 8006}, 0x2931: {"PICK ALIGNMENT", 8006, 8044}, 0x294a: {"PICK GENDER", 8006, 8076}, 0x2963: {"PICK CLASS", 8072, 8006}}
+	t, ok := titles[f.Caller.Off]
+	return ok && source == t.text && f.RawX == t.x && f.RawY == t.y
+}
 func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]string, glyphs glyphSet) {
 	pal := g.o.Palette()
 	for _, w := range words {
@@ -1133,7 +1267,7 @@ func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 || l.feedback != nil || l.serviceNotice != nil {
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 || l.feedback != nil || l.serviceNotice != nil || l.creationNameReturn != nil || l.creationFooterPending {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))
