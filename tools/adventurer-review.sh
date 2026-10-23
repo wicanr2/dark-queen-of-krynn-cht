@@ -5,7 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 case "${2:-core}" in
   core) CHAPTER=adventurer-core-r1 ;;
   monsters) CHAPTER=adventurer-monsters-r1 ;;
-  *) echo '章節只接受 core 或 monsters' >&2; exit 2 ;;
+  spells) CHAPTER=adventurer-spells-r1 ;;
+  *) echo '章節只接受 core、monsters 或 spells' >&2; exit 2 ;;
 esac
 SOURCE="$ROOT/workplace/probe/manual-gameplay-20261023/$CHAPTER"
 PRIOR=/home/anr2/cht/golden_box/death_knight_of_krynn
