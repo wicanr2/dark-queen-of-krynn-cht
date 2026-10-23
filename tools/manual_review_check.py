@@ -62,7 +62,9 @@ def validate(project, review, prior, font, output):
         assert page["source_level"]=="scan reviewed" and page["panel"] in ("review-only","hold-password-scope")
         for text in (title,body):
             assert not any(ord(c)<32 or c=="�" for c in text)
-            assert not re.search(r"\\(?!n)",text)
+            # 原手冊的 DOS 路徑保留反斜線；其餘只接受 TSV 換行語法。
+            without_paths=re.sub(r"\b[A-Z]:\\[A-Z0-9._\\]+", "", text)
+            assert not re.search(r"\\(?!n)",without_paths)
         heading=ui["manual.heading"] % (number,title)
         assert len(heading)<=37
         lines=wrap(body);count=(len(lines)+12)//13
@@ -82,8 +84,7 @@ def validate(project, review, prior, font, output):
         body=texts[f'manual.operation.page{fact["page"]}.body']
         assert all(s in body for s in fact["required"]),("校讀片段遺失",fact["page"])
         assert all(s not in body for s in fact.get("forbidden",[])),("舊誤植回流",fact["page"])
-    all_chars=set("".join(font_text.values()))
-    all_chars.discard("\\") # TSV 的換行語法不繪製。
+    all_chars=set("".join(v.replace(r"\n", "") for v in font_text.values()))
     cmap=TTFont(font).getBestCmap()
     assert all(ord(c) in cmap for c in all_chars),"手冊字型缺字"
     assert {p["page"] for p in manifest["pages"] if p["panel"]=="hold-password-scope"}==set(manifest["hold_pages"])
