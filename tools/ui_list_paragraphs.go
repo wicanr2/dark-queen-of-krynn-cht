@@ -50,10 +50,13 @@ func (g *liveGame) installListParagraphs() {
 		service := p.Key == "service-message."+suffix && p.Caller.Seg == 0x291a &&
 			(p.Caller.Off == 0x0eee || p.Caller.Off == 0x0fd0 || p.Caller.Off == 0x0c7f) &&
 			p.NativeBox == ([4]int{8, 168, 312, 184}) && p.Foreground == 11 && p.Background == 0 && p.Clear == 1 && l.config.Background == 23
-		if p.JournalEntry != 0 && (!message || p.JournalEntry < 1 || p.JournalEntry > 99 ||
-			digest([]byte(l.sources[journalTemplateKey]))[:20] != strings.TrimPrefix(journalTemplateKey, "ui.") ||
-			strings.Count(l.sources[journalTemplateKey], "%s") != 1 ||
-			strings.Replace(l.sources[journalTemplateKey], "%s", strconv.Itoa(p.JournalEntry), 1) != source) {
+		formattedJournal := message &&
+			digest([]byte(l.sources[journalTemplateKey]))[:20] == strings.TrimPrefix(journalTemplateKey, "ui.") &&
+			strings.Count(l.sources[journalTemplateKey], "%s") == 1 &&
+			strings.Replace(l.sources[journalTemplateKey], "%s", strconv.Itoa(p.JournalEntry), 1) == source
+		literalJournal := literal && p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x1d81}) && p.Foreground == 7 && p.Clear == 1 &&
+			strings.HasSuffix(source, " AS JOURNAL ENTRY "+strconv.Itoa(p.JournalEntry)+".")
+		if p.JournalEntry != 0 && (p.JournalEntry < 1 || p.JournalEntry > 99 || (!formattedJournal && !literalJournal)) {
 			panic("手札編號與完整原文不符")
 		}
 		if source == "" || !(literal || message || service) || p.SHA256 != digest([]byte(source)) ||

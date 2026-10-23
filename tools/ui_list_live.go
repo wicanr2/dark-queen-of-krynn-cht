@@ -387,7 +387,17 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.BackgroundOverride != nil && *f.BackgroundOverride == 7 &&
 				(f.SHA256 == "27f835efb80b2af751f472f06171037b89065c6143ee753de6944a644900b081" || f.SHA256 == loadSourcePromptSHA256 || f.SHA256 == loadSlotPromptSHA256)) ||
 				(f.UpperCaller == (oracle.Addr{Seg: 0x2287, Off: 0x316A}) && f.UpperFormatSHA256 == "" && *f.Color == 0x8f && f.BackgroundOverride == nil && f.SHA256 == loadCaptionSHA256))
-			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt {
+			combatCaption := f.Pane == "callsite" && f.Group == "footer" && f.SourcePattern == "" && f.Start == 0 && f.Width == 0 &&
+				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == "" &&
+				f.RawX == 8004 && f.RawY == 189 && f.UpperCaller == (oracle.Addr{Seg: 0x2143, Off: 0x08e3}) &&
+				f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
+				l.sources[f.Key] == "A battle begins..." && f.Length == len(l.sources[f.Key]) && f.SHA256 == digest([]byte(l.sources[f.Key]))
+			aimingRange := f.Pane == "callsite" && f.Group == "footer" && f.SourcePattern == "" && f.Start == 0 && f.Width == 0 &&
+				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == "" &&
+				f.RawX == 8004 && f.RawY == 8089 && f.UpperCaller == (oracle.Addr{Seg: 0x22f4, Off: 0x2bf0}) &&
+				f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
+				l.sources[f.Key] == "Aim: range = " && f.Length == len(l.sources[f.Key])
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
@@ -963,9 +973,13 @@ func (g *liveGame) installListFields() {
 				signature = menu.Signature
 			}
 			preserved := l.footerCompatible(signature)
+			returnMenu := ok && menu.Count == 1 && len(menu.Buttons) == 1 &&
+				menu.Buttons[0].SHA256 == digest([]byte("Return"))
 			if !preserved {
 				for p, w := range l.words {
-					if w.Group == "footer" && w.Button {
+					returnPrompt := ok && !returnMenu && w.Foreground == 0 && w.Background == 7 &&
+						(l.sources[w.Key] == "Press" || l.sources[w.Key] == "to continue.")
+					if w.Group == "footer" && (w.Button || returnPrompt) {
 						delete(l.words, p)
 					}
 				}

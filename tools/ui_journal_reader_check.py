@@ -122,6 +122,8 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
     summaries=[]
     native_events_all=None
     for run in runs:
+        paragraph_order={e["Step"]:i for i,e in enumerate(run.get("list_events") or [])
+                         if e["Kind"] in ("paragraph-before-glyph","unknown-paragraph-original")}
         if images: assert run["reader_illustrations_sha256"]==sha((inputs/"illustrations.json").read_bytes())
         assert run["reader_catalog_sha256"]==sha(path.read_bytes()) and run["reader_complete"]
         assert run["reader_controls_sha256"]==(sha(controls_path.read_bytes()) if controls_path.exists() else "")
@@ -148,6 +150,10 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
             if mode or gallery is not None:
                 assert frame_index > 0 and step==run["list_frames"][frame_index-1]["step"], "查閱期間原版步數改變"
             while p_index<len(native_paragraphs) and native_paragraphs[p_index]["step"]<=step:
+                pending=native_paragraphs[p_index]["step"]
+                # Run 可恰好停在呼叫前。同一步數的畫格以已驗證的事件序號判斷邊界。
+                if pending==step and pending in paragraph_order and paragraph_order[pending]>=frame.get("list_event_count",len(run.get("list_events") or [])):
+                    break
                 assert mode=="" and gallery is None, "原版在查閱期間前進"
                 p=native_paragraphs[p_index];p_index+=1
                 if auto is not None:

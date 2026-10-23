@@ -18,6 +18,113 @@ def read(path):
     return json.loads(path.read_text())
 
 
+def check_battle_sources(inputs, config, provenance, en, zh, glyphs, trace):
+    from ui_list_inputs import catalog
+    proof=provenance["battle_extension"]
+    source_path=inputs.parent.parent/proof["source_path"]
+    assert source_path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(source_path.read_bytes())==proof["source_sha256"]
+    source_trace=read(source_path)
+    assert source_trace["exe_sha256"]==trace["exe_sha256"]
+    trace=source_trace
+    base=inputs.parent.parent/proof["base"]
+    assert base.resolve().is_relative_to(inputs.parent.parent.resolve())
+    assert set(proof["base_files"])=={p.name for p in base.iterdir() if p.is_file()}
+    for name,h in proof["base_files"].items():assert sha((base/name).read_bytes())==h
+    old=read(base/"inputs.json");parent=read(base/"provenance.json")
+    assert {k:v for k,v in provenance.items() if k!="battle_extension"}=={k:v for k,v in parent.items() if not k.endswith("_extension")}
+    assert config["Fields"]==old["Fields"]+[r["binding"] for r in proof["fields"]]
+    assert config["Paragraphs"]==old["Paragraphs"]+[r["binding"] for r in proof["paragraphs"]]
+    for name in set(config)-{"Fields","Paragraphs","Menus","fine_windows"}:assert config[name]==old[name]
+    assert set(config)==set(old)
+    menus=dict(old["Menus"])
+    for m in proof["menus"]:
+        assert m in trace["menus"]
+        words=[bytes.fromhex(b["SourceHex"]).decode() for b in m["Buttons"]]
+        assert words in (["Aim","Use","Cast","Guard","Quick","Delay","View","Speed","End"],["Next","Prev","Manual","Center","Exit"])
+        menus[m["Signature"]]="combat" if len(words)==9 else "aiming"
+    assert config["Menus"]==menus
+    expected_buttons=set()
+    for m in trace["menus"]:
+        words=[bytes.fromhex(b["SourceHex"]).decode() for b in m["Buttons"]]
+        if words in (["Aim","Use","Cast","Guard","Quick","Delay","View","Speed","End"],["Next","Prev","Manual","Center","Exit"]):
+            assert m["Signature"] in config["Menus"],"battle menu shape untranslated"
+            if m["Signature"] not in old["Menus"]:
+                expected_buttons.update((m["Signature"],b["Index"]) for b in m["Buttons"])
+    actual_buttons=[(r["menu_signature"],r["button_index"]) for r in proof["fields"] if r["kind"]=="menu"]
+    assert len(actual_buttons)==len(set(actual_buttons)) and set(actual_buttons)==expected_buttons,"battle menu buttons incomplete"
+    base_en,base_zh=catalog(base/"en.tsv"),catalog(base/"zh-TW.tsv")
+    for values,previous in [(en,base_en),(zh,base_zh)]:
+        assert all(values[k]==v for k,v in previous.items())
+        assert set(values)==set(previous)|set(proof["origins"])
+    texts=Path("/catalogs")
+    for name,h in proof["formal_files"].items():assert sha((texts/name).read_bytes())==h
+    formal_en,formal_zh=catalog(texts/"en.tsv"),catalog(texts/"zh-TW.tsv")
+    terms=list(csv.DictReader((texts/"glossary.tsv").open(),delimiter="\t"))
+    bank=texts/"battle-ui-review.tsv";assert sha(bank.read_bytes())==proof["review_sha256"]
+    review={v["key"]:v for v in csv.DictReader(bank.open(),delimiter="\t")}
+    for key,origin in proof["origins"].items():
+        if "review" in origin:
+            row=review[key];assert row==origin["review"] and (en[key],zh[key])==(row["en"],row["text"])
+            assert any(t["en"]==row["glossary_en"] for t in terms)
+            if row["formal_key"]:assert formal_en[row["formal_key"]]==row["en"]
+        elif "formal_key" in origin:
+            k=origin["formal_key"];assert (en[key],zh[key])==(formal_en[k],formal_zh[k])
+        else:
+            term=origin["glossary"];assert term in terms and term["category"]=="ui"
+            assert en[key].casefold()==term["en"].casefold() and zh[key]==term["zh"]
+    untouched=set(proof["base_files"])-{"en.tsv","zh-TW.tsv","font-zh-TW.tsv","inputs.json","provenance.json","glyphs-16.json"}
+    for name in untouched:assert (inputs/name).read_bytes()==(base/name).read_bytes()
+    old_glyphs=read(base/"glyphs-16.json")
+    assert all(glyphs[k]==old_glyphs[k] for k in ("size","height","font_sha256"))
+    assert all(glyphs["glyphs"][k]==v for k,v in old_glyphs["glyphs"].items())
+    old_font=catalog(base/"font-zh-TW.tsv");expected_font=dict(old_font)
+    expected_font.update({k:zh[k] for k in proof["origins"]})
+    assert catalog(inputs/"font-zh-TW.tsv")==expected_font
+    required=set("".join(expected_font.values()))-set("\r\n\t")
+    assert set(glyphs["glyphs"])==set(old_glyphs["glyphs"])|required
+    path=inputs.parent.parent/proof["source_path"]
+    assert path.resolve()==(inputs.parent/"observe-route-r1/receipt.json").resolve()
+    assert sha(path.read_bytes())==proof["source_sha256"]
+    calls={c["step"]:c for c in trace["calls"]}
+    for row in proof["fields"]:
+        f=row["binding"]
+        assert f["Start"]==0 and f["Length"]==len(en[f["Key"]]),"battle lexical mask mismatch"
+        if row["kind"]=="menu":
+            m=next(m for m in trace["menus"] if m["Signature"]==row["menu_signature"])
+            b=next(b for b in m["Buttons"] if b["Index"]==row["button_index"])
+            assert bytes.fromhex(b["SourceHex"]).decode()==en[f["Key"]]
+            assert f["SHA256"]==f["FormatSHA256"]==b["SHA256"]
+            native=lambda v:v if v<400 else (v-8000)*2
+            assert [f["RawX"],f["RawY"]]==[native(b["RawX"]),native(b["RawY"])+1]
+            assert f["Pane"]=="menu" and f["Group"]=="footer" and f["Caller"]=={"Seg":0xCEB,"Off":0x1BE}
+            assert f["MenuSignature"]==m["Signature"]
+        else:
+            c=calls[row["call_step"]];w=trace["wrappers"][c["wrapper_index"]];source=c["vararg_1_candidate"]["text"]
+            assert f["Pane"]=="callsite" and f["Caller"]==c["caller"]=={"Seg":0xB72,"Off":0x27C}
+            assert f["UpperCaller"]==w["caller"] and f["FormatSHA256"]==sha(b"%s") and c["format"]["text"]=="%s"
+            assert f["SHA256"]==sha(source.encode()) and source[:f["Length"]]==en[f["Key"]]
+            assert source in ("Hitpoints","AC","A battle begins...","Aim: range = 0 ")
+            assert w["format"]["text"]==source and [f["RawY"],f["RawX"]]==c["stack"][2:4]
+            assert (row["first_glyph"],row["return_step"])==(c["first_glyph"],c["return_step"]) and c["step"]<c["first_glyph"]
+            assert f["Group"]==("body" if source in ("Hitpoints","AC") else "footer")
+            if source in ("A battle begins...","Aim: range = 0 "):
+                assert f["UpperNative"]==[(w["stack"][i]&255)*8 for i in (2,3)],"battle upper coordinate contract mismatch"
+                assert f["Color"]==c["stack"][4]==0x8f and "BackgroundOverride" not in f
+            else:assert not any(k in f for k in ("UpperNative","Color","BackgroundOverride"))
+    native_paragraphs={p["step"]:p for p in trace["paragraphs"] or []}
+    for row in proof["paragraphs"]:
+        p=native_paragraphs[row["step"]];f=row["binding"];source=p["source"]["text"]
+        assert f["Key"]=="ecl."+sha(source.encode())[:20] and en[f["Key"]]==source
+        assert f["SHA256"]==sha(source.encode()) and f["Caller"]==p["caller"]
+        assert f["NativeBox"]==p["native_box"]==[8,136,312,184]
+        assert [f[k] for k in ("Foreground","Background","Clear")]==[p[k] for k in ("foreground","background","clear")]
+        assert (row["first_glyph"],row["return_step"])==(p["first_glyph"],p["return_step"])
+        if f.get("JournalEntry"):
+            match=re.search(r" AS JOURNAL ENTRY ([1-9][0-9]?)\.$",source)
+            assert match and f["JournalEntry"]==int(match[1]),"battle journal source number mismatch"
+    return source_trace
+
+
 def check(en_run, zh_run, inputs, control, observed, output):
     assert not output.exists()
     a, b, oracle, trace = [read(p / "receipt.json") for p in (en_run, zh_run, control, observed)]
@@ -37,6 +144,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    battle=provenance.get("battle_extension")
+    battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
+    inherited_creation_fields=read(inputs.parent.parent/battle["base"]/"inputs.json")["Fields"] if battle else []
+    creation_tracking=any(f["Pane"]=="menu-text" and f["Caller"]=={"Seg":0x1BB6,"Off":0x1BE} for f in inherited_creation_fields)
     item_context=provenance.get("item_context_extension")
     context_fields=[r["binding"] for r in item_context["fields"]] if item_context else []
     equipment=provenance.get("equipment_extension")
@@ -46,7 +157,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if item_context:
         base=inputs.parent.parent/item_context["base"]
         for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
@@ -161,16 +272,16 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for span in f["Spans"]:
                 assert text[span["Start"]:span["Start"]+span["Length"]]==en[span["Key"]]
             assert f["Spans"][0]["Start"]==1 and en[f["Spans"][0]["Key"]] in ("Yes","No")
+    if page_proof:
+        proof=page_proof
+        path=inputs.parent.parent/proof["source_path"]
+        assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==proof["sha256"]
+        assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
     if creation:
         base=inputs.parent.parent/creation["base"]
         source=inputs.parent.parent/creation["source_path"]
         assert source.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(source.read_bytes())==creation["source_sha256"]
         creation_source=read(source)
-        if page_proof:
-            proof=page_proof
-            path=inputs.parent.parent/proof["source_path"]
-            assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==proof["sha256"]
-            assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
         base_en,base_zh=catalog(base/"en.tsv"),catalog(base/"zh-TW.tsv")
         assert all(en[k]==v for k,v in base_en.items()) and all(zh[k]==v for k,v in base_zh.items())
         for f in removed_age:
@@ -394,13 +505,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if not field.get("SourcePattern"):
             return field["Start"] if sha(text.encode()) == field["SHA256"] else None
         if field["SourcePattern"]=="created-name":
-            assert creation and field["Pane"]=="callsite" and field["Group"]=="footer"
+            assert (creation or field in inherited_creation_fields) and field["Pane"]=="callsite" and field["Group"]=="footer"
             assert en[field["Key"]]=="Save" and field["SHA256"]==sha(b"Save")
             assert field["UpperCaller"]=={"Seg":0xCEB,"Off":0x995} and field["Caller"]=={"Seg":0xB72,"Off":0x27C}
             assert (field["RawX"],field["RawY"],field["Start"],field["Length"])==(8004,189,0,4)
             return 0 if re.fullmatch(r"Save [ -~]{1,15}\? ",text) else None
         if field["SourcePattern"]=="age-unit":
-            assert creation and field["Pane"]=="callsite" and field["Group"]=="body" and en[field["Key"]]=="years"
+            assert (creation or field in inherited_creation_fields) and field["Pane"]=="callsite" and field["Group"]=="body" and en[field["Key"]]=="years"
             assert field["UpperCaller"]=={"Seg":0x2C4A,"Off":0xD3} and (field["RawX"],field["RawY"],field["Length"])==(8032,8012,5)
             return len(text)-5 if re.fullmatch(r"[0-9]+ years",text) else None
         assert field["SourcePattern"] == "clock-period"
@@ -578,7 +689,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             wrappers[i] = row
     expected = [c for c in trace["calls"] if c["wrapper_index"] in wrappers]
     assert len(accepted) == len(expected)
-    assert accepted or paragraph_entries or (creation and any(e["Kind"]=="field-before-glyph" for e in b["list_events"])), "沒有列表列、段落或建角欄位接入"
+    assert accepted or paragraph_entries or ((creation or battle) and any(e["Kind"]=="field-before-glyph" for e in b["list_events"])), "沒有列表列、段落或已驗來源欄位接入"
     for event, original in zip(accepted, expected):
         wrapper = trace["wrappers"][original["wrapper_index"]]
         assert event["Step"] == wrapper["step"] < event["first_glyph"] == original["first_glyph"]
@@ -812,6 +923,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert sha(boundary_path.read_bytes()) == boundary["sha256"]
         feedback_boundaries = read(boundary_path)
     page, page_history = None, []
+    battle_erased_fields=[]
     clear_baselines = []
     pending_clear_index = None
     wrappers_by_step = {w["step"]: w for w in trace["wrappers"]}
@@ -1011,35 +1123,43 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert e["detail"]=={"caller":w["caller"],"ss":w["return_ss"],"sp":w["return_sp"],"source_sha256":sha(w["format"]["text"].encode())}
         elif kind == "footer-render-entry":
             preserved = False
+            retire_return_prompt=False
+            def return_prompt(w):
+                return retire_return_prompt and w["Foreground"]==0 and w["Background"]==7 and en[w["Key"]] in ("Press","to continue.")
             if e.get("detail") is not None:
                 native_refresh = refresh_sources[e["Step"]]
                 signature = native_refresh["menu_snapshot"]["Signature"] if native_refresh["valid"] else ""
+                menu=native_refresh["menu_snapshot"]
+                retire_return_prompt=native_refresh["valid"] and not (menu["Count"]==1 and len(menu["Buttons"])==1 and menu["Buttons"][0]["SourceHex"]==b"Return".hex())
                 expected = {(f["RawX"]+f["Start"]*8, f["RawY"], f.get("Width", f["Length"]*8), f["Key"])
                             for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == signature}
                 before = {(w["X"], w["Y"], w["Width"], w["Key"]) for w in words.values() if w["Group"] == "footer" and (not typed_buttons or w.get("Button"))}
                 preserved = bool(expected) and signature in config["Menus"] and before == expected
                 assert e["detail"] == {"menu_signature": signature, "preserved": preserved}
             if not preserved:
-                words = {pos: w for pos, w in words.items() if w["Group"] != "footer" or (typed_buttons and not w.get("Button"))}
+                words = {pos: w for pos, w in words.items() if w["Group"] != "footer" or (typed_buttons and not w.get("Button") and not return_prompt(w))}
         elif kind == "native-fill":
             assert any(f["step"] <= e["Step"] <= f["return_instruction_step"]
                        and f["native_rect"] == e["detail"] for f in trace["fill_events"])
+            if battle:
+                targets=[dict(w) for w in words.values() if w["Group"]=="body" and intersects(w,e["detail"])]
+                if targets:battle_erased_fields.append({"step":e["Step"],"rect":e["detail"],"targets":targets})
             erase(e["detail"])
         elif kind == "creation-pane-redraw":
-            assert creation and e["detail"]==[8,8,304,104]
+            assert (creation or creation_tracking) and e["detail"]==[8,8,304,104]
             assert any(f["step"]<=e["Step"]<=f["return_instruction_step"] and f["native_rect"]==e["detail"] for f in trace["fill_events"])
         elif kind == "creation-name-leave":
-            assert creation
+            assert creation or creation_tracking
             assert any(f["step"]<=e["Step"]<=f["return_instruction_step"] and f["native_rect"]==e["detail"] for f in trace["fill_events"])
             prompt=next(w for w in words.values() if w["X"]==8 and w["Y"]==189 and en[w["Key"]]=="Character name:")
             assert prompt["Group"]=="footer"
         elif kind == "creation-footer-entry":
-            assert creation
+            assert creation or creation_tracking
             c=calls_by_step[e["Step"]]
             assert e["detail"]["call_step"]==c["step"]
             assert any(f["Key"]==e["detail"]["key"] and f["Caller"]==c["caller"] and (f["RawY"],f["RawX"])==tuple(c["stack"][2:4]) for f in config["Fields"])
         elif kind == "creation-footer-page":
-            assert creation
+            assert creation or creation_tracking
             c=next(c for c in trace["calls"] if c.get("first_glyph",e["Step"]+1)<=e["Step"]<c["return_step"])
             if c.get("video_first"):
                 assert c["video_first"]["Step"]==e["Step"]
@@ -1048,7 +1168,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert e["detail"]["target_page"]==e["detail"]["first_write_offset"]&0x4000
                 assert 0<=e["detail"]["first_write_offset"]<0x8000
         elif kind == "creation-footer-visible":
-            assert creation
+            assert creation or creation_tracking
             if trace.get("display_changes"):
                 layout=next(v["layout"] for v in reversed(trace["display_changes"]) if v["step"]<=e["Step"])
                 assert e["detail"]=={"target_page":layout["DisplayStart"]}
@@ -1127,6 +1247,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         for checkpoint in actual["checkpoints"]:
             buttons = [c for c in trace["calls"] if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
             if not buttons:
+                if battle_source:
+                    previous_buttons=[c for c in battle_source["calls"] if c["step"]<checkpoint["step"] and c["caller"]=={"Seg":0xCEB,"Off":0x1BE}]
+                    assert previous_buttons and previous_buttons[-1]["return_step"]<trace["request"]["start_steps"]
+                    signature=battle_source["menus"][previous_buttons[-1]["menu_index"]]["Signature"]
+                    assert signature not in config["Menus"],"known initial menu missing translation"
+                    assert not any(w["Group"]=="footer" for w in layouts[checkpoint["step"]]["words"] or [])
+                    continue
                 # 第六個字母的終點在 359M；同一步的 Return 尚未送入。
                 assert actual.get("cold_boot") and checkpoint["step"] <= 359000000
                 assert not layouts[checkpoint["step"]]["words"]
@@ -1171,7 +1298,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     assert word in (layouts[checkpoint["step"]]["words"] or []), ("missing retained prompt",checkpoint["label"],f["Key"])
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
     assert len(cleared) == len(clear_baselines)
-    assert cleared or any(p["Clear"] for p in page_history) or feedback_intervals, "沒有列表清除、段落替換或已驗證回報復原"
+    battle_field_cycles=[dict(item,reprinted=[f["Step"] for f in fields if f["Step"]>item["step"] and any(
+        all(f["detail"]["word"][k]==w[k] for k in ("X","Y","Width","Key","Group")) for w in item["targets"])]) for item in battle_erased_fields]
+    battle_field_cycles=[item for item in battle_field_cycles if item["reprinted"]]
+    assert cleared or any(p["Clear"] for p in page_history) or feedback_intervals or battle_field_cycles, "沒有列表清除、段落替換、回報復原或已驗證欄位重印"
     for event, (start, targets) in zip(cleared, clear_baselines):
         assert start < event["Step"] and event["detail"]["targets"] == targets
     assert all(e["detail"]["pixels"] == len({y*320+x for w in e["detail"]["targets"] for y in range(w["Y"],w["Y"]+8) for x in range(w["X"],w["X"]+w["Width"])}) for e in cleared)
@@ -1440,6 +1570,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
     if item_context:
         result["item_context_added_fields"]=len(context_fields)
         result["limits"]="已觀測裝備拒絕及姓名長度的 DRAFT；GUI 以各自正常請求列明，不宣稱所有姓名字元、所有裝備回報或正式入口完成。"
+    if battle:
+        result["battle_added_fields"]=len(battle["fields"])
+        result["battle_added_paragraphs"]=len(battle["paragraphs"])
+        result["battle_field_cycles"]=battle_field_cycles
+        result["limits"]="正常宮殿告別狀態後連續離城、凱爾高斯手札 65 與首次戰鬥、瞄準退出及首次攻擊。右側武器、攻擊及傷害回報仍原文，未宣稱整場戰鬥、正式入口或全遊戲中文化完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
