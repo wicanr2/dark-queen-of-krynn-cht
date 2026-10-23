@@ -88,6 +88,116 @@ type liveGame struct {
 	campPositions map[[2]int]string
 	list          *listState
 	reader        *journalReader
+	cold          *coldLoad
+}
+
+// 研究限定的冷讀重播。角色管理沿用 20px，讀回後才切換既有 16px 列表原型。
+type coldLoad struct {
+	Actions           []listAction
+	QuizStep, Handoff uint64
+	QuizSHA256        string
+	SaveFiles         map[string]struct {
+		Bytes           int
+		SHA256          string
+		ModTimeUnixNano int64
+	}
+	action                      int
+	sent, ready                 bool
+	frames                      []liveFrame
+	events                      []liveEvent
+	checkpoints                 []map[string]any
+	boundaries                  []map[string]any
+	catalog                     map[string]string
+	glyphs                      glyphSet
+	inputs, request, sources    string
+	bridgeSHA                   string
+	fineWindowsPath             string
+	readerCatalog, readerImages string
+}
+
+func (g *liveGame) updateCold() error {
+	c, o := g.cold, g.o
+	if o.Steps() == c.Handoff {
+		if g.transition || g.renderDepth != 0 || len(g.paints) != 0 {
+			panic("冷讀交接仍有未完成角色選單交易")
+		}
+		bridge := filepath.Join(g.out, "cold-handoff.state")
+		must(o.SaveStateFile(bridge))
+		data, err := os.ReadFile(bridge)
+		must(err)
+		c.bridgeSHA = digest(data)
+		c.frames, c.events, c.checkpoints, c.boundaries = g.frames, g.events, g.checkpoints, g.boundaries
+		g.frames, g.events, g.checkpoints, g.boundaries = nil, nil, nil, nil
+		g.active = map[[2]int]liveEvent{}
+		g.lifecycle = false
+		g.catalog, g.glyphs = c.catalog, c.glyphs
+		g.list = &listState{}
+		g.installList(c.inputs, c.request, c.sources)
+		if c.readerCatalog != "" {
+			g.installReader(c.readerCatalog, c.readerImages)
+		}
+		if g.list.request.StateSHA != c.bridgeSHA {
+			panic("冷讀交接與獨立原版快照不符")
+		}
+		if c.fineWindowsPath != "" {
+			raw, err := os.ReadFile(c.fineWindowsPath)
+			must(err)
+			var windows [][2]uint64
+			must(json.Unmarshal(raw, &windows))
+			last := c.Handoff
+			for _, w := range windows {
+				if w[0] < last || w[1] <= w[0] || w[1] > g.list.request.Actions[len(g.list.request.Actions)-1].End {
+					panic("冷讀細驗區間不符")
+				}
+				last = w[1]
+			}
+			g.list.config.FineWindows = append(g.list.config.FineWindows, windows...)
+		}
+		c.ready = true
+		return g.updateList()
+	}
+	if c.action >= len(c.Actions) {
+		panic("冷讀動作提前結束")
+	}
+	a := c.Actions[c.action]
+	step := o.Steps()
+	if !c.sent && step == a.At {
+		if a.Kind == "text" {
+			must(o.TypeKeys(a.Key))
+		} else {
+			must(o.SendKeys(a.Key))
+		}
+		c.sent = true
+	}
+	next := a.At
+	if c.sent {
+		next = a.End
+	}
+	batch := uint64(500000)
+	if g.fine {
+		for _, at := range []uint64{241000000, 261000000, 281000000, 301000000, 327000000} {
+			if step >= at && step < at+1000000 {
+				batch = 2000
+			}
+		}
+	}
+	if next-step < batch {
+		batch = next - step
+	}
+	if batch == 0 {
+		panic("冷讀步數未前進")
+	}
+	must(o.Run(batch))
+	if o.Steps() == a.End {
+		if a.End == c.QuizStep && digest(o.Indexed()) != c.QuizSHA256 {
+			panic("讀檔查驗頁不符，不輸入答案")
+		}
+		g.capture()
+		g.checkpoints[len(g.checkpoints)-1]["label"] = a.Label
+		c.action++
+		c.sent = false
+	}
+	return nil
 }
 
 func must(err error) {
@@ -120,7 +230,48 @@ func readLiveCatalog(path string) map[string]string {
 	}
 	return result
 }
+
+func (g *liveGame) installShortText() {
+	o := g.o
+	// 控制組同樣觀測事件；translate 只影響 Draw 的呈現資料。
+	o.OnCall(oracle.Addr{Seg: 0x1212, Off: 0x03a0}, func(_ *oracle.Oracle) {
+		r := o.Regs()
+		word := func(off uint16) uint16 { return o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + off}) }
+		seg, off := word(12), word(10)
+		source := []byte{}
+		for i := 0; i < 255; i++ {
+			c := o.Byte(oracle.Addr{Seg: seg, Off: off + uint16(i)})
+			if c == 0 {
+				break
+			}
+			if c < 32 || c > 126 {
+				return
+			}
+			source = append(source, c)
+		}
+		key := digest(source)
+		if (g.interactive || g.cold != nil) && g.escapePending && string(source) == "%s" && word(4) == 8008 && word(6) == 8068 {
+			g.active = map[[2]int]liveEvent{}
+			g.transition = false
+			g.escapePending = false
+			g.boundaries = append(g.boundaries, map[string]any{"kind": "begin-adventure-native-hud", "step": o.Steps(), "selection_step": g.escapeStep, "active": 0})
+		}
+		text, ok := g.catalog[key]
+		if !ok {
+			return
+		}
+		e := liveEvent{Step: o.Steps(), X: int(word(6)), Y: int(word(4)), Color: word(8), Source: string(source), Key: key, Text: text}
+		if g.camp && (o.Caller() != (oracle.Addr{Seg: 0x0ceb, Off: 0x01be}) || g.campPositions[[2]int{e.X, e.Y}] != key) {
+			return
+		}
+		g.events = append(g.events, e)
+		g.active[[2]int{e.X, e.Y}] = e
+	})
+}
 func (g *liveGame) limit() uint64 {
+	if g.cold != nil && !g.cold.ready {
+		return g.cold.Handoff + 1
+	}
 	if g.list != nil {
 		return g.list.request.Actions[len(g.list.request.Actions)-1].End
 	}
@@ -164,11 +315,14 @@ func (g *liveGame) installLifecycle() {
 		g.boundaries = append(g.boundaries, map[string]any{"step": o.Steps(), "kind": kind, "active": len(g.active), "render_depth": g.renderDepth, "paint_depth": len(g.paints), "transition": g.transition})
 	}
 	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x17b8}, func(_ *oracle.Oracle) {
+		if !g.lifecycle {
+			return
+		}
 		if o.Regs().AX != 0xffff {
-			if (g.interactive || g.camp) && len(g.active) == 0 {
+			if (g.interactive || g.camp || g.cold != nil) && len(g.active) == 0 {
 				return
 			}
-			if g.interactive && o.Regs().AX == 10 {
+			if (g.interactive || g.cold != nil) && o.Regs().AX == 10 {
 				g.escapePending = true
 				g.escapeStep = o.Steps()
 			}
@@ -177,6 +331,9 @@ func (g *liveGame) installLifecycle() {
 		}
 	})
 	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, func(_ *oracle.Oracle) {
+		if !g.lifecycle {
+			return
+		}
 		if g.transition {
 			g.active = map[[2]int]liveEvent{}
 		}
@@ -186,6 +343,9 @@ func (g *liveGame) installLifecycle() {
 		}
 	})
 	o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x1585}, func(_ *oracle.Oracle) {
+		if !g.lifecycle {
+			return
+		}
 		g.renderDepth--
 		if g.renderDepth < 0 {
 			panic("繪製邊界不成對")
@@ -198,6 +358,9 @@ func (g *liveGame) installLifecycle() {
 	})
 	registered := map[oracle.Addr]bool{}
 	o.OnCall(oracle.Addr{Seg: 0x0ceb, Off: 0x008e}, func(_ *oracle.Oracle) {
+		if !g.lifecycle {
+			return
+		}
 		if o.StackWord(4) != 1 {
 			return
 		}
@@ -252,6 +415,9 @@ func (g *liveGame) Update() error {
 		}
 		must(g.o.Run(500000))
 		return nil
+	}
+	if g.cold != nil && !g.cold.ready {
+		return g.updateCold()
 	}
 	if g.o.Steps() >= g.limit() {
 		return nil
@@ -490,10 +656,10 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		panic("前端提交與合成畫格不同")
 	}
 	name := fmt.Sprintf("frame-%03d-%09d.png", len(g.frames), g.o.Steps())
-	if g.interactive || g.camp || g.list != nil {
+	if g.interactive || g.camp || g.list != nil || g.cold != nil {
 		name = "frame-" + composedHash + ".png"
 	}
-	if _, err := os.Stat(filepath.Join(g.out, name)); (!g.interactive && !g.camp && g.list == nil) || os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(g.out, name)); (!g.interactive && !g.camp && g.list == nil && g.cold == nil) || os.IsNotExist(err) {
 		f, err := os.Create(filepath.Join(g.out, name))
 		must(err)
 		im := &image.RGBA{Pix: readback, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
@@ -568,6 +734,10 @@ func main() {
 	story := flag.Bool("story", false, "DRAFT：正常首段劇情的字級原型")
 	storySequence := flag.Bool("story-sequence", false, "DRAFT：接續八次一般 Return，觀測七段已匹配文字")
 	interactive := flag.Bool("interactive", false, "DRAFT：冷啟動並接受實際視窗鍵盤事件；只翻譯角色選單")
+	coldPath := flag.String("cold-load", "", "DRAFT：已核對 J 槽的冷啟動重播請求")
+	coldSave := flag.String("cold-save", "", "唯讀的中文 J 槽來源目錄")
+	coldRoles := flag.String("cold-role-inputs", "", "已核對的 20px 角色管理輸入目錄")
+	coldFine := flag.String("cold-fine-windows", "", "DRAFT：從獨立原版繪製事件衍生的細驗區間")
 	camp := flag.Bool("camp", false, "DRAFT：正常旅店、營地與存檔 J 的底列短標籤")
 	campInputs := flag.String("camp-inputs", "", "營地原型的已觀測來源與座標索引")
 	listMode := flag.Bool("list", false, "DRAFT：依原版標題辨識 Shield 列表並處理捲動及退出")
@@ -580,6 +750,9 @@ func main() {
 	readerInteractive := flag.Bool("reader-interactive", false, "DRAFT：接受真正鍵盤的查閱控制")
 	readerProbe := flag.Bool("reader-probe", false, "DRAFT：允許明列的手札畫面元件預覽")
 	flag.Parse()
+	if *coldFine != "" && (*coldPath == "" || !*fine) {
+		panic("冷讀細驗區間需要冷讀及 fine 模式")
+	}
 	if *readerIllustrations != "" && *readerCatalog == "" {
 		panic("圖文清單需要手札 TSV")
 	}
@@ -595,7 +768,7 @@ func main() {
 	o, err := oracle.Load("/orig/DQK.EXE", "/orig")
 	must(err)
 	defer o.Close()
-	if *interactive {
+	if *interactive || *coldPath != "" {
 		if *state != "" || *story {
 			panic("互動原型只支援冷啟動角色選單")
 		}
@@ -605,7 +778,7 @@ func main() {
 	}
 	o.SetScratch(filepath.Join(*out, "scratch"))
 	expectedSteps := uint64(239000000)
-	if *interactive {
+	if *interactive || *coldPath != "" {
 		expectedSteps = 0
 	}
 	if *story || *camp {
@@ -624,6 +797,9 @@ func main() {
 	g.lifecycle = *lifecycle
 	g.interactive = *interactive
 	g.camp = *camp
+	if *coldPath != "" && (!*listMode || *camp || *story || *interactive || *lifecycle || *coldSave == "" || *coldRoles == "") {
+		panic("冷讀原型參數不符")
+	}
 	if *listMode {
 		if *camp || *story || *interactive || *lifecycle {
 			panic("列表原型需獨立啟用")
@@ -682,7 +858,57 @@ func main() {
 			g.campPositions[pos] = v.SourceSHA256
 		}
 	}
-	if g.list != nil {
+	if *coldPath != "" {
+		data, err := os.ReadFile(*coldPath)
+		must(err)
+		c := &coldLoad{catalog: g.catalog, glyphs: g.glyphs, inputs: *listInputs, request: *listRequest, sources: *sourceCatalog, fineWindowsPath: *coldFine, readerCatalog: *readerCatalog, readerImages: *readerIllustrations}
+		must(json.Unmarshal(data, c))
+		if c.Handoff != 355000000 || c.QuizStep != 355000000 || c.QuizSHA256 != "d7eec5b094e4265a627d2b61333d3bc7d339572431e281ac29b533e10c76ae67" || len(c.Actions) != 12 || len(c.SaveFiles) != 2 {
+			panic("未知冷讀路徑")
+		}
+		last := uint64(0)
+		for _, a := range c.Actions {
+			if a.At < last || a.End <= a.At || (a.Kind != "text" && a.Kind != "named") {
+				panic("冷讀動作不符")
+			}
+			last = a.End
+		}
+		if last != c.Handoff {
+			panic("冷讀終點不符")
+		}
+		for _, name := range []string{"SavGamJ.qsv", "VaultJ.DAT"} {
+			spec, ok := c.SaveFiles[name]
+			if !ok {
+				panic("冷讀存檔缺項")
+			}
+			raw, err := os.ReadFile(filepath.Join(*coldSave, name))
+			must(err)
+			info, err := os.Stat(filepath.Join(*coldSave, name))
+			must(err)
+			if len(raw) != spec.Bytes || digest(raw) != spec.SHA256 {
+				panic("中文存檔來源不符")
+			}
+			dir := filepath.Join(*out, "scratch", "SAVE")
+			must(os.MkdirAll(dir, 0755))
+			must(os.WriteFile(filepath.Join(dir, name), raw, 0644))
+			if info.ModTime().UnixNano() != spec.ModTimeUnixNano {
+				panic("中文存檔時間來源不符")
+			}
+			must(os.Chtimes(filepath.Join(dir, name), info.ModTime(), info.ModTime()))
+		}
+		g.cold, g.list, g.lifecycle = c, nil, true
+		g.catalog = readLiveCatalog(filepath.Join(*coldRoles, "zh-TW.tsv"))
+		data, err = os.ReadFile(filepath.Join(*coldRoles, "glyphs-20.json"))
+		must(err)
+		// Unmarshal 會合併既有 map；先解除與已保存 16px 字模的共享，避免混入 20px 遮罩。
+		g.glyphs = glyphSet{}
+		must(json.Unmarshal(data, &g.glyphs))
+		if len(g.catalog) != 12 || g.glyphs.Size != 20 || g.glyphs.Height != 24 {
+			panic("冷讀角色選單需沿用 20px 十二標籤")
+		}
+		g.installLifecycle()
+		g.installShortText()
+	} else if g.list != nil {
 		g.installList(*listInputs, *listRequest, *sourceCatalog)
 		if *readerCatalog != "" {
 			g.installReader(*readerCatalog, *readerIllustrations)
@@ -780,40 +1006,7 @@ func main() {
 			g.pages = append(g.pages, p)
 		})
 	} else {
-		// 控制組同樣觀測事件；translate 只影響 Draw 的呈現資料。
-		o.OnCall(oracle.Addr{Seg: 0x1212, Off: 0x03a0}, func(_ *oracle.Oracle) {
-			r := o.Regs()
-			word := func(off uint16) uint16 { return o.Word(oracle.Addr{Seg: r.SS, Off: r.SP + off}) }
-			seg, off := word(12), word(10)
-			source := []byte{}
-			for i := 0; i < 255; i++ {
-				c := o.Byte(oracle.Addr{Seg: seg, Off: off + uint16(i)})
-				if c == 0 {
-					break
-				}
-				if c < 32 || c > 126 {
-					return
-				}
-				source = append(source, c)
-			}
-			key := digest(source)
-			if g.interactive && g.escapePending && string(source) == "%s" && word(4) == 8008 && word(6) == 8068 {
-				g.active = map[[2]int]liveEvent{}
-				g.transition = false
-				g.escapePending = false
-				g.boundaries = append(g.boundaries, map[string]any{"kind": "begin-adventure-native-hud", "step": o.Steps(), "selection_step": g.escapeStep, "active": 0})
-			}
-			text, ok := g.catalog[key]
-			if !ok {
-				return
-			}
-			e := liveEvent{Step: o.Steps(), X: int(word(6)), Y: int(word(4)), Color: word(8), Source: string(source), Key: key, Text: text}
-			if g.camp && (o.Caller() != (oracle.Addr{Seg: 0x0ceb, Off: 0x01be}) || g.campPositions[[2]int{e.X, e.Y}] != key) {
-				return
-			}
-			g.events = append(g.events, e)
-			g.active[[2]int{e.X, e.Y}] = e
-		})
+		g.installShortText()
 	}
 	g.texture = ebiten.NewImage(640, 400)
 	ebiten.SetWindowSize(640, 400)
@@ -899,6 +1092,27 @@ func main() {
 			}
 		}
 		for key, path := range map[string]string{"list_inputs_sha256": *listInputs, "list_request_sha256": *listRequest, "source_catalog_sha256": *sourceCatalog} {
+			data, err := os.ReadFile(path)
+			must(err)
+			result[key] = digest(data)
+		}
+	}
+	if g.cold != nil {
+		c := g.cold
+		if !c.ready {
+			panic("冷讀未接回遊戲")
+		}
+		result["scope"] = "DRAFT continuous MZ cold-load J: approved 20px role labels and existing 16px gameplay prototype; load-source/slot prompts remain original; no complete-game claim"
+		result["cold_boot"] = true
+		result["snapshot_loaded"] = false
+		result["bridge_state_sha256"] = c.bridgeSHA
+		result["cold_frames"], result["cold_events"], result["cold_checkpoints"], result["cold_boundaries"] = c.frames, c.events, c.checkpoints, c.boundaries
+		if c.fineWindowsPath != "" {
+			raw, err := os.ReadFile(c.fineWindowsPath)
+			must(err)
+			result["cold_fine_windows_sha256"] = digest(raw)
+		}
+		for key, path := range map[string]string{"cold_request_sha256": *coldPath, "cold_role_catalog_sha256": filepath.Join(*coldRoles, "zh-TW.tsv"), "cold_role_glyphs_sha256": filepath.Join(*coldRoles, "glyphs-20.json")} {
 			data, err := os.ReadFile(path)
 			must(err)
 			result[key] = digest(data)

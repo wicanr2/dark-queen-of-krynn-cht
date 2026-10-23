@@ -196,7 +196,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
                    and native(b["RawX"]) == native(c["stack"][3]) and native(b["RawY"])+1 == native(c["stack"][2])]
         assert len(buttons) == 1
     for actual in (a, b):
-        assert actual["initial_state_sha256"] == oracle["state_sha256"]
+        if actual.get("cold_boot"):
+            assert "initial_state_sha256" not in actual
+            assert actual["bridge_state_sha256"] == oracle["state_sha256"]
+            assert sha((en_run if actual is a else zh_run).joinpath("cold-handoff.state").read_bytes()) == oracle["state_sha256"]
+        else:
+            assert actual["initial_state_sha256"] == oracle["state_sha256"]
         assert actual["list_request_sha256"] == oracle["request_sha256"]
         assert actual["list_inputs_sha256"] == sha((inputs / "inputs.json").read_bytes())
         assert actual["catalog_sha256"] == sha((inputs / "zh-TW.tsv").read_bytes())
@@ -206,7 +211,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert len(actual["checkpoints"]) == len(oracle["checkpoints"])
         for x, y in zip(actual["checkpoints"], oracle["checkpoints"]):
             for field in ("label", "step", "regs", "ram_sha256", "indexed_sha256", "palette", "keys_consumed", "file_writes"):
-                assert x[field] == y[field], (field, x["step"])
+                offset = actual["cold_checkpoints"][-1]["keys_consumed"] if field == "keys_consumed" and actual.get("cold_boot") else 0
+                expected = y[field]+offset if offset else y[field]
+                assert x[field] == expected, (field, x["step"])
         for field in ("regs", "ram_sha256", "indexed_sha256", "palette"):
             assert actual[field] == oracle["checkpoints"][-1][field]
     assert a["list_events"] == b["list_events"]
@@ -739,7 +746,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         layouts = {frame["step"]: frame for frame in actual["list_frames"]}
         menu_field_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu"}
         for checkpoint in actual["checkpoints"]:
-            button = next(c for c in reversed(trace["calls"]) if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE})
+            buttons = [c for c in trace["calls"] if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
+            if not buttons:
+                # 第六個字母的終點在 359M；同一步的 Return 尚未送入。
+                assert actual.get("cold_boot") and checkpoint["step"] <= 359000000
+                assert not layouts[checkpoint["step"]]["words"]
+                continue
+            button = buttons[-1]
             signature = menu_signature(button)
             if signature not in config["Menus"]:
                 continue
