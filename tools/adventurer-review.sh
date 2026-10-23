@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# DRAFT：冒險手冊正文校讀與離線量測，世界地圖另列。
+# DRAFT：冒險手冊正文校讀與離線量測，圖稿另列。
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE="$ROOT/workplace/probe/manual-gameplay-20261023/adventurer-core-r1"
+case "${2:-core}" in
+  core) CHAPTER=adventurer-core-r1 ;;
+  monsters) CHAPTER=adventurer-monsters-r1 ;;
+  *) echo '章節只接受 core 或 monsters' >&2; exit 2 ;;
+esac
+SOURCE="$ROOT/workplace/probe/manual-gameplay-20261023/$CHAPTER"
 PRIOR=/home/anr2/cht/golden_box/death_knight_of_krynn
 NAME="${1:?全新檢查目錄名稱}"
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]
