@@ -694,6 +694,36 @@ AC 與 HP 來自同一次含 tab 的印字。以原版像素核對起點分別�
 呈現沿 `ui-list-live.sh` 的 en／zh 與 true 細驗參數；`review`、`guards`、`evidence` 的參數入口見腳本末尾。
 報告為 `gpu-check-r4.json`、`creation-check-r2-r4.json`，字模、catalog 及實測程式不變。
 
+### 裝備拒絕回報與姓名長度的 DRAFT 擴充
+
+入口為 [item_contexts.py](../../tools/item_contexts.py)，工作區為 `workplace/probe/item-contexts-20261024/`。
+從已驗正常狀態，嘗試在長劍仍裝備時選擇長弓，核對原版拒絕回報及底列恢復。
+回報沿正式 TSV「already using %s」衍生前綴，物品名稱沿前作既有詞條；加值、物品判定及姓名不變。
+來源、上層格式、呼叫端、原始座標及真正返回共同限制綁定，須以獨立原版色號保存回報前後邊界。
+
+姓名部分逐一由正常輸入取得一至十五字元的物品標題。所有格與物品標題各自保存原始座標及來源，
+不能只從姓名長度公式產生未觀測位置；原版按鈕表仍作完整核對。
+一字元與十五字元另由完整建角表開始驗證，其他來源從已驗的姓名提示狀態接續，明列各自範圍。
+本節維持 DRAFT，不改正式字級、原版輸入限制或存檔名稱語意。
+
+有效輸入為 `inputs-r1`、`inputs-name-01` 及 `inputs-name-15`。新增十八個綁定包含八種缺少的
+姓名長度各兩段標題，以及回報的前綴與物品名稱。已有來源的七種長度沿原綁定；
+比較器另外從十五份固定雜湊的原版收據核對完整標題，不由新增 metadata 推定覆蓋率。
+原文 291 鍵、繁中 286 鍵，差額仍是五個保留語意鍵；字模、閱讀資料及呈現程式不變。
+
+在既有 Python 工具容器內執行 `item_contexts.py names-check /probe/item-contexts-20261024`、
+`refusal-check /probe/item-contexts-20261024`，再以 `inputs /probe /catalogs /probe/item-contexts-20261024`
+生成來源。`/probe` 唯讀，僅研究子目錄覆蓋可寫掛載，`/catalogs` 指向唯讀正式譯表。
+呈現沿 [ui-list-live.sh](../../tools/ui-list-live.sh) 的 en／zh 與 true 細驗參數。
+`review`、`guards` 接研究目錄；`rebuild` 接 `/probe /catalogs 研究目錄`，
+`evidence` 接專案根目錄與研究目錄，封存方法見 helper 末尾。
+
+三條 GUI 的有效報告為 `refusal-gpu-check-final.json`、`name-01-gpu-check-final-r2.json` 及
+`name-15-gpu-check-final.json`，共 5,975 組 GPU 畫格、30 個原版狀態。
+原版回報只重畫底列，沿既有保存／恢復交易驗證；未離開物品頁的請求以請求終點界定列表區間，
+不要求出現尚未發生的整頁清除。回報顯示時底列按鈕暫退，恢復完成後必須六個完整返回。
+本批結果與限制見 [研究 005](../re/005-translation-catalog.md#2026-10-24裝備拒絕回報與姓名長度)。
+
 ## 待驗後才能 READY
 
 - 首段完整劇情的上層入口已由研究 004 解出；仍需補齊其他格式字串、組句、輸入名稱、

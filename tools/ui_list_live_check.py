@@ -37,6 +37,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    item_context=provenance.get("item_context_extension")
+    context_fields=[r["binding"] for r in item_context["fields"]] if item_context else []
     equipment=provenance.get("equipment_extension")
     equipment_fields=[r["binding"] for r in equipment["fields"]] if equipment else []
     equipment_rows=[r["binding"] for r in equipment["rows"]] if equipment else []
@@ -44,13 +46,65 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    if item_context:
+        base=inputs.parent.parent/item_context["base"]
+        for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
+        base_config=read(base/"inputs.json")
+        assert config["Fields"]==base_config["Fields"]+context_fields
+        for name in ("Rows","Headers","Menus","Paragraphs","PaneLists","RowCallers","Background"):
+            assert config[name]==base_config[name]
+        old_en,old_zh=catalog(base/"en.tsv"),catalog(base/"zh-TW.tsv")
+        key=item_context["prefix_key"]
+        assert set(en)==set(old_en)|{key} and set(zh)==set(old_zh)|{key}
+        assert all(en[k]==v for k,v in old_en.items()) and all(zh[k]==v for k,v in old_zh.items())
+        formal_en,formal_zh=catalog(Path("/catalogs/en.tsv")),catalog(Path("/catalogs/zh-TW.tsv"))
+        root=item_context["formal_key"]
+        assert formal_en[root]==en[key]+"%s" and formal_zh[root]==zh[key]+"%s"
+        for name in ("glyphs-16.json","glyphs-20.json","role.zh-TW.tsv","reader.zh-TW.tsv"):
+            assert (inputs/name).read_bytes()==(base/name).read_bytes()
+        for row in item_context["fields"]:
+            path=inputs.parent.parent/row["source_path"]
+            assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==row["source_sha256"]
+            native_source=read(path)
+            assert native_source["exe_sha256"]==oracle["exe_sha256"]
+            c=next(c for c in native_source["calls"] if c["step"]==row["call_step"])
+            f=row["binding"];source=c["vararg_1_candidate"]["text"]
+            assert c["caller"]==f["Caller"]=={"Seg":0xB72,"Off":0x27C} and c["format"]["text"]=="%s"
+            assert f["FormatSHA256"]==sha(b"%s") and f["SHA256"]==sha(source.encode())
+            assert [f["RawY"],f["RawX"]]==c["stack"][2:4]
+            assert (row["first_glyph"],row["return_step"])==(c["first_glyph"],c["return_step"]) and c["step"]<c["first_glyph"]
+            assert source[f["Start"]:f["Start"]+f["Length"]]==en[f["Key"]]
+            if f["Pane"] in ("suffix","inventory"):
+                assert f["Group"]=="header" and f["Start"]==0 and f["Length"]==len(source)
+                assert source==("'s" if f["Pane"]=="suffix" else "Items") and f["RawY"]==8004
+            else:
+                wrapper=native_source["wrappers"][c["wrapper_index"]]
+                assert f["Pane"]=="callsite" and f["Group"]=="footer" and f["UpperCaller"]==wrapper["caller"]=={"Seg":0x88E,"Off":0x1560}
+                assert wrapper["format"]["text"]=="%s" and f["UpperFormatSHA256"]==sha(b"%s") and f["UpperNative"]==[0,192]
+                assert f["Color"]==0x8f and c["stack"][2:5]==[189,8004,0x8f] and "BackgroundOverride" not in f
+                if f["Key"]==key:assert f["Start"]==0 and f["Length"]==len(en[key])
+                else:assert f["Start"]==len(en[key]) and f["Length"]==len(en[f["Key"]]) and f["Key"].startswith("inventory.")
+        # 獨立來源集合不從新增 binding 反推，刪去整個 metadata 列仍須報錯。
+        names_proof=read(inputs.parent/"names-check.json")
+        assert [v["length"] for v in names_proof["cases"]]==list(range(1,16))
+        for case in names_proof["cases"]:
+            path=inputs.parent/"names"/f'length-{case["length"]:02}'/"observe/receipt.json"
+            assert sha(path.read_bytes())==case["receipt_sha256"]
+            source_trace=read(path)
+            assert source_trace["exe_sha256"]==oracle["exe_sha256"]
+            for source,pane,step in (("'s","suffix",case["suffix_call"]),("Items","inventory",case["items_call"])):
+                c=next(c for c in source_trace["calls"] if c["step"]==step)
+                assert c["format"]["text"]=="%s" and c["vararg_1_candidate"]["text"]==source
+                assert any(f["Pane"]==pane and f["Group"]=="header" and en[f["Key"]]==source
+                           and [f["RawY"],f["RawX"]]==c["stack"][2:4] and f["Caller"]==c["caller"]
+                           and f["SHA256"]==sha(source.encode()) for f in config["Fields"]),"item context name title remains untranslated"
     if equipment:
         base=inputs.parent.parent/equipment["base"]
         for name,h in equipment["base_files"].items():
             assert Path(name).name==name and sha((base/name).read_bytes())==h
         base_config=read(base/"inputs.json")
-        assert config["Fields"]==base_config["Fields"]+equipment_fields
+        assert config["Fields"]==base_config["Fields"]+equipment_fields+context_fields
         assert config["Rows"]==base_config["Rows"]+equipment_rows
         menus=dict(base_config["Menus"])
         menus.update({m["Signature"]:"inventory" for m in equipment["menus"]})
@@ -63,7 +117,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             if w["format"]["segment"]==inventory_header["Segment"] and w["format"]["offset"]==inventory_header["Offset"] and w["stack"][3]&255==1:
                 assert any(f["Pane"]=="inventory" and f["Group"]=="header" and f["SHA256"]==sha(c["vararg_1_candidate"]["text"].encode())
                            and [f["RawY"],f["RawX"]]==c["stack"][2:4] and f["Caller"]==c["caller"] for f in config["Fields"]),"equipment title remains untranslated"
-        for name in ("en.tsv","zh-TW.tsv","glyphs-16.json","glyphs-20.json","reader.zh-TW.tsv"):
+        for name in (("glyphs-16.json","glyphs-20.json","reader.zh-TW.tsv") if item_context else ("en.tsv","zh-TW.tsv","glyphs-16.json","glyphs-20.json","reader.zh-TW.tsv")):
             assert (inputs/name).read_bytes()==(base/name).read_bytes()
         source=inputs.parent.parent/equipment["source_path"]
         assert source.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(source.read_bytes())==equipment["source_sha256"]
@@ -122,7 +176,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         for f in removed_age:
             assert f in read(base/"inputs.json")["Fields"] and f["Pane"]=="callsite" and base_en[f["Key"]]=="years"
             assert f["UpperCaller"]=={"Seg":0x2C4A,"Off":0xD3} and (f["RawX"],f["RawY"],f["Length"])==(8032,8012,5)
-        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"])+creation_added+equipment_fields
+        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"])+creation_added+equipment_fields+context_fields
         bank=Path("/catalogs/creation-ui-review.tsv")
         assert sha(bank.read_bytes())==creation["review_sha256"]
         review={r["key"]:r for r in csv.DictReader(bank.open(),delimiter="\t")}
@@ -176,7 +230,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             for name in ["glyphs-20.json","role.zh-TW.tsv"]:assert run["list_role_"+name+"_sha256"]==sha((inputs/name).read_bytes())
         added=[row["binding"] for row in session["added"]]
         assert len(added)==21 and sum(f.get("FontSize")==20 for f in added)==12
-        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"]+added+([row["binding"] for row in startup["added"]] if startup else []))+creation_added+equipment_fields
+        assert config["Fields"]==retain_creation(read(base/"inputs.json")["Fields"]+added+([row["binding"] for row in startup["added"]] if startup else []))+creation_added+equipment_fields+context_fields
         for row in session["added"]:
             binding,origin=row["binding"],row["origin"]
             key=binding["Key"]
@@ -206,7 +260,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         base=inputs.parent.parent/startup["base"]
         for name,digest in startup["base_files"].items():assert sha((base/name).read_bytes())==digest
         base_config=read(base/"inputs.json");added=startup["added"]
-        assert len(added)==2 and config["Fields"]==retain_creation(base_config["Fields"]+[row["binding"] for row in added])+creation_added+equipment_fields
+        assert len(added)==2 and config["Fields"]==retain_creation(base_config["Fields"]+[row["binding"] for row in added])+creation_added+equipment_fields+context_fields
         assert config["Rows"]==base_config["Rows"]+equipment_rows
         for name in ["Headers","Paragraphs","PaneLists","RowCallers","Background"]:assert config[name]==base_config[name]
         path=inputs.parent.parent/startup["observed_path"]
@@ -695,7 +749,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                   and f["native_rect"][0] <= 8 and f["native_rect"][1] <= 8
                   and f["native_rect"][0] + f["native_rect"][2] >= 312
                   and f["native_rect"][1] + f["native_rect"][3] >= 184]
-    intervals = [(w["step"], next(s for s in full_fills if s > w["step"])) for w in title_wrappers]
+    intervals = [(w["step"], next((s for s in full_fills if s > w["step"]),oracle["request"]["actions"][-1]["end"]+1)) for w in title_wrappers]
     for c in trace["calls"]:
         source = c["vararg_1_candidate"] if c["format"]["text"] == "%s" else c["format"]
         in_list = any(start <= c["step"] < end for start, end in intervals)
@@ -746,7 +800,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert {e["Step"] for e in b["list_events"] if e["Kind"] == "unknown-feedback-original"} == set(feedback_candidates)-expected_feedback
     assert {e["Step"] for e in b["list_events"] if e["Kind"] == "footer-feedback-capture"} == expected_feedback
     if any(e["Kind"] == "footer-feedback-capture" for e in b["list_events"]):
-        service = trade or provenance["service_extension"]
+        service = item_context or trade or provenance["service_extension"]
         proof = service["feedback_proof"]
         proof_path = inputs.parent / proof["receipt"]
         assert proof_path.resolve().is_relative_to(inputs.parent.resolve())
@@ -1091,6 +1145,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert any(button["return_step"] < fill["step"] < prompt["step"]
                            and fill["native_rect"] == [8,189,304,8] for fill in trace["fill_events"])
                 expected_keys = set()
+            # 原版回報暫時撤掉底列，但尚未替換按鈕表指標。
+            if any(interval["ready"]<=checkpoint["step"]<interval["closed"] for interval in feedback_intervals):
+                expected_keys=set()
             actual_keys = {w["Key"] for w in layouts[checkpoint["step"]]["words"] or [] if w["Group"] == "footer" and (w.get("Button") if typed_buttons else w["Key"] in menu_field_keys)}
             assert actual_keys == expected_keys, ("checkpoint footer incomplete", checkpoint["label"], expected_keys-actual_keys, actual_keys-expected_keys)
         # 原版仍保留的提示必須留在穩定畫面，不能因模型也把它清掉而通過。
@@ -1114,7 +1171,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     assert word in (layouts[checkpoint["step"]]["words"] or []), ("missing retained prompt",checkpoint["label"],f["Key"])
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
     assert len(cleared) == len(clear_baselines)
-    assert cleared or any(p["Clear"] for p in page_history), "沒有列表清除或段落替換"
+    assert cleared or any(p["Clear"] for p in page_history) or feedback_intervals, "沒有列表清除、段落替換或已驗證回報復原"
     for event, (start, targets) in zip(cleared, clear_baselines):
         assert start < event["Step"] and event["detail"]["targets"] == targets
     assert all(e["detail"]["pixels"] == len({y*320+x for w in e["detail"]["targets"] for y in range(w["Y"],w["Y"]+8) for x in range(w["X"],w["X"]+w["Width"])}) for e in cleared)
@@ -1380,6 +1437,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["equipment_added_fields"]=len(equipment_fields)
         result["equipment_added_rows"]=len(equipment_rows)
         result["limits"]="正常建角後狀態及一般背包按鍵，或原建角路徑回歸；只驗已觀測裝備名稱與裝卸，不含任意物品、所有拒絕回報、正式入口或全遊戲中文化。"
+    if item_context:
+        result["item_context_added_fields"]=len(context_fields)
+        result["limits"]="已觀測裝備拒絕及姓名長度的 DRAFT；GUI 以各自正常請求列明，不宣稱所有姓名字元、所有裝備回報或正式入口完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
