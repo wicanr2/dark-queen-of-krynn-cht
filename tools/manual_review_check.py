@@ -35,6 +35,8 @@ def validate(project, review, prior, font, output):
     assert not output.exists() and output.parent.is_dir()
     manifest=json.loads((review/"source-review.json").read_text())
     assert manifest["draft"] is True and manifest["runtime_verified"] is False
+    key_prefix=manifest.get("key_prefix","manual.operation")
+    assert key_prefix in ("manual.operation","manual.adventurer")
     assert sha(review/"operation-review.zh-TW.tsv")==manifest["review_sha256"]
     assert sha(font)==FONT_SHA
     texts=read_catalog(review/"operation-review.zh-TW.tsv")
@@ -54,7 +56,16 @@ def validate(project, review, prior, font, output):
     pages=[p["page"] for p in manifest["pages"]]
     assert pages==list(range(manifest["first_page"],manifest["last_page"]+1))
     for page in manifest["pages"]:
-        number=page["page"];prefix=f"manual.operation.page{number}"
+        number=page["page"];prefix=f"{key_prefix}.page{number}"
+        if page["panel"]=="illustration-only":
+            assert page["source_level"]=="scan reviewed"
+            assert page["image"] in {r["path"] for r in manifest["sources"]}
+            assert page["ocr"] in {r["path"] for r in manifest["sources"]}
+            assert prefix+".body" not in texts
+            assert texts[prefix+".title"]
+            expected.add(prefix+".title")
+            layouts.append({"page":number,"lines":0,"parts":0,"panel":"illustration-only"})
+            continue
         title,body=[texts[prefix+suffix] for suffix in (".title",".body")]
         expected.update((prefix+".title",prefix+".body"))
         assert page["image"] in {r["path"] for r in manifest["sources"]}
@@ -76,21 +87,23 @@ def validate(project, review, prior, font, output):
     for binding in manifest["terms"]:
         matching=[t for t in terms if t["en"]==binding["en"] and t["category"]==binding["category"]]
         assert len(matching)==1
-        body=texts[f'manual.operation.page{binding["page"]}.body']
+        body=texts[f'{key_prefix}.page{binding["page"]}.body']
         assert matching[0]["zh"] in body,("術語未對齊",binding)
         previous=[t for t in prior_terms if t["en"]==binding["en"] and t["category"]==binding["category"]]
         if previous: assert len(previous)==1 and previous[0]["zh"]==matching[0]["zh"],("前作術語衝突",binding)
     for fact in manifest["invariants"]:
-        body=texts[f'manual.operation.page{fact["page"]}.body']
+        body=texts[f'{key_prefix}.page{fact["page"]}.body']
         assert all(s in body for s in fact["required"]),("校讀片段遺失",fact["page"])
         assert all(s not in body for s in fact.get("forbidden",[])),("舊誤植回流",fact["page"])
     all_chars=set("".join(v.replace(r"\n", "") for v in font_text.values()))
     cmap=TTFont(font).getBestCmap()
     assert all(ord(c) in cmap for c in all_chars),"手冊字型缺字"
     assert {p["page"] for p in manifest["pages"] if p["panel"]=="hold-password-scope"}==set(manifest["hold_pages"])
+    assert {p["page"] for p in manifest["pages"] if p["panel"]=="illustration-only"}==set(manifest.get("illustration_pages",[]))
     output.mkdir()
     (output/"font-source.tsv").write_text("key\ttext\n"+"".join(f"{k}\t{v}\n" for k,v in font_text.items()))
     result={"draft":True,"source_pages":len(pages),"review_rows":len(texts),"characters":sum(len(v) for v in texts.values()),
+            "key_prefix":key_prefix,"illustration_pages":manifest.get("illustration_pages",[]),
             "glyphs":len(all_chars),"term_bindings":len(manifest["terms"]),"protected_facts":len(manifest["invariants"]),
             "hold_pages":manifest["hold_pages"],"layouts":layouts,"review_sha256":sha(review/"operation-review.zh-TW.tsv"),
             "checker_sha256":sha(Path(__file__)),"limits":"source proofread and offline layout only; no manual panel or runtime rule validation"}
@@ -111,7 +124,7 @@ def layout(review, output):
     images=[]
     for entry in checked["layouts"]:
         if entry["panel"]!="review-only":continue
-        page=entry["page"];prefix=f"manual.operation.page{page}"
+        page=entry["page"];prefix=f'{checked.get("key_prefix","manual.operation")}.page{page}'
         lines=wrap(texts[prefix+".body"])
         for part in range(entry["parts"]):
             image=Image.new("RGB",(640,400),"black")
