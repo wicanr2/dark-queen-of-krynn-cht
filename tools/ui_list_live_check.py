@@ -273,11 +273,16 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    bar=provenance.get("bar_extension")
+    source_args=(inputs,config,provenance,en,zh,glyphs)
+    if bar:
+        from bar_ui_inputs import check_sources
+        source_args=check_sources(*source_args)
     short_ecl=provenance.get("short_ecl_extension")
     literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
     if literal_batch:
-        literal_args=check_short_ecl_sources(inputs,config,provenance,en,zh,glyphs) if short_ecl else (inputs,config,provenance,en,zh,glyphs)
+        literal_args=check_short_ecl_sources(*source_args) if short_ecl else source_args
         parent_args=check_literal_catalog_sources(*literal_args)
         battle_source=check_battle_sources(*parent_args,trace)
     else:battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
@@ -292,7 +297,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if item_context:
         base=inputs.parent.parent/item_context["base"]
         for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
@@ -410,7 +415,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
     if page_proof:
         proof=page_proof
         path=inputs.parent.parent/proof["source_path"]
-        assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==proof["sha256"]
+        expected_sha=proof["source_sha256"] if bar else proof["sha256"]
+        assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==expected_sha
         assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
     if creation:
         base=inputs.parent.parent/creation["base"]

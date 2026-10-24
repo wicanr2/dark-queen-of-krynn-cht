@@ -898,6 +898,36 @@ FontTools 容器與字型雜湊由本機索引保存。
 `evidence`／`audit` 同樣接專案根與研究目錄，封存前需有來源核對、變造、重建與術語校讀報告。
 144 則檢查通過、七項既有語境註記沿用；本輪沒有新增 GUI 驗收或正常相鄰片段證據。
 
+### 酒館選單的 DRAFT 擴充
+
+工作區為 `workplace/probe/bar-ui-20261024/`，沿既有完整選單表及 16px 呈現契約，補上三個酒館按鈕。
+完整原版表需同時核對記錄數、原始 bytes、三個文字指標、原文雜湊與座標；不做全域單字替換。
+別名譯文取正式 TSV 的相同單字，原版 Title Case 與 ECL 大寫只在資料衍生時對照，執行期仍精確匹配。
+保持現行整合目錄、段落、閱讀資料、角色 20px 與原版規則，未知表形回退原版。
+新增資料由 [bar_ui_inputs.py](../../tools/bar_ui_inputs.py) 建立及獨立核對。
+原型須走正常進入、喝酒、交談與返回，並以原版印字、清除及反白事件建立 GPU 預期畫格。
+按鍵箭頭的實際作用由原版收據判定，不預設會移動酒館按鈕反白。
+資料防護至少拒絕改譯文、錯表形或座標、改舊欄位；字模已涵蓋時不得重製舊點陣。
+這是既有 DRAFT 的資料擴充，不是正式啟動器或全遊戲驗收。
+
+有效資料為 `inputs-r2`、原版 `observe-bar-r2`／`control-bar-r2` 與 GUI `en-r2`／`zh-r2`。
+`programs-r1/ui-list-live` 沿父批凍結二進位，未重新編譯；來源、輸入及請求雜湊見 `run-r2.json`，
+實測 Xvfb 命令為 `gui-r2.sh`，需在受限、離線 Docker 容器內執行，設定 `RESULT` 及 `TRANSLATE`。
+腳本假定 `/probe` 為唯讀既有重播、`/out` 為此研究目錄、`/orig` 為唯讀原版。
+無 `reader-controls.json` 的資料不傳該選用參數，不製造新控制格式。
+
+Python 工具在固定 Pillow 容器內執行，專案根 `/project` 唯讀，只覆蓋本研究目錄可寫，
+正式譯表另掛 `/catalogs` 唯讀，使用目前 UID/GID、外層逾時及資源限制。
+`native /project/workplace/probe/bar-ui-20261024` 核對九個原版狀態；
+`prepare /project /project/workplace/probe/bar-ui-20261024` 只建立全新 `inputs-r2`，
+`guards` 接相同兩個路徑，核對四項變造與十五檔重建。
+`review` 接研究目錄，要求九個穩定截點都非保留前畫面、三鈕齊全、最後恢復城市七鈕，
+另產四張對照並分開記錄來源、首字形、初次可見與顏色。
+逐點驗證沿 [ui_list_live_check.py](../../tools/ui_list_live_check.py) 的六個既有目錄參數，
+新來源防護先核對本批資料，再沿父批短句、敘事與戰鬥檢查，實際 GPU 仍用完整本批資料。
+`evidence`／`audit` 接專案根及研究目錄，封存前需主路徑、父批回歸、可見截點及防護報告。
+結果見 [研究 005](../re/005-translation-catalog.md#2026-10-24酒館三鈕與喝酒交談)。
+
 ## 待驗後才能 READY
 
 - 首段完整劇情的上層入口已由研究 004 解出；仍需補齊其他格式字串、組句、輸入名稱、
