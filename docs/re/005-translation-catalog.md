@@ -3234,3 +3234,34 @@ Quick 初版仍等舊底列按鈕返回，錯過穩定移動提示，攻擊時�
 本批從中途快照開始，已畫完而未重新輸出的姓名及右框不猜建詞框，部分原文仍可見。
 結果只涵蓋本批來源與正常輸入，不稱為全畫面、完整戰鬥、正式啟動入口或全遊戲中文化完成。
 主線接續仍為首戰回報的 `control-r4/final.state`，3,690M；全量 HD 未開始。
+
+## 2026-10-24：森林紮營的整句來源查證
+
+工作區 `workplace/probe/passage-chain-camp-20261024/` 接續既有森林正常來源。
+使用既有 `passage-chain-live-20261024/programs-r1/passage-chain-probe`，SHA-256
+`d9250e5ea4124debd373f3a24b8835e5990dab81a76e8febfccdaa9c5c8a7656`；
+dosgolem、Go 與原版 EXE 沿前述整句來源批，沒有重新編譯或改變辨識條件。
+初始快照為 `battle-text-20261024/control-journey-r2/final.state`，SHA-256
+`ea51b3a5495a8b2f448cd47687fe221c759e83fa2b007d0f0e938a84b4dea069`。
+只沿原版狀態、虛擬時間與一般按鍵，不另設 seed、重擲或注入位置、遭遇與腳本。
+
+| 正常分段 | 觀測／控制結果 |
+|---|---|
+| 既有森林十二鍵，紮營及選 Rest | 十四個截點；實際到 13,3，原版預設休息九小時十五分 |
+| 正常執行 Rest | 一個截點；原版時鐘從 11:27 AM 到 8:42 PM，返回營地選單，沒有遭遇敘事 |
+| 離營、開區域圖 | 兩個截點；保留原版區域圖，只作選路研究，不作重繪完成證據 |
+| 兩次 Right 及十次 Up | 十二個截點；南行實際停在 13,5 阻擋處，沒有聲稱十次 Up 均成功移動 |
+
+四對原版共二十九個比較截點、原始 PNG 及各對最終快照相同，沒有寫檔或未實作服務。
+沒有任何敘事輸出或整句候選，屬負向來源研究，不增加正向整句、GUI 或中文覆蓋。
+區域圖及兩張營地原始畫面已看圖；未為找遭遇而更改觸發條件或反覆回到同一快照重擲。
+
+[passage_camp_source.py](../../tools/passage_camp_source.py) 的 `verify`、`evidence`、`audit` 接專案根及本研究目錄。
+在既有 Pillow image、UID 1000、停用網路的 Docker 內執行，專案唯讀，只掛本研究目錄可寫。
+重播使用前述凍結探針，四個參數為各段起始快照、`*-request-r1.json`、全新輸出目錄及 `observe`／`control`。
+第一段請求名稱為 `request-r1.json`；後三段由前段已成對核對的正常快照接續。
+唯讀掛載原版為 `/orig`、研究根為 `/probe`，並設定
+`DQK_PASSAGE_BOOK=/probe/passage-chain-20261024/chain-inputs-r1/registry.json` 與
+`DQK_PASSAGE_EN=/probe/passage-chain-20261024/chain-inputs-r1/en.tsv`。
+`evidence.json` 首次封存 91 個產物、五個來源及九份工具，後續以 `audit` 驗大小、SHA-256、UID/GID。
+正式譯表、術語、字模、呈現程式及 819 個直接 ECL 鍵差額不變，主線保持 3,690M。
