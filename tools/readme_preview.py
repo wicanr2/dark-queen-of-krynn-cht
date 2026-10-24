@@ -7,7 +7,7 @@ import platform
 import shutil
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import PIL
 
 
@@ -111,6 +111,19 @@ def build(root, output):
     portraits = [r for r in records.values() if r['source'] in candidates
                  and r['block'] == 1 and r['context'][0][0] in candidates[r['source']]]
     assert len(portraits) == 31
+    # 總覽只排版已解圖格，不補人物身分，也不改原圖。
+    cell, columns = 192, 6
+    atlas = Image.new('RGB', (cell * columns, cell * ((len(portraits) + columns - 1) // columns)), '#23232c')
+    draw = ImageDraw.Draw(atlas)
+    for i, record in enumerate(portraits):
+        with Image.open(output / record['image']) as image:
+            image = image.convert('RGBA')
+            scale = max(1, min((cell - 16) // image.width, (cell - 32) // image.height))
+            image = image.resize((image.width * scale, image.height * scale), Image.Resampling.NEAREST)
+            x, y = (i % columns) * cell, (i // columns) * cell
+            atlas.paste(image, (x + (cell - image.width) // 2, y + 8), image)
+        draw.text((x + 8, y + cell - 20), record['key'], fill='white')
+    atlas.save(output / 'portraits-original.png')
 
     def esc(text):
         return html.escape(str(text), quote=True)
@@ -135,7 +148,8 @@ def build(root, output):
     content += '</div></section><section id="monsters"><h2>怪物與戰鬥角色原版總覽</h2><p>CPIC 共 190 格，包含動作與重複編號；圖格數不等於怪物種類數。尚未逐項對回怪物名稱。</p>'
     content += figure('CPIC-original.png', 'CPIC 原版全圖格總覽 · 點圖開啟原尺寸', True)
     content += '<details><summary>隊員戰鬥造型 · CBODY 98 格</summary>' + figure('CBODY-original.png', 'CBODY 原版戰鬥造型', True) + '</details></section>'
-    content += '<section id="portraits"><h2>人物頭像原版總覽</h2><p>先列 31 張人物候選圖。名稱與身分待核對；三個 PIC 圖庫已解出的 72 格另含場景與怪物，還有 52 個其他繪圖方法的區塊尚未解碼。</p><div class="portraits">'
+    content += '<section id="portraits"><h2>人物頭像原版總覽</h2><p>先列 31 張人物候選圖。名稱與身分待核對；三個 PIC 圖庫已解出的 72 格另含場景與怪物，還有 52 個其他繪圖方法的區塊尚未解碼。</p>'
+    content += figure('portraits-original.png', '31 張人物候選頭像 · 點圖開啟原尺寸', True) + '<div class="portraits">'
     for r in portraits:
         content += figure(r['image'], r['key'] + ' · 身分待核', True)
     content += '</div><details><summary>查看 PICA／PICB／PICC 已解出的圖格</summary>'
@@ -153,6 +167,32 @@ def build(root, output):
     css = '''*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#12151c;color:#ede9dc;font:17px/1.8 system-ui,sans-serif}header,main,nav{max-width:1200px;margin:auto;padding:32px}header{padding-top:64px}header p{max-width:850px}.eyebrow{color:#cbb47e;letter-spacing:.15em}h1{font-size:64px;line-height:1.1;letter-spacing:.12em;margin:20px 0}h2{font-size:30px;color:#dec58d}h3{font-size:21px}.note,figcaption,footer{color:#b9b6ae}nav{display:flex;gap:24px;flex-wrap:wrap;border-block:1px solid #44413a;padding-block:16px}a{color:#d9bf87}section{padding:24px 0 42px;border-bottom:1px solid #44413a;scroll-margin-top:20px}.pair,.pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.pair{align-items:start}figure{min-width:0;margin:12px 0}figure img{display:block;width:100%;height:auto;background:#23232c;border:1px solid #49483f}.pixel{image-rendering:pixelated}.pairs .pair{align-items:center}.pairs img{aspect-ratio:1;object-fit:contain}.pairs article{padding:20px;background:#1b202b;border:1px solid #49483f}.portraits{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:18px}.portraits figcaption{font-size:12px}figcaption{font-size:14px;padding-top:6px}summary{cursor:pointer;padding:16px 0;color:#d9bf87}footer{font-size:14px;padding-top:30px}@media(max-width:720px){header,main,nav{padding:20px}h1{font-size:44px}.pairs,.pair{grid-template-columns:1fr}.portraits{grid-template-columns:repeat(3,minmax(0,1fr))}}'''
     page = '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>黑暗之后 · 圖文介紹</title><style>' + css + '</style>' + content + '</html>\n'
     (output / 'README.html').write_text(page)
+    markdown = '# 《黑暗之后》HD＋繁體中文化\n\n'
+    markdown += '本機圖文版。繁中顯示仍為研究原型；HD 僅兩張試繪，尚未接入遊戲。\n\n'
+    markdown += '## 故事背景\n\n' + story + '\n\n'
+    markdown += '故事依《冒險手冊》「故事開始」的將軍來信整理，譯名沿用《幽靈騎士》。\n\n'
+    markdown += '## 怪物與戰鬥角色總覽\n\n190 個 CPIC 圖格包含動作與重複編號，身分尚未全量核對。\n\n'
+    markdown += '![原版怪物與戰鬥角色圖格總覽](CPIC-original.png)\n\n'
+    markdown += '98 個隊員戰鬥造型另列。\n\n![原版隊員戰鬥造型](CBODY-original.png)\n\n'
+    markdown += '## 人物頭像總覽\n\n31 張人物候選圖，保留來源編號，身分待核。\n\n'
+    markdown += '![原版人物頭像總覽](portraits-original.png)\n\n'
+    markdown += '## 原版與 HD 試繪對照\n\n全量 HD 尚未製作；以下試繪未接入遊戲，正式風格未定案。\n\n'
+    markdown += '| 圖像 | 原版 | HD 試繪 |\n|---|---|---|\n'
+    markdown += '| 藍龍 CPIC..6 | ![藍龍原版](CPIC..6.png) | ![藍龍 HD 試繪](hd-blue-dragon-r2.png) |\n'
+    markdown += '| 頭像 PICA.7.1，身分待核 | ![頭像原版](PICA.7.1.png) | ![頭像 HD 試繪](hd-portrait-r1.png) |\n\n'
+    markdown += '## 遊戲截圖\n\n兩側取自相同原版狀態與輸入，未套用 HD。\n\n'
+    markdown += '| 畫面 | 原版 | 繁中顯示原型 |\n|---|---|---|\n'
+    for name, title in [('ammo', '單支箭矢與裝備清單'), ('battle', '首戰毒氣與傷害回報'), ('defeat', '首戰敗北結語')]:
+        markdown += f'| {title} | ![原版 {title}]({name}-en.png) | ![繁中 {title}]({name}-zh.png) |\n'
+    markdown += '\n## 遊戲內地圖\n\n原版正常探索畫面與區域圖，尚未套用繁中或 HD。\n\n'
+    markdown += '![原版森林探索](forest.png)\n\n![原版遊戲內區域圖](area-map.png)\n\n'
+    markdown += '### 攻略地圖重繪\n\n凱爾高斯繁中攻略重繪原型，尚未接入遊戲。\n\n'
+    markdown += '![凱爾高斯攻略重繪原型](guide-caergoth.png)\n\n'
+    markdown += '## 完整已解圖庫\n\n三份圖庫另含怪物與場景，不全是人物頭像。\n\n'
+    for name in ('PICA', 'PICB', 'PICC'):
+        markdown += f'![{name} 原版已解圖庫]({name}-original.png)\n\n'
+    markdown += '原版及衍生圖像只留本機。玩家須自備合法原版。來源與雜湊見 [展示索引](preview-index.json) 及 [圖庫索引](tlb-index.json)。\n'
+    (output / 'README.md').write_text(markdown)
     result = dict(draft=True, rights='本機限定；原版及衍生圖像不加入 Git',
         readme_sha256=digest(root / 'README.md'), tlb_index_sha256=digest(output / 'tlb-index.json'),
         original_frames=len(records), unsupported_blocks=len(unsupported), portrait_candidates=[r['key'] for r in portraits],
@@ -161,7 +201,9 @@ def build(root, output):
         tools={n: digest(root / 'tools' / n) for n in ('tlb_gallery.py', 'readme_preview.py', 'readme-gallery.sh')},
         sprite_witness=dict(key='CPIC..6', xy=[32, 104], opaque_pixels=matched,
             receipt_sha256=digest(native / 'receipt.json'), indexed_sha256=checkpoint['indexed_sha256']),
-        html_sha256=digest(output / 'README.html'))
+        html_sha256=digest(output / 'README.html'), markdown_sha256=digest(output / 'README.md'),
+        portrait_atlas=dict(file='portraits-original.png', sha256=digest(output / 'portraits-original.png'),
+                            size=list(atlas.size), keys=[r['key'] for r in portraits]))
     (output / 'preview-index.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({k: result[k] for k in ('original_frames', 'hd_samples', 'hd_in_game')}))
 

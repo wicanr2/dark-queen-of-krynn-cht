@@ -46,7 +46,7 @@
 ## 展示來源與重建
 
 [readme-gallery.sh](../../tools/readme-gallery.sh) 在既有離線 Docker image 中重新解碼，
-再由 [readme_preview.py](../../tools/readme_preview.py) 產生 `README.html`。
+再由 [readme_preview.py](../../tools/readme_preview.py) 產生 `README.md` 與 `README.html`。
 image 固定為 `sha256:44d0742ca1061bcd453440cdce925afa31c5324e115fca1334da0e364f0e2c48`，
 執行時的 Python、Pillow 版本與三個工具雜湊存入 `preview-index.json`。
 來源唯讀，輸出使用目前 UID/GID。新目錄名稱以 `readme-gallery-` 開頭，既有目錄不覆寫。
@@ -67,3 +67,19 @@ image 固定為 `sha256:44d0742ca1061bcd453440cdce925afa31c5324e115fca1334da0e36
 已在 Chromium 離線開啟預覽，49 張圖片可解碼，31 個頭像候選及五個導覽目標存在。
 1280、720、390 像素寬度沒有水平溢出。瀏覽器版號、頁面雜湊與實際截圖存於預覽目錄
 `browser-receipt.json`。這是文件展示驗證，不是正式遊戲、HD 接入或跨平台驗收。
+
+## 2026-10-25：Markdown 圖文版與人物總覽圖
+
+根目錄 README 分別介紹怪物、人物頭像、遊戲截圖與遊戲內地圖，故事仍取自既有手冊來源。
+圖像不加入 Git；本機輸出新增可直接閱讀的 `README.md`，與 HTML 共用相同原圖及來源索引。
+現行預覽為 `workplace/probe/readme-gallery-preview-20261025/`，舊版不覆寫。
+
+新增 `portraits-original.png`，將既有三十一張人物候選依來源編號排成六欄，
+尺寸 1,152 × 1,152，只作整數倍最近鄰縮放與排版，不補身分或改原圖。
+索引記錄總覽雜湊、尺寸、三十一個來源鍵，以及 Markdown 與 HTML 的雜湊。
+Markdown 十九個圖片連結全部可開啟，總覽每格逐像素核對原圖，
+其餘既有展示 PNG 與前版逐位元組一致。檢查工具及結果見本機 `check-documents.py`、`document-check.json`。
+
+Chromium 實際開啟新 HTML，五十張圖片均可解碼，三十一個獨立頭像與五個導覽目標保留。
+1,280、720、390 像素寬度無水平溢出；來源、瀏覽器版本與截圖見同目錄 `browser-receipt.json`。
+兩張 HD 仍為未接入試繪，未增加 HD 完成數或遊戲驗收範圍。
