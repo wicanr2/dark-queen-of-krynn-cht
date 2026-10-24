@@ -33,15 +33,16 @@ type listHeader struct {
 	SHA256          string
 }
 type listConfig struct {
-	Headers     []listHeader
-	Rows        []listRow
-	Fields      []listField
-	Paragraphs  []listParagraph
-	Menus       map[string]string
-	PaneLists   []listPaneSource
-	RowCallers  []oracle.Addr
-	Background  byte
-	FineWindows [][2]uint64 `json:"fine_windows"`
+	Headers       []listHeader
+	Rows          []listRow
+	Fields        []listField
+	Paragraphs    []listParagraph
+	HUDParagraphs []listHUDParagraph `json:",omitempty"`
+	Menus         map[string]string
+	PaneLists     []listPaneSource
+	RowCallers    []oracle.Addr
+	Background    byte
+	FineWindows   [][2]uint64 `json:"fine_windows"`
 }
 type listPaneSource struct {
 	RowFillPage                           bool
@@ -83,6 +84,7 @@ type listWord struct {
 	Foreground, Background byte
 	Button                 bool `json:"Button,omitempty"`
 	FontSize               int  `json:",omitempty"`
+	Height                 int  `json:",omitempty"`
 }
 type listTextEvent struct {
 	Step       uint64
@@ -91,6 +93,14 @@ type listTextEvent struct {
 	FirstGlyph uint64 `json:"first_glyph,omitempty"`
 	Detail     any    `json:"detail,omitempty"`
 }
+
+func (w listWord) height() int {
+	if w.Height > 0 {
+		return w.Height
+	}
+	return 8
+}
+
 type listFeedback struct {
 	Upper                     paintReturn
 	Entry                     uint64
@@ -135,6 +145,9 @@ type listState struct {
 	clockReturn            *paintReturn
 	clockKeys              map[string]bool
 	paragraphPaints        []paintReturn
+	hudPending             []listHUDPending
+	hudReturns             map[oracle.Addr]bool
+	hudActive              bool
 	trackListPage          bool
 	descriptorContext      bool
 	rowPagePending         bool
@@ -176,7 +189,7 @@ func (g *liveGame) listLog(kind string, detail any) int {
 }
 func (l *listState) erase(x, y, w, h int) {
 	for p, v := range l.words {
-		if v.X < x+w && v.X+v.Width > x && v.Y < y+h && v.Y+8 > y {
+		if v.X < x+w && v.X+v.Width > x && v.Y < y+h && v.Y+v.height() > y {
 			delete(l.words, p)
 		}
 	}
@@ -406,7 +419,15 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.RawX == 8004 && f.RawY == 8089 && f.UpperCaller == (oracle.Addr{Seg: 0x22f4, Off: 0x2bf0}) &&
 				f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
 				l.sources[f.Key] == "Aim: range = " && f.Length == len(l.sources[f.Key])
-			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange {
+			combatTarget := f.Pane == "callsite" && f.Group == "body" && f.Start == 0 && f.Length == 11 && f.Width == 0 && f.RawX == 8092 && f.RawY == 8048 &&
+				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x088e, Off: 0x16fb}) && f.UpperNative != nil && *f.UpperNative == ([2]int{184, 96}) &&
+				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.Color != nil && *f.Color == 0x82 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23 &&
+				f.SHA256 == "34e6a2c45cd76bd572bc718ec07bba5666ec09acc337edfcc226f81c36949655"
+			spellCaption := f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Length == 15 && f.Width == 0 && f.RawX == 8004 && f.RawY == 8089 &&
+				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0x4630}) && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) &&
+				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == "" && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
+				f.SHA256 == "ec5608fbca6974ee4604c38946916a68781c2eac792a0384deec8c151eb62d34"
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
@@ -502,6 +523,10 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 		x, y, w, h := v[1], v[0], v[3]-v[1], v[2]-v[0]
 		fillCaller := oracle.Addr{Off: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 2}), Seg: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 4})}
+		if l.hudActive && len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) && ([4]int{x, y, w, h}) == ([4]int{184, 8, 128, 168}) {
+			l.footerTransition = true
+			g.listLog("hud-panel-redraw", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}})
+		}
 		if l.memoryListOpen && len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) &&
 			([4]int{x, y, w, h}) == ([4]int{184, 8, 128, 168}) {
 			for p, word := range l.words {
@@ -568,7 +593,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				l.clearCovered = map[int]bool{}
 				pixels := map[int]bool{}
 				for _, word := range l.clearTargets {
-					for yy := word.Y; yy < word.Y+8; yy++ {
+					for yy := word.Y; yy < word.Y+word.height(); yy++ {
 						for xx := word.X; xx < word.X+word.Width; xx++ {
 							pixels[yy*320+xx] = true
 						}
@@ -587,6 +612,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			l.headerReturn = nil
 			l.pane = ""
 			l.memoryListOpen = false
+			l.hudActive = false
 			l.descriptorContext = false
 			l.trackListPage, l.rowPagePending = false, false
 			g.listLog("pane-invalidate", [4]int{x, y, w, h})
@@ -692,7 +718,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		for _, p := range locations {
 			x, y := p%320, p/320
 			for _, w := range l.clearTargets {
-				if x >= w.X && x < w.X+w.Width && y >= w.Y && y < w.Y+8 {
+				if x >= w.X && x < w.X+w.Width && y >= w.Y && y < w.Y+w.height() {
 					l.clearCovered[p] = true
 				}
 			}
@@ -744,13 +770,13 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		// 參數是裁切區。來源及目的都必須留在此區，不能把整個區域搬到區外。
 		next := map[[2]int]listWord{}
 		for _, w := range l.words {
-			if w.X < x1 && w.X+w.Width > x0 && w.Y < y1 && w.Y+8 > y0 {
-				if w.X < x0 || w.X+w.Width > x1 || w.Y < y0 || w.Y+8 > y1 {
+			if w.X < x1 && w.X+w.Width > x0 && w.Y < y1 && w.Y+w.height() > y0 {
+				if w.X < x0 || w.X+w.Width > x1 || w.Y < y0 || w.Y+w.height() > y1 {
 					continue
 				}
 				w.X += dx
 				w.Y += dy
-				if w.X < x0 || w.X+w.Width > x1 || w.Y < y0 || w.Y+8 > y1 {
+				if w.X < x0 || w.X+w.Width > x1 || w.Y < y0 || w.Y+w.height() > y1 {
 					continue
 				}
 			}
@@ -828,7 +854,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 					}
 					feedback := &listFeedback{Upper: l.fieldWrapper.Return, Entry: o.Steps(), SourceSHA: f.SHA256, ReturnPane: l.pane, Rect: rect, Pixels: listRectPixels(o.Indexed(), rect)}
 					for _, word := range l.snapshot() {
-						if word.X < rect[0]+rect[2] && word.X+word.Width > rect[0] && word.Y < rect[1]+rect[3] && word.Y+8 > rect[1] {
+						if word.X < rect[0]+rect[2] && word.X+word.Width > rect[0] && word.Y < rect[1]+rect[3] && word.Y+word.height() > rect[1] {
 							feedback.Saved = append(feedback.Saved, word)
 						}
 					}
@@ -926,7 +952,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 					panic("列表詞框來源不符")
 				}
 				w := listWord{X: (col + span.Start) * 8, Y: row * 8, Width: span.Length * 8, Key: span.Key, Group: "body", Foreground: byte(s[4]), Background: l.config.Background}
-				if w.X < 0 || w.X+w.Width > 320 || w.Y < 0 || w.Y+8 > 200 {
+				if w.X < 0 || w.X+w.Width > 320 || w.Y < 0 || w.Y+w.height() > 200 {
 					panic("列表中文字框越界")
 				}
 				l.words[[2]int{w.X, w.Y}] = w
@@ -1139,7 +1165,7 @@ func (g *liveGame) installListFields() {
 			if f.BackgroundOverride != nil {
 				w.Background = *f.BackgroundOverride
 			}
-			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+8 > 200 {
+			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+w.height() > 200 {
 				panic("列表欄位越界")
 			}
 			g.invalidateListParagraph(w.X, w.Y, w.Width, 8, "field overwrite")
@@ -1276,7 +1302,7 @@ func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]
 			textY -= 2
 		}
 		bg, fg := pal[w.Background], pal[w.Foreground]
-		for yy := 0; yy < 16; yy++ {
+		for yy := 0; yy < w.height()*2; yy++ {
 			for xx := 0; xx < w.Width*2; xx++ {
 				copy(px[((y+yy)*640+x+xx)*4:][:3], bg[:])
 			}

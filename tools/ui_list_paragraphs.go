@@ -22,6 +22,111 @@ type serviceNotice struct {
 	Ready, Restoring bool
 }
 
+// 右側各框獨立保留；來源由同一原版段落入口取得，不從已畫出的字元猜字。
+type listHUDSpan struct {
+	Start, Length int
+	Key           string
+	Rect          [4]int
+}
+type listHUDParagraph struct {
+	SHA256                        string
+	Caller                        oracle.Addr
+	NativeBox                     [4]int
+	Foreground, Background, Clear byte
+	Spans                         []listHUDSpan
+	HideFooter                    bool `json:",omitempty"`
+}
+type listHUDPending struct {
+	Paint      paintReturn
+	Entry      uint64
+	Words      []listWord
+	HideFooter bool
+}
+
+func (g *liveGame) validateHUDParagraphs() {
+	for _, p := range g.list.config.HUDParagraphs {
+		weapon := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x097e}) && p.NativeBox == ([4]int{184, 56, 312, 80})
+		status := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 88, 312, 176})
+		miss := p.Caller == (oracle.Addr{Seg: 0x22f4, Off: 0x048f}) && p.NativeBox == ([4]int{184, 104, 312, 136})
+		if !(weapon || status || miss) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
+			panic("右側段落來源不符")
+		}
+		for _, span := range p.Spans {
+			x, y, w, h := span.Rect[0], span.Rect[1], span.Rect[2], span.Rect[3]
+			if span.Start != 0 || span.Length <= 0 || g.list.sources[span.Key] == "" || len(g.list.sources[span.Key]) != span.Length ||
+				g.catalog[span.Key] == "" || x != p.NativeBox[0] || y != p.NativeBox[1] || w <= 0 || h < 8 || x+w > p.NativeBox[2] || y+h > p.NativeBox[3] ||
+				len([]rune(g.catalog[span.Key]))*g.glyphs.Size > w*2 {
+				panic("右側段落切片或字框不符")
+			}
+		}
+	}
+}
+
+func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, clear byte, ptr oracle.Addr, source string) bool {
+	l, o := g.list, g.o
+	for _, p := range l.config.HUDParagraphs {
+		if p.Caller != caller || p.NativeBox != box || p.Foreground != fg || p.Background != bg || p.Clear != clear || p.SHA256 != digest([]byte(source)) {
+			continue
+		}
+		var words []listWord
+		for _, span := range p.Spans {
+			if span.Start+span.Length > len(source) || source[span.Start:span.Start+span.Length] != l.sources[span.Key] {
+				return false
+			}
+			x, y, w, h := span.Rect[0], span.Rect[1], span.Rect[2], span.Rect[3]
+			word := listWord{X: x, Y: y, Width: w, Key: span.Key, Group: "body", Foreground: fg, Background: l.config.Background}
+			if h != 8 {
+				word.Height = h
+			}
+			words = append(words, word)
+		}
+		g.page = nil
+		l.erase(box[0], box[1], box[2]-box[0], box[3]-box[1])
+		r := o.Regs()
+		paint := paintReturn{caller, r.SS, r.SP + 4}
+		l.paragraphPaints = append(l.paragraphPaints, paint)
+		l.hudActive = true
+		l.hudPending = append(l.hudPending, listHUDPending{paint, o.Steps(), words, p.HideFooter})
+		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("hud-before-glyph", map[string]any{"caller": caller, "native_box": box, "source_sha256": p.SHA256, "source_pointer": ptr, "spans": p.Spans, "words": words}))
+		if l.hudReturns == nil {
+			l.hudReturns = map[oracle.Addr]bool{}
+		}
+		if !l.hudReturns[caller] {
+			l.hudReturns[caller] = true
+			o.OnCall(caller, func(_ *oracle.Oracle) {
+				if len(l.hudPending) == 0 {
+					return
+				}
+				pending := l.hudPending[len(l.hudPending)-1]
+				now := o.Regs()
+				if pending.Paint.Addr != caller || pending.Paint.SS != now.SS || pending.Paint.SP != now.SP {
+					return
+				}
+				if len(l.paragraphPaints) == 0 || l.paragraphPaints[len(l.paragraphPaints)-1] != pending.Paint {
+					panic("右側段落返回未配對")
+				}
+				l.paragraphPaints = l.paragraphPaints[:len(l.paragraphPaints)-1]
+				l.hudPending = l.hudPending[:len(l.hudPending)-1]
+				for _, word := range pending.Words {
+					l.erase(word.X, word.Y, word.Width, word.height())
+					l.words[[2]int{word.X, word.Y}] = word
+				}
+				if pending.HideFooter {
+					for at, word := range l.words {
+						if word.Group == "footer" {
+							delete(l.words, at)
+						}
+					}
+					l.footerTransition = false
+				}
+				g.listLog("hud-return", map[string]any{"entry_step": pending.Entry, "caller": caller, "ss": now.SS, "sp": now.SP, "words": pending.Words, "footer_hidden": pending.HideFooter})
+			})
+		}
+		return true
+	}
+	return false
+}
+
 // 已證實的 26B4 敘事路徑先解碼一個 ECL 運算元，再建立 B487 文字。
 // 只接 80h 原位元串；1／2／3 與 81h 的查表或間接來源不套短句譯文。
 // 原始定位與 IDA／正常重播證據見規格 001「短敘事來源的 DRAFT 研究」。
@@ -61,6 +166,7 @@ func (g *liveGame) invalidateListParagraph(x, y, width, height int, reason strin
 
 func (g *liveGame) installListParagraphs() {
 	l, o := g.list, g.o
+	g.validateHUDParagraphs()
 	if len(l.config.Paragraphs) == 0 {
 		return
 	}
@@ -114,6 +220,9 @@ func (g *liveGame) installListParagraphs() {
 			g.listLog("unknown-paragraph-original", map[string]any{"caller": caller, "reason": reason})
 		}
 		if binding == nil {
+			if ok && g.beginHUDParagraph(caller, box, fg, bg, clear, ptr, source) {
+				return
+			}
 			fallback("source or context mismatch")
 			return
 		}
