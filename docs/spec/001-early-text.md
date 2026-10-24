@@ -1,6 +1,6 @@
 # 001：提早辨識文字與同幀呈現
 
-狀態：DRAFT。建立：2026-10-21；更新：2026-10-22。
+狀態：DRAFT。建立：2026-10-21；更新：2026-10-24。
 工作：[G3／#4](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)。
 使用者要求在英文繪出之前攔截，避免英文閃現後才覆繪中文。
 本規格已有初始角色管理選單的定位與隔離原型，首段劇情入口另見研究 004，尚未達到正式接入的 READY 條件。
@@ -817,6 +817,46 @@ AC 與 HP 來自同一次含 tab 的印字。以原版像素核對起點分別�
 `literal_catalog.py outline-pack 研究目錄` 封存其來源與點陣，
 字模生成入口為 `menu_glyphs.py 字型檔 TSV 輸出 16 outline-fallback.json`。
 未提供最後參數時沿原嚴格點陣路徑，超框即拒絕。
+
+### 短敘事來源的 DRAFT 研究
+
+工作區為 `workplace/probe/ecl-source-20261024/`，只追查短敘事與姓名輸出的來源界線。
+[ecl_source_probe.go](../../tools/ecl_source_probe.go) 讀入既有正常快照，保存原始 `26B4:0000` 程式碼
+及 `333E:0000` 資料段，不執行或改寫 guest。位址採 dosgolem 執行期 segment:offset，
+動態載入區不沿 resident 的 IDA 位址換算。短句未取得足夠來源證據前不解除批次排除條件。
+此探針不進正式入口，不以離線快照讀取冒充正常玩家路徑驗收。
+[ecl_source_ida.py](../../tools/ecl_source_ida.py) 只對該程式碼的一次性 binary 資料庫匯出
+`1CD3` 至 `1D8D` 的原始指令、bytes 及 IDA 名稱；人工選定函式邊界仍須動態進出證據。
+敘事函式的後續四組正常入口／retf 前堆疊配對見 `ecl-source-20261024/visibility-review.json`；
+運算元函式的完整邊界仍以靜態證據記錄，沒有宣稱所有型別的動態流程完成。
+<!-- RESOLVED-DQK11-26B4-1CD3-C61CCABA -->
+`DQK.EXE` 1.1／執行期 `26B4:1CD3` 的短句來源與函式邊界，已由
+[研究 005 的回填表](../re/005-translation-catalog.md#短敘事結論回填表) 核對原始函式 SHA-256、
+四次正常來源及酒館垂直鏈。非 `80h` 型別的完整語意維持未知，原文回退不受影響。
+
+探針可另接一般按鍵請求及 observe／control 參數，重播與原版控制組核對，仍不寫入 guest。
+IDA 的原位元串解碼分支為 `2143:0091`，型別 `80h`；`81h` 走另一個索引入口，
+`1`／`2`／`3` 亦分開處理。這些是本次快照程式碼的執行期位置，不沿用 resident 換算。
+正常酒館四次敘事在解碼後至首字形前，`333E:B216` 均為 `80h`；觀測／控制及父批五個狀態相同。
+
+短句原型只接受原版 `333E:B487` 來源、`80h` 型別與實際 `11h`／`12h` 接續／清除指令，
+並逐次核對完整敘事函式及運算元函式的原始 bytes 雜湊。
+原文雜湊、框、顏色及清除條件仍照常匹配。間接或未知來源保留原文，不能只因文字剛好相同而替換姓名。
+已有正式譯文且非相鄰片段的短 ECL 字面敘事可沿四種既有情境加入 DRAFT，
+不擴張成全遊戲變數解析器、正式資料格式或正式入口。
+[ecl_source_guard_test.go](../../tools/ecl_source_guard_test.go) 使用正常段落入口快照作正向資料，
+在測試副本改變型別、指標、指令或函式 bytes，驗證相同文字仍會回退且判斷不改寫原版狀態。
+測試以 `DQK_SHORT_SOURCE_STATE` 指定探針輸出的 `short-source.state`，缺檔明確略過；
+這些變造不是正常玩家路徑，不拿來證明原版能自然產生所有型別。
+[short_ecl_inputs.py](../../tools/short_ecl_inputs.py) 從正式 TSV 與相鄰片段索引建立短句子集，
+保留父批完整目錄、字模、欄位、閱讀及細驗區間。`native-check /probe 研究目錄` 先核對四次原版來源，
+`prepare /probe /catalogs 字型檔 研究目錄` 建立 `inputs-r1`；`rebuild` 使用同一組參數，
+`guards` 接研究目錄。來源與大量譯文只留本機，正式主表及術語不改。
+[short_ecl_evidence.py](../../tools/short_ecl_evidence.py) 的 `source-review 專案根 研究目錄`
+核對 IDA 原始 bytes、型別表、正常來源及測試；`review 研究目錄` 產生實際中英文對照。
+`evidence 專案根 研究目錄` 封存本機來源、工具及畫格，`audit` 使用相同參數逐檔回驗。
+封存時兩個路徑須共用專案根，例如 `/project` 與 `/project/workplace/probe/ecl-source-20261024`，
+只對該研究子目錄覆蓋可寫掛載。
 
 ## 待驗後才能 READY
 

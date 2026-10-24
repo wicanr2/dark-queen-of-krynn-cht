@@ -83,7 +83,7 @@ def check_battle_sources(inputs, config, provenance, en, zh, glyphs, trace):
     required=set("".join(expected_font.values()))-set("\r\n\t")
     assert set(glyphs["glyphs"])==set(old_glyphs["glyphs"])|required
     path=inputs.parent.parent/proof["source_path"]
-    assert path.resolve()==(inputs.parent/"observe-route-r1/receipt.json").resolve()
+    assert path.resolve()==(inputs.parent.parent/"battle-text-20261024/observe-route-r1/receipt.json").resolve()
     assert sha(path.read_bytes())==proof["source_sha256"]
     calls={c["step"]:c for c in trace["calls"]}
     for row in proof["fields"]:
@@ -198,6 +198,62 @@ def check_literal_catalog_sources(inputs,config,provenance,en,zh,glyphs):
     return base,old,parent,old_en,old_zh,previous
 
 
+def check_short_ecl_sources(inputs,config,provenance,en,zh,glyphs):
+    from ui_list_inputs import catalog
+    proof=provenance["short_ecl_extension"];root=inputs.parent.parent
+    base=root/proof["base"]
+    assert base.resolve().is_relative_to(root.resolve())
+    assert set(proof["base_files"])=={p.name for p in base.iterdir() if p.is_file()}
+    for n,h in proof["base_files"].items():assert Path(n).name==n and sha((base/n).read_bytes())==h
+    old,parent=read(base/"inputs.json"),read(base/"provenance.json")
+    assert {k:v for k,v in provenance.items() if k!="short_ecl_extension"}==parent
+    assert {k:v for k,v in config.items() if k!="Paragraphs"}=={k:v for k,v in old.items() if k!="Paragraphs"},"short ECL inherited mismatch"
+    texts=Path("/catalogs")
+    assert set(proof["formal_files"])=={"en.tsv","zh-TW.tsv","glossary.tsv","catalog.json","glossary-additions.tsv"}
+    for n,h in proof["formal_files"].items():assert sha((texts/n).read_bytes())==h
+    assert sha((texts/"passage-candidates.json").read_bytes())==proof["fragments_sha256"]
+    source,target=catalog(texts/"en.tsv"),catalog(texts/"zh-TW.tsv")
+    fragments={f["key"] for g in read(texts/"passage-candidates.json")["groups"] for s in g["sources"] for f in s["fragments"]}
+    wanted=[]
+    for k,v in source.items():
+        if k not in target or not k.startswith("ecl.") or len(v)>15 or k in fragments:continue
+        if re.search(r"[^\x20-\x7f]",v) or re.search(r"[\x00-\x1f]",target[k]) or "\\" in v+target[k] or "%" in v or "JOURNAL ENTRY" in v:continue
+        assert k=="ecl."+sha(v.encode())[:20];wanted.append(k)
+    wanted.sort();old_en,old_zh=catalog(base/"en.tsv"),catalog(base/"zh-TW.tsv")
+    assert proof["keys"]==wanted and proof["new_keys"]==[k for k in wanted if k not in old_en]
+    assert en==dict(old_en,**{k:source[k] for k in wanted})
+    assert zh==dict(old_zh,**{k:target[k] for k in wanted}),"short ECL translation mismatch"
+    expected=list(old["Paragraphs"]);seen={json.dumps(p,sort_keys=True) for p in expected}
+    for k in wanted:
+        for s in parent["literal_catalog_extension"]["styles"]:
+            p=dict(Key=k,SHA256=sha(source[k].encode()),**s["style"])
+            if json.dumps(p,sort_keys=True) not in seen:expected.append(p)
+    assert config["Paragraphs"]==expected and len(expected)-len(old["Paragraphs"])==proof["added_bindings"],"short ECL binding mismatch"
+    font=catalog(base/"font-zh-TW.tsv");font.update({k:target[k] for k in wanted})
+    assert catalog(inputs/"font-zh-TW.tsv")==font
+    previous=read(base/"glyphs-16.json")
+    assert all(glyphs[k]==previous[k] for k in ("size","height","font_sha256"))
+    assert all(glyphs["glyphs"][k]==v for k,v in previous["glyphs"].items())
+    assert set(glyphs["glyphs"])==set(previous["glyphs"])|(set("".join(font.values()))-set("\r\n\t"))
+    for name in set(proof["base_files"])-{"inputs.json","provenance.json","en.tsv","zh-TW.tsv","font-zh-TW.tsv","glyphs-16.json"}:
+        assert (inputs/name).read_bytes()==(base/name).read_bytes()
+    path=root/proof["native_source"]
+    assert path.resolve().is_relative_to(root.resolve()) and sha(path.read_bytes())==proof["native_sha256"]
+    trace=read(path);control=read(path.parent.parent/"control-bar-r3/receipt.json")
+    assert trace["checkpoints"]==control["checkpoints"] and len(trace["checkpoints"])==5
+    canonical=root/parent["literal_catalog_extension"]["page_validation"]["source_path"]
+    oracle=read(canonical)
+    for a,b in zip(trace["checkpoints"],oracle["checkpoints"]):
+        assert all(a[k]==b[k] for k in ("step","label","regs","ram_sha256","indexed_sha256","palette"))
+        assert not a["writes"] and not a["unimplemented"]
+    paragraphs=[e for e in trace["events"] if e["point"]=={"Seg":0xb72,"Off":0x311}]
+    assert len(paragraphs)==len(oracle["paragraphs"])==4
+    for e,p in zip(paragraphs,oracle["paragraphs"]):
+        assert e["step"]==p["step"] and e["buffer"]==p["source"]["text"] and e["caller"]==p["caller"]
+        assert e["source_pointer"]=={"Seg":0x333e,"Off":0xb487} and e["raw_b216"]==0x80 and e["raw_b1c7"]==(0x12 if p["clear"] else 0x11)
+    return base,old,parent,old_en,old_zh,previous
+
+
 def check(en_run, zh_run, inputs, control, observed, output):
     assert not output.exists()
     a, b, oracle, trace = [read(p / "receipt.json") for p in (en_run, zh_run, control, observed)]
@@ -217,10 +273,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    short_ecl=provenance.get("short_ecl_extension")
     literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
     if literal_batch:
-        parent_args=check_literal_catalog_sources(inputs,config,provenance,en,zh,glyphs)
+        literal_args=check_short_ecl_sources(inputs,config,provenance,en,zh,glyphs) if short_ecl else (inputs,config,provenance,en,zh,glyphs)
+        parent_args=check_literal_catalog_sources(*literal_args)
         battle_source=check_battle_sources(*parent_args,trace)
     else:battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
     inherited_creation_fields=read(inputs.parent.parent/battle["base"]/"inputs.json")["Fields"] if battle else []
@@ -1663,6 +1721,20 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["literal_catalog"]={"eligible_keys":len(literal_batch["keys"]),"new_keys":len(added),
             "added_bindings":literal_batch["added_bindings"],"observed_new_keys":sorted(seen),"visible_new_keys":sorted(visible)}
         result["limits"]="既有正式 ECL 譯文沿四種已證實顯示情境批次接入；本次 GUI 只驗普通宮殿狀態後進酒館與交談，不能將目錄數換算成已走過的玩家路徑。短句、相鄰片段及新手札引用保留缺口；正式入口與全遊戲中文化未完成。"
+    short_events=[e for e in paragraph_entries if len(e["detail"]["page"]["Source"])<=15 and e["detail"]["page"]["Key"].startswith("ecl.")]
+    for e in short_events:
+        proof=e["detail"].get("short_ecl_source")
+        if short_ecl or proof:
+            assert proof==dict(raw_b216=0x80,raw_b1c7=0x12 if e["detail"]["page"]["Clear"] else 0x11,
+                handler_sha256="c61ccaba966f4c04eea49304ea633c61c02566cd8ca8e93105412d50e7f239c9",
+                operand_sha256="c6f1c1c8cb204e32aa000a8ca180da3a23431f5d2a0e799cf4e65792269ef6ff")
+            assert e["detail"]["source_pointer"]=={"Seg":0x333e,"Off":0xb487}
+    if short_ecl:
+        seen={e["detail"]["page"]["Key"] for e in short_events}
+        visible={k for f,s in zip(b["frames"],b["list_frames"]) if not f["held"] and s.get("paragraph") for k in s["paragraph"]["Components"]}&set(short_ecl["keys"])
+        assert seen and visible==seen and seen&set(short_ecl["new_keys"])
+        result["short_ecl"]=dict(eligible=len(short_ecl["keys"]),new_keys=len(short_ecl["new_keys"]),added_bindings=short_ecl["added_bindings"],observed_keys=sorted(seen),visible_keys=sorted(visible))
+        result["limits"]="80h 字面短敘事的 DRAFT 接入；本輪正常 GUI 只驗酒館標題一個新增短鍵及既有長台詞、離開後城市恢復。資料接入數不作玩家路徑覆蓋率，間接型別回退另作受控測試。相鄰片段、新引用、其他介面及正式入口仍待完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

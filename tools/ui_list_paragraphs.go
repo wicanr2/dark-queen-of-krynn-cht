@@ -22,6 +22,28 @@ type serviceNotice struct {
 	Ready, Restoring bool
 }
 
+// 已證實的 26B4 敘事路徑先解碼一個 ECL 運算元，再建立 B487 文字。
+// 只接 80h 原位元串；1／2／3 與 81h 的查表或間接來源不套短句譯文。
+// 原始定位與 IDA／正常重播證據見規格 001「短敘事來源的 DRAFT 研究」。
+func shortECLLiteralSource(o *oracle.Oracle, ptr, caller oracle.Addr) (map[string]any, bool) {
+	if o.Regs().DS != 0x333e || ptr != (oracle.Addr{Seg: 0x333e, Off: 0xb487}) ||
+		caller.Seg != 0x26b4 || (caller.Off != 0x1d53 && caller.Off != 0x1d81) {
+		return nil, false
+	}
+	kind := o.Byte(oracle.Addr{Seg: 0x333e, Off: 0xb216})
+	opcode := o.Byte(oracle.Addr{Seg: 0x333e, Off: 0xb1c7})
+	if kind != 0x80 || (caller.Off == 0x1d53 && opcode != 0x11) || (caller.Off == 0x1d81 && opcode != 0x12) {
+		return nil, false
+	}
+	handler := digest(o.Bytes(oracle.Addr{Seg: 0x26b4, Off: 0x1cd3}, 0xba))
+	operand := digest(o.Bytes(oracle.Addr{Seg: 0x2143, Off: 0x13}, 0xff))
+	if handler != "c61ccaba966f4c04eea49304ea633c61c02566cd8ca8e93105412d50e7f239c9" ||
+		operand != "c6f1c1c8cb204e32aa000a8ca180da3a23431f5d2a0e799cf4e65792269ef6ff" {
+		return nil, false
+	}
+	return map[string]any{"raw_b216": kind, "raw_b1c7": opcode, "handler_sha256": handler, "operand_sha256": operand}, true
+}
+
 func (g *liveGame) invalidateListParagraph(x, y, width, height int, reason string) {
 	if g.page == nil || len(g.list.paragraphPaints) > 0 {
 		return
@@ -95,6 +117,15 @@ func (g *liveGame) installListParagraphs() {
 			fallback("source or context mismatch")
 			return
 		}
+		var shortSource map[string]any
+		if strings.HasPrefix(binding.Key, "ecl.") && len(source) <= 15 {
+			var literal bool
+			shortSource, literal = shortECLLiteralSource(o, ptr, caller)
+			if !literal {
+				fallback("nonliteral short ECL source")
+				return
+			}
+		}
 		if strings.HasPrefix(binding.Key, "service-message.") {
 			bg = byte(l.config.Background)
 		} else if bg == 0 {
@@ -156,7 +187,11 @@ func (g *liveGame) installListParagraphs() {
 		l.erase(box[0], box[1], box[2]-box[0], box[3]-box[1])
 		r := o.Regs()
 		l.paragraphPaints = append(l.paragraphPaints, paintReturn{caller, r.SS, r.SP + 4})
-		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("paragraph-before-glyph", map[string]any{"page": page, "caller": caller, "source_pointer": ptr}))
+		detail := map[string]any{"page": page, "caller": caller, "source_pointer": ptr}
+		if shortSource != nil {
+			detail["short_ecl_source"] = shortSource
+		}
+		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("paragraph-before-glyph", detail))
 		if strings.HasPrefix(binding.Key, "service-message.") && caller == (oracle.Addr{Seg: 0x291a, Off: 0x0fd0}) {
 			if l.serviceNotice != nil {
 				panic("服務段落回報尚未返回")
