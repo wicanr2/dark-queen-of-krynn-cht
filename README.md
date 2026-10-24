@@ -51,6 +51,14 @@
 或以瀏覽器開啟[完整圖庫頁](workplace/probe/readme-gallery-preview-20261025/README.html)。
 這兩個入口僅在備有本機素材的工作區有效，GitHub 不保存其中的圖像。
 
+| 展示區 | 目前內容 |
+|---|---|
+| [怪物總覽](workplace/probe/readme-gallery-preview-20261025/README.html#monsters) | 原版 CPIC 190 格與隊員造型 98 格 |
+| [人物頭像總覽](workplace/probe/readme-gallery-preview-20261025/README.html#portraits) | 31 張候選頭像總覽及獨立原圖 |
+| [原版／HD 對照](workplace/probe/readme-gallery-preview-20261025/README.html#hd) | 藍龍與人物頭像各一組試繪，尚未接入遊戲 |
+| [遊戲截圖](workplace/probe/readme-gallery-preview-20261025/README.html#screens) | 裝備、戰鬥回報及敗北畫面的原版／繁中對照 |
+| [遊戲內地圖](workplace/probe/readme-gallery-preview-20261025/README.html#maps) | 原版探索與區域圖，另列繁中攻略地圖重繪原型 |
+
 圖文版同時提供 Markdown 與 HTML，收錄上述總覽圖、原版／HD 對照及遊戲截圖。
 五份圖庫目前解出 360 格，另有 52 個繪圖區塊尚未解碼。
 原版及衍生圖像依專案規則只留本機，GitHub 上保存介紹與重建工具。
@@ -73,7 +81,8 @@ bash tools/readme-gallery.sh readme-gallery-my-preview
 
 ## 目前狀態
 
-已建立正常載入、建角、城內服務、裝備、法術清單、手札引用及首戰部分回報的繁中顯示原型。
+已建立正常載入、建角、城內服務、裝備、法術清單、手札引用、首戰部分回報、勝利結算
+與港口敘事的繁中顯示原型。
 文字在原版繪製前辨識，並以連續畫格檢查過渡；這些仍是研究原型，尚無正式完整中文入口。
 手札正文與圖文元件已有校讀及驗證，說明面板、其餘敘事與玩家路徑仍待接入。
 詳細範圍與目前有效程式集中在 [CONTEXT.md](CONTEXT.md)，全量 HD 尚未開始。
