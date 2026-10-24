@@ -282,6 +282,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    reader_route=provenance.get('reader_route_extension')
+    reader_route_path=None
+    if reader_route and (inputs.parent.parent/reader_route['source_path']).resolve()==(observed/'receipt.json').resolve():
+        reader_route_path=dict(source_path=reader_route['source_path'],page_validation=reader_route['data']['page_validation'])
     captain=provenance.get('captain_extension')
     captain_path=None
     if captain:
@@ -291,30 +295,31 @@ def check(en_run, zh_run, inputs, control, observed, output):
     victory_path=None
     if victory:
         selected=[p for p in victory['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1 or (not selected and captain_path),'unknown victory path'
+        assert len(selected)==1 or (not selected and (captain_path or reader_route_path)),'unknown victory path'
         victory_path=selected[0] if selected else None
     exploration_cast=provenance.get('exploration_cast_extension')
     exploration_path=exploration_cast if exploration_cast and (inputs.parent.parent/exploration_cast['source_path']).resolve()==(observed/'receipt.json').resolve() else None
-    if exploration_cast:assert exploration_path or victory_path or captain_path,'unknown exploration cast path'
+    if exploration_cast:assert exploration_path or victory_path or captain_path or reader_route_path,'unknown exploration cast path'
     fire=provenance.get('fire_extension')
     fire_path=None
     if fire:
         selected=[p for p in fire['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1 or not selected and (exploration_path or victory_path or captain_path),'unknown fire path'
+        assert len(selected)==1 or not selected and (exploration_path or victory_path or captain_path or reader_route_path),'unknown fire path'
         fire_path=selected[0] if selected else None
     magic_toggle=provenance.get('magic_toggle_extension')
     magic_path=None
     if magic_toggle:
         if (inputs.parent.parent/magic_toggle['source_path']).resolve()==(observed/'receipt.json').resolve():magic_path=magic_toggle
-        else:assert fire_path or exploration_path or victory_path or captain_path,'unknown magic toggle path'
+        else:assert fire_path or exploration_path or victory_path or captain_path or reader_route_path,'unknown magic toggle path'
     spell_route=provenance.get('spell_route_extension')
     spell_path=None
     if spell_route:
         if (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve():spell_path=spell_route
-        else:assert magic_path or fire_path or exploration_path or victory_path or captain_path,'unknown spell route path'
-    if captain:assert captain_path or victory_path or exploration_path or fire_path or magic_path or spell_path,'unknown captain path'
-    scoped_path=captain_path or victory_path or exploration_path or fire_path or magic_path or spell_path
-    scoped_data=captain if captain_path else victory if victory_path else exploration_cast if exploration_path else fire if fire_path else magic_toggle if magic_path else spell_route
+        else:assert magic_path or fire_path or exploration_path or victory_path or captain_path or reader_route_path,'unknown spell route path'
+    if captain:assert captain_path or victory_path or exploration_path or fire_path or magic_path or spell_path or reader_route_path,'unknown captain path'
+    if reader_route:assert reader_route_path or captain_path or victory_path or exploration_path or fire_path or magic_path or spell_path,'unknown reader route'
+    scoped_path=reader_route_path or captain_path or victory_path or exploration_path or fire_path or magic_path or spell_path
+    scoped_data=reader_route if reader_route_path else captain if captain_path else victory if victory_path else exploration_cast if exploration_path else fire if fire_path else magic_toggle if magic_path else spell_route
     journal_refs=provenance.get('journal_reference_extension')
     journal_path=None
     if journal_refs:
@@ -355,6 +360,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds,fire) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if reader_route:
+        from journal_route_inputs import check_sources as check_reader_route_sources
+        source_args=check_reader_route_sources(*source_args)
     if captain:
         from captain_ui_inputs import check_sources as check_captain_sources
         source_args=check_captain_sources(*source_args)
@@ -2108,6 +2116,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     idx=(observed/checkpoint['label']).with_suffix('.idx').read_bytes()
                     x,y,width,height=witness['native_rect']
                     changed=changed or sha(b''.join(idx[row*320+x:row*320+x+width] for row in range(y,y+height)))!=witness['reference_sha256']
+                if reader_route_path:
+                    witnesses=[w for w in reader_route['data']['prompt_witnesses'] if w['field_entry']==event['Step'] and w['key']==f['Key']]
+                    if witnesses:
+                        witness,=witnesses
+                        idx=(observed/(checkpoint['label']+'.idx')).read_bytes()
+                        x,y,width,height=witness['native_rect']
+                        changed=changed or sha(b''.join(idx[row*320+x:row*320+x+width] for row in range(y,y+height)))!=witness['printed_sha256']
                 if not changed:
                     assert word in (layouts[checkpoint["step"]]["words"] or []), ("missing retained prompt",checkpoint["label"],f["Key"])
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
@@ -2587,6 +2602,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if captain_path:
             result['captain']=dict(source_path=captain_path['source_path'],predecessor=captain['data']['binding']['PredecessorKey'],ancestor_sampling=inherited)
             result['limits']='DRAFT 正常 Explain 的開引號、自介接續及 Return 換頁；不改原版腳本或存檔，未驗其餘劇情及正式入口。'
+        if reader_route_path:
+            result['reader_route']=dict(source_path=reader_route_path['source_path'],entry=reader_route['data']['binding']['JournalEntry'],ancestor_sampling=inherited)
+            result['limits']='DRAFT 正常手札 59 引用、已讀查閱、下一段關閉及登船提問；不改原版判定，未驗全冊正常引用或正式入口。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
