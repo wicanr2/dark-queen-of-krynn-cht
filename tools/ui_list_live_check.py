@@ -273,11 +273,17 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    effects=provenance.get("effects_extension")
     hud=provenance.get("hud_extension")
     party_cast=provenance.get("party_cast_extension")
     cast=provenance.get("cast_extension")
     bar=provenance.get("bar_extension")
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if effects:
+        from combat_effects_inputs import check_sources as check_effects_sources
+        source_args=check_effects_sources(*source_args)
+        from combat_effects_inputs import copy_witness
+        effects_copy_witness=copy_witness(inputs.parent.parent)
     if hud:
         from combat_hud_inputs import check_sources as check_hud_sources
         source_args=check_hud_sources(*source_args)
@@ -309,7 +315,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(hud or {}).get("page_validation") or (party_cast or {}).get("page_validation") or (cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(effects or {}).get("page_validation") or (hud or {}).get("page_validation") or (party_cast or {}).get("page_validation") or (cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if item_context:
         base=inputs.parent.parent/item_context["base"]
         for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
@@ -632,13 +638,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_entries=[e for e in b["list_events"] if e["Kind"]=="hud-before-glyph"]
     hud_returns=[e for e in b["list_events"] if e["Kind"]=="hud-return"]
     hud_words={}
+    hud_records=[]
     if hud:
-        assert {e["Step"] for e in hud_entries}=={r["step"] for r in hud["data"]["records"]}
+        if effects:
+            from combat_effects_inputs import hud_records as derive_hud_records
+            hud_records=derive_hud_records(trace,config["HUDParagraphs"],en)
+            assert hud_records==effects["data"]["records"]
+        else:hud_records=hud["data"]["records"]
+        assert {e["Step"] for e in hud_entries}=={r["step"] for r in hud_records}
     else:assert not hud_entries and not hud_returns
     assert len(hud_entries)==len(hud_returns)
     for e,returned in zip(hud_entries,hud_returns):
         p=paragraph_by_step[e["Step"]]
-        record=next(r for r in hud["data"]["records"] if r["step"]==e["Step"])
+        record=next(r for r in hud_records if r["step"]==e["Step"])
         binding=record["binding"]
         assert binding in config["HUDParagraphs"] and binding["Caller"]==p["caller"] and binding["NativeBox"]==p["native_box"]
         assert p["source"]["nul_terminated"] and bytes.fromhex(p["source"]["hex"]).decode("ascii")==p["source"]["text"]
@@ -647,15 +659,61 @@ def check(en_run, zh_run, inputs, control, observed, output):
             source_pointer={"Seg":p["source"]["segment"],"Off":p["source"]["offset"]},spans=binding["Spans"],words=e["detail"]["words"])
         words_here=[]
         for span in binding["Spans"]:
-            assert p["source"]["text"][span["Start"]:span["Start"]+span["Length"]]==en[span["Key"]]
+            if binding.get("IntegerTemplateKey"):
+                from combat_effects_inputs import integer
+                number=integer(p["source"]["text"],en[span["Key"]])
+                assert number is not None and number==record["number"]
+                assert en[span["Key"]].replace("%d",str(number))==p["source"]["text"]
+            else:assert p["source"]["text"][span["Start"]:span["Start"]+span["Length"]]==en[span["Key"]]
             x,y,width,height=span["Rect"]
             w=dict(X=x,Y=y,Width=width,Key=span["Key"],Group="body",Foreground=p["foreground"],Background=config["Background"])
             if height!=8:w["Height"]=height
+            if binding.get("IntegerTemplateKey"):w["Number"]=number
             words_here.append(w)
         assert e["detail"]["words"]==words_here
         assert returned["detail"]==dict(entry_step=e["Step"],caller=p["caller"],ss=p["regs"]["SS"],sp=(p["regs"]["SP"]+4)&65535,
             words=words_here,footer_hidden=binding.get("HideFooter",False))
         hud_words[e["Step"]]=words_here
+    hud_update_entries=[e for e in b["list_events"] if e["Kind"]=="hud-update-entry"]
+    hud_update_returns=[e for e in b["list_events"] if e["Kind"]=="hud-update-return"]
+    assert len(hud_update_entries)==len(hud_update_returns)
+    hud_updates=[]
+    if effects:
+        for panel in trace["hud_panels"]:
+            if not panel["raw_c6b7"] or panel["menu_snapshot"]["Signature"]!=effects["data"]["bindings"][0]["KeepFooterSignature"]:continue
+            signature=panel["menu_snapshot"]["Signature"]
+            buttons=[c for c in trace["calls"] if c["step"]<panel["step"] and c["caller"]=={"Seg":0xceb,"Off":0x1be} and c.get("menu_index",-1)>=0 and trace["menus"][c["menu_index"]]["Signature"]==signature]
+            # 六個原版按鈕都已返回，才有可保留的目標選單。
+            if len(buttons)<6 or max(c["return_step"] for c in buttons[-6:])>=panel["step"]:continue
+            hud_updates.append(panel)
+        assert len(hud_updates)==len(hud_update_entries)
+    else:assert not hud_update_entries
+    for entry,returned,panel in zip(hud_update_entries,hud_update_returns,hud_updates):
+        signature=panel["menu_snapshot"]["Signature"]
+        assert entry["Step"]==panel["step"] and returned["Step"]==panel["return_step"]
+        assert entry["detail"]==dict(caller=panel["caller"],ss=panel["regs"]["SS"],sp=panel["regs"]["SP"],menu_signature=signature,raw_c6b7=panel["raw_c6b7"])
+        assert returned["detail"]==dict(entry_step=entry["Step"],caller=panel["caller"],ss=panel["regs"]["SS"],sp=(panel["regs"]["SP"]+4)&65535,menu_signature=signature)
+    hud_restores=[e for e in b["list_events"] if e["Kind"]=="hud-footer-restored"]
+    if effects:
+        next_panel=next(p for p in hud_updates if p["caller"]=={"Seg":0x22f4,"Off":0x2d1c})
+        restore=next(c for c in trace["calls"] if c["step"]>next_panel["return_step"] and c["caller"]=={"Seg":0xceb,"Off":0x1be} and c["format"]["text"]=="Next" and (c["stack"][4]&15)==7)
+        assert len(hud_restores)==1 and hud_restores[0]["Step"]==restore["return_step"]
+        assert hud_restores[0]["detail"]==dict(caller=restore["caller"],ss=restore["ss"],sp=(restore["sp"]+4)&65535)
+    else:assert not hud_restores
+    hud_retired=[e for e in b["list_events"] if e["Kind"]=="hud-damage-retired"]
+    if effects:
+        retire_fills=[]
+        for record in hud_records:
+            if record.get("number") is None:continue
+            fill=next(f for f in trace["fill_events"] if f["step"]>record["return_step"] and f["native_rect"]==[184,80,128,96])
+            assert fill["stack"][:2]==[0x1b,0xb72] and not fill["within_list"]
+            retire_fills.append(fill)
+        assert [e["Step"] for e in hud_retired]==[f["converted_step"] for f in retire_fills]
+        last_retire=retire_fills[-1]["converted_step"]
+        new_buttons=[c for c in trace["calls"] if c["step"]>last_retire and c["caller"]=={"Seg":0xceb,"Off":0x1be}]
+        new_signature=trace["menus"][new_buttons[0]["menu_index"]]["Signature"]
+        footer_restored=max(c["return_step"] for c in new_buttons if trace["menus"][c["menu_index"]]["Signature"]==new_signature)
+    else:assert not hud_retired
     paragraph_entries = [e for e in b["list_events"] if e["Kind"] == "paragraph-before-glyph"]
     paragraph_fallbacks = [e for e in b["list_events"] if e["Kind"] == "unknown-paragraph-original"]
     if config.get("Paragraphs"):
@@ -925,9 +983,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert wrapper["format"]["text"] == source["text"]
             expected_upper = f.get("UpperNative",[native(c["stack"][3]),native(c["stack"][2])])
             assert [(wrapper["stack"][n]&255)*8 for n in (2,3)] == expected_upper
-            if hud and f.get("UpperNative")==[184,96] and f in [row["binding"] for row in hud["data"]["fields"]]:
-                assert f["UpperCaller"]=={"Seg":0x088e,"Off":0x16fb} and f["UpperNative"]==[184,96]
-                assert c["stack"][2:5]==[8048,8092,0x82] and f["Color"]==0x82
+            if hud and f.get("UpperNative") in ([184,8],[184,80],[184,96]) and f in [row["binding"] for row in hud["data"]["fields"]+(effects or {}).get("data",{}).get("fields",[])]:
+                assert f["UpperCaller"]=={"Seg":0x088e,"Off":0x16fb} and f["UpperNative"]==[184,native(f["RawY"])]
+                assert c["stack"][2:5]==[f["RawY"],8092,0x82] and f["Color"]==0x82
             elif f.get("UpperFormatSHA256") and "UpperNative" in f:
                 assert f["UpperNative"] == [0,192] and c["stack"][2:4] == [189,8004]
                 if f["UpperCaller"] == {"Seg":0x088e,"Off":0x1560}:
@@ -944,8 +1002,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert c["stack"][2:5]==[189,8004,0x8f] and f["Color"]==0x8f and "BackgroundOverride" not in f
         background = f.get("BackgroundOverride",config["Background"])
         if "BackgroundOverride" in f and background==23:
-            if hud and f.get("UpperNative")==[184,96] and f in [row["binding"] for row in hud["data"]["fields"]]:
-                assert f["Pane"]=="callsite" and f["Group"]=="body" and f["UpperNative"]==[184,96]
+            if hud and f.get("UpperNative") in ([184,8],[184,80],[184,96]) and f in [row["binding"] for row in hud["data"]["fields"]+(effects or {}).get("data",{}).get("fields",[])]:
+                assert f["Pane"]=="callsite" and f["Group"]=="body" and f["UpperNative"]==[184,native(f["RawY"])]
             elif creation and source["text"]=="Character name:":
                 assert f["Pane"]=="menu-text" and f["Group"]=="footer" and f["Caller"]=={"Seg":0x266D,"Off":0x11F}
                 assert c["stack"][2:5]==[189,8004,0x80] and f["Color"]==0x80 and (start,f["Length"])==(0,15)
@@ -1137,6 +1195,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     if w["Group"]=="footer":
                         del words[pos]
                         row_positions.discard(pos)
+        elif kind=="hud-damage-retired":
+            original=next(f for f in trace["fill_events"] if f["converted_step"]==e["Step"])
+            assert original["native_rect"]==[184,80,128,96] and any(w.get("Number") is not None for w in words.values())
+            assert e["detail"]==dict(caller={"Seg":0xb72,"Off":0x1b},native_rect=original["native_rect"])
+        elif kind in ("hud-update-entry","hud-update-return","hud-footer-restored"):
+            assert effects
         elif kind=="hud-panel-redraw":
             assert hud
             original=next(f for f in trace["fill_events"] if f["converted_step"]==e["Step"])
@@ -1581,7 +1645,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert 0 <= x < x + width <= 640 and 0 <= y < y + height <= 400
             size=w.get("FontSize",16)
             assert size in (16,20) and (size==16 or role_alpha is not None)
-            assert len(zh[w["Key"]]) * size <= width
+            text=zh[w["Key"]]
+            if "Number" in w:
+                assert text.count("%d")==1 and text.count("%")==1
+                text=text.replace("%d",str(w["Number"]))
+            assert len(text) * size <= width
             assert all(x + width <= xx or xx + ww <= x or y + height <= yy or yy + hh <= y for xx, yy, ww, hh in rectangles)
             rectangles.append((x, y, width, height))
             fg, bg = palette[w["Foreground"]], palette[w["Background"]]
@@ -1596,7 +1664,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             text_y=y-2 if size==20 else y
             assert 0<=text_y and text_y+(24 if size==20 else 16)<=400
             selected_alpha=role_alpha if size==20 else alpha
-            for col, ch in enumerate(zh[w["Key"]]):
+            for col, ch in enumerate(text):
                 for off, value in enumerate(selected_alpha[ch] if size==20 else selected_alpha[ch][:256]):
                     if value:
                         yy, xx = divmod(off, size)
@@ -1645,8 +1713,14 @@ def check(en_run, zh_run, inputs, control, observed, output):
         expected_page = model[model_index][3] if model_index >= 0 else None
         assert state.get("paragraph") == expected_page, ("paragraph frame lifetime",frame["step"])
         original = originals[frame["step"]]
-        if hud and any(r["step"]<=frame["step"]<r["return_step"] for r in hud["data"]["records"]):
+        if hud and any(r["step"]<=frame["step"]<r["return_step"] for r in hud_records):
             assert frame["held"],("HUD transaction exposed",frame["step"])
+        if any(r["step"]<=frame["step"]<r["return_step"] for r in hud_updates):
+            assert frame["held"],("HUD panel transaction exposed",frame["step"])
+        if effects and next_panel["step"]<=frame["step"]<restore["return_step"]:
+            assert frame["held"],("HUD footer restoration exposed",frame["step"])
+        if effects and last_retire<=frame["step"]<footer_restored:
+            assert frame["held"],("HUD damage retirement exposed",frame["step"])
         if any(start <= frame["step"] < end for start, end in clock_intervals):
             assert frame["held"], ("clock transaction exposed", frame["step"])
         native_state = native_layouts[frame["step"]]
@@ -1657,11 +1731,14 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 for word in state["words"] or []:
                     origins=[(e,w) for e in hud_entries if e["Step"]<=frame["step"] for w in hud_words[e["Step"]] if w==word]
                     if origins:
-                        e,w=origins[-1];record=next(r for r in hud["data"]["records"] if r["step"]==e["Step"])
+                        e,w=origins[-1];record=next(r for r in hud_records if r["step"]==e["Step"])
                         if record["paint_page"]!=native_state["display_start"]:
-                            checkpoint=next(cp for cp in trace["checkpoints"] if cp["step"]>=record["return_step"])
+                            candidates=[(cp["step"],observed/(cp["label"]+".png")) for cp in trace["checkpoints"] if cp["step"]>=record["return_step"]]
+                            if effects:
+                                candidates += [(cp["step"],inputs.parent.parent/cp["path"]) for cp in effects_copy_witness["images"] if cp["step"]>=record["return_step"]]
+                            _,native_image=min(candidates,key=lambda item:item[0])
                             x,y,width,height=word["X"]*2,word["Y"]*2,word["Width"]*2,word.get("Height",8)*2
-                            expected=Image.open(observed/(checkpoint["label"]+".png")).convert("RGBA").resize((640,400),Image.Resampling.NEAREST).crop((x,y,x+width,y+height)).tobytes()
+                            expected=Image.open(native_image).convert("RGBA").resize((640,400),Image.Resampling.NEAREST).crop((x,y,x+width,y+height)).tobytes()
                             raw=pixels(en_run,originals[frame["step"]])
                             actual=b"".join(raw[(yy*640+x)*4:(yy*640+x+width)*4] for yy in range(y,y+height))
                             assert actual==expected,("HUD page or unproved copy",frame["step"],word["Key"])
@@ -1853,6 +1930,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["party_cast"]["new_keys"]=len(set(catalog(hud_base/"en.tsv")).difference(catalog(party_base/"en.tsv")))
         result["hud"]={"bindings":len(config["HUDParagraphs"]),"entries":len(hud_entries),"returns":len(hud_returns),"aliases":len(hud["data"]["aliases"]),"added_fields":len(hud["data"]["fields"]),"added_menus":len(hud["data"]["menus"])}
         result["limits"]="正常兩位角色清單、右側兩種武器、施法起始、一次攻擊與未命中；不外推傷害、完整施法、勝利或正式入口。"
+    if effects:
+        result["effects"]=dict(bindings=len(effects["data"]["bindings"]),aliases=len(effects["data"]["aliases"]),fields=len(effects["data"]["fields"]),menus=len(effects["data"]["menus"]),numeric_reports=sum(r.get("number") is not None for r in hud_records),panel_updates=len(hud_updates))
+        result["effects"]["copy_witness"]=effects_copy_witness
+        result["limits"]="正常冰風暴目標選取、七次魔法傷害文字與返回戰鬥選單；只保留原版輸出數值，不推導傷害公式，不宣稱勝利或正式入口完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

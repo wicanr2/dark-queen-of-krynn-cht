@@ -318,7 +318,7 @@ def evidence(root, output):
     snapshot=output/"tool-snapshots"
     assert not snapshot.exists()
     snapshot.mkdir()
-    tool_names=["cold-load.sh","cold_load.py","cold_load_probe.go","early_text_live.go","ui_list_live.go",
+    tool_names=["cold-load.sh","cold_load.py","cold_load_probe.go","early_text_live.go","ui_list_live.go","ui_hud_integer.go",
                 "ui_list_live_check.py","ui_list_inputs.py","ui_list_paragraphs.go","ui_journal_reader.go",
                 "ui_journal_illustrations.go","ui_menu_source.go","oracle_video_observer.go","ui-list-live.sh",
                 "ui_context_probe.go","ui_context_check.py","ui-context.sh","camp_live_inputs.py",

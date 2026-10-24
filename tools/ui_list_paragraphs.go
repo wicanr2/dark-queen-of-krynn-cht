@@ -34,13 +34,88 @@ type listHUDParagraph struct {
 	NativeBox                     [4]int
 	Foreground, Background, Clear byte
 	Spans                         []listHUDSpan
-	HideFooter                    bool `json:",omitempty"`
+	HideFooter                    bool   `json:",omitempty"`
+	IntegerTemplateKey            string `json:",omitempty"`
+	KeepFooterSignature           string `json:",omitempty"`
 }
 type listHUDPending struct {
-	Paint      paintReturn
-	Entry      uint64
-	Words      []listWord
-	HideFooter bool
+	Paint               paintReturn
+	Entry               uint64
+	Words               []listWord
+	HideFooter          bool
+	KeepFooterSignature string
+}
+
+type listHUDPanelPending struct {
+	Paint     paintReturn
+	Entry     uint64
+	Signature string
+}
+
+// 只在已知瞄準底列完整且原版右框確實重畫時等待 sub_1803F 返回。
+func (g *liveGame) installHUDPanelUpdates() {
+	l, o := g.list, g.o
+	signatures := map[string]bool{}
+	for _, p := range l.config.HUDParagraphs {
+		if p.KeepFooterSignature != "" {
+			signatures[p.KeepFooterSignature] = true
+		}
+	}
+	if len(signatures) == 0 {
+		return
+	}
+	entry := oracle.Addr{Seg: 0x088e, Off: 0x085f}
+	if hex.EncodeToString(o.Bytes(entry, 11)) != "558bec83ec02803eb7c600" || o.Byte(oracle.Addr{Seg: 0x088e, Off: 0x0a18}) != 0xcb {
+		panic("右框更新邊界不符")
+	}
+	registered := map[oracle.Addr]bool{}
+	o.OnCall(entry, func(_ *oracle.Oracle) {
+		r := o.Regs()
+		raw := o.Byte(oracle.Addr{Seg: r.DS, Off: 0xc6b7})
+		menu, ok := readMenuSource(o)
+		if r.DS != 0x333e || raw == 0 || !ok || !signatures[menu.Signature] || !l.footerCompatible(menu.Signature) {
+			return
+		}
+		at := o.Caller()
+		paint := paintReturn{at, r.SS, r.SP + 4}
+		l.hudPanelPaints = append(l.hudPanelPaints, listHUDPanelPending{paint, o.Steps(), menu.Signature})
+		g.listLog("hud-update-entry", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP, "menu_signature": menu.Signature, "raw_c6b7": raw})
+		if !registered[at] {
+			registered[at] = true
+			o.OnCall(at, func(_ *oracle.Oracle) {
+				if len(l.hudPanelPaints) == 0 {
+					return
+				}
+				p := l.hudPanelPaints[len(l.hudPanelPaints)-1]
+				now := o.Regs()
+				if p.Paint.Addr != at || p.Paint.SS != now.SS || p.Paint.SP != now.SP {
+					return
+				}
+				menu, ok := readMenuSource(o)
+				if !ok || menu.Signature != p.Signature || !l.footerCompatible(menu.Signature) {
+					panic("右框重畫改變瞄準底列")
+				}
+				l.hudPanelPaints = l.hudPanelPaints[:len(l.hudPanelPaints)-1]
+				// Next 的右框完成後，原版還會在可見頁恢復按鈕顏色。
+				if at == (oracle.Addr{Seg: 0x22f4, Off: 0x2d1c}) {
+					l.hudFooterRestore = true
+				} else if at != (oracle.Addr{Seg: 0x205e, Off: 0x084b}) {
+					l.footerTransition = false
+				}
+				g.listLog("hud-update-return", map[string]any{"entry_step": p.Entry, "caller": at, "ss": now.SS, "sp": now.SP, "menu_signature": p.Signature})
+			})
+		}
+	})
+	o.OnCall(oracle.Addr{Seg: 0x0ceb, Off: 0x01be}, func(_ *oracle.Oracle) {
+		p, r := l.hudFooterReturn, o.Regs()
+		if p == nil || p.SS != r.SS || p.SP != r.SP {
+			return
+		}
+		l.hudFooterReturn = nil
+		l.hudFooterRestore = false
+		l.footerTransition = false
+		g.listLog("hud-footer-restored", map[string]any{"caller": p.Addr, "ss": r.SS, "sp": r.SP})
+	})
 }
 
 func (g *liveGame) validateHUDParagraphs() {
@@ -50,6 +125,15 @@ func (g *liveGame) validateHUDParagraphs() {
 		miss := p.Caller == (oracle.Addr{Seg: 0x22f4, Off: 0x048f}) && p.NativeBox == ([4]int{184, 104, 312, 136})
 		if !(weapon || status || miss) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
 			panic("右側段落來源不符")
+		}
+		if p.IntegerTemplateKey != "" {
+			if !status || p.HideFooter || len(p.Spans) != 1 || p.Spans[0].Key != p.IntegerTemplateKey ||
+				p.SHA256 != digest([]byte(g.list.sources[p.IntegerTemplateKey])) || !hudIntegerTemplate(g.list.sources[p.IntegerTemplateKey]) || !hudIntegerTemplate(g.catalog[p.IntegerTemplateKey]) ||
+				len(p.KeepFooterSignature) != 64 || g.list.config.Menus[p.KeepFooterSignature] != "aim" {
+				panic("右側數值模板或底列來源不符")
+			}
+		} else if p.KeepFooterSignature != "" {
+			panic("未辨識的右側底列保留契約")
 		}
 		for _, span := range p.Spans {
 			x, y, w, h := span.Rect[0], span.Rect[1], span.Rect[2], span.Rect[3]
@@ -65,18 +149,39 @@ func (g *liveGame) validateHUDParagraphs() {
 func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, clear byte, ptr oracle.Addr, source string) bool {
 	l, o := g.list, g.o
 	for _, p := range l.config.HUDParagraphs {
-		if p.Caller != caller || p.NativeBox != box || p.Foreground != fg || p.Background != bg || p.Clear != clear || p.SHA256 != digest([]byte(source)) {
+		if p.Caller != caller || p.NativeBox != box || p.Foreground != fg || p.Background != bg || p.Clear != clear {
+			continue
+		}
+		var number *int32
+		if p.IntegerTemplateKey != "" {
+			value, ok := hudInteger(source, l.sources[p.IntegerTemplateKey])
+			if !ok {
+				continue
+			}
+			number = &value
+			menu, ok := readMenuSource(o)
+			if !ok || menu.Signature != p.KeepFooterSignature || !l.footerCompatible(menu.Signature) {
+				continue
+			}
+		} else if p.SHA256 != digest([]byte(source)) {
 			continue
 		}
 		var words []listWord
 		for _, span := range p.Spans {
-			if span.Start+span.Length > len(source) || source[span.Start:span.Start+span.Length] != l.sources[span.Key] {
+			if number == nil && (span.Start+span.Length > len(source) || source[span.Start:span.Start+span.Length] != l.sources[span.Key]) {
 				return false
 			}
 			x, y, w, h := span.Rect[0], span.Rect[1], span.Rect[2], span.Rect[3]
 			word := listWord{X: x, Y: y, Width: w, Key: span.Key, Group: "body", Foreground: fg, Background: l.config.Background}
 			if h != 8 {
 				word.Height = h
+			}
+			word.Number = number
+			if number != nil {
+				text, ok := hudIntegerText(g.catalog[span.Key], *number)
+				if !ok || len([]rune(text))*g.glyphs.Size > w*2 {
+					return false
+				}
 			}
 			words = append(words, word)
 		}
@@ -86,8 +191,8 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 		paint := paintReturn{caller, r.SS, r.SP + 4}
 		l.paragraphPaints = append(l.paragraphPaints, paint)
 		l.hudActive = true
-		l.hudPending = append(l.hudPending, listHUDPending{paint, o.Steps(), words, p.HideFooter})
-		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("hud-before-glyph", map[string]any{"caller": caller, "native_box": box, "source_sha256": p.SHA256, "source_pointer": ptr, "spans": p.Spans, "words": words}))
+		l.hudPending = append(l.hudPending, listHUDPending{paint, o.Steps(), words, p.HideFooter, p.KeepFooterSignature})
+		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("hud-before-glyph", map[string]any{"caller": caller, "native_box": box, "source_sha256": digest([]byte(source)), "source_pointer": ptr, "spans": p.Spans, "words": words}))
 		if l.hudReturns == nil {
 			l.hudReturns = map[oracle.Addr]bool{}
 		}
@@ -116,6 +221,13 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 						if word.Group == "footer" {
 							delete(l.words, at)
 						}
+					}
+					l.footerTransition = false
+				}
+				if pending.KeepFooterSignature != "" {
+					menu, ok := readMenuSource(o)
+					if !ok || menu.Signature != pending.KeepFooterSignature || !l.footerCompatible(menu.Signature) {
+						panic("右側數值回報的瞄準底列改變")
 					}
 					l.footerTransition = false
 				}
@@ -167,6 +279,7 @@ func (g *liveGame) invalidateListParagraph(x, y, width, height int, reason strin
 func (g *liveGame) installListParagraphs() {
 	l, o := g.list, g.o
 	g.validateHUDParagraphs()
+	g.installHUDPanelUpdates()
 	if len(l.config.Paragraphs) == 0 {
 		return
 	}

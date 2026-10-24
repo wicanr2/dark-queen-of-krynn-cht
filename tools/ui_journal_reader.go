@@ -288,8 +288,11 @@ func (g *liveGame) composeReader(px []byte) {
 
 func (g *liveGame) readerStable() bool {
 	l := g.list
+	if l != nil && (l.hudFooterRestore || l.hudFooterReturn != nil) {
+		return false
+	}
 	return l != nil && len(l.paints) == 0 && len(l.fills) == 0 && len(l.scrolls) == 0 && !l.clearPending && !l.awaitPageFlip &&
-		len(l.menus) == 0 && len(l.buttons) == 0 && !l.headerTransition && !l.footerTransition && l.clockReturn == nil && len(l.paragraphPaints) == 0
+		len(l.menus) == 0 && len(l.buttons) == 0 && !l.headerTransition && !l.footerTransition && l.clockReturn == nil && len(l.paragraphPaints) == 0 && len(l.hudPanelPaints) == 0
 }
 
 func (g *liveGame) installReaderControls(path, nativeRequest string, live, probe bool) {

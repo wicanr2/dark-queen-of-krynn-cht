@@ -82,9 +82,10 @@ type listWord struct {
 	Key                    string
 	Group                  string
 	Foreground, Background byte
-	Button                 bool `json:"Button,omitempty"`
-	FontSize               int  `json:",omitempty"`
-	Height                 int  `json:",omitempty"`
+	Button                 bool   `json:"Button,omitempty"`
+	FontSize               int    `json:",omitempty"`
+	Height                 int    `json:",omitempty"`
+	Number                 *int32 `json:",omitempty"`
 }
 type listTextEvent struct {
 	Step       uint64
@@ -148,6 +149,9 @@ type listState struct {
 	hudPending             []listHUDPending
 	hudReturns             map[oracle.Addr]bool
 	hudActive              bool
+	hudPanelPaints         []listHUDPanelPending
+	hudFooterRestore       bool
+	hudFooterReturn        *paintReturn
 	trackListPage          bool
 	descriptorContext      bool
 	rowPagePending         bool
@@ -419,8 +423,9 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.RawX == 8004 && f.RawY == 8089 && f.UpperCaller == (oracle.Addr{Seg: 0x22f4, Off: 0x2bf0}) &&
 				f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
 				l.sources[f.Key] == "Aim: range = " && f.Length == len(l.sources[f.Key])
-			combatTarget := f.Pane == "callsite" && f.Group == "body" && f.Start == 0 && f.Length == 11 && f.Width == 0 && f.RawX == 8092 && f.RawY == 8048 &&
-				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x088e, Off: 0x16fb}) && f.UpperNative != nil && *f.UpperNative == ([2]int{184, 96}) &&
+			blueY, bluePosition := map[uint16]int{8004: 8, 8040: 80, 8048: 96}[f.RawY]
+			combatTarget := f.Pane == "callsite" && f.Group == "body" && f.Start == 0 && f.Length == 11 && f.Width == 0 && f.RawX == 8092 && bluePosition &&
+				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x088e, Off: 0x16fb}) && f.UpperNative != nil && *f.UpperNative == ([2]int{184, blueY}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.Color != nil && *f.Color == 0x82 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23 &&
 				f.SHA256 == "34e6a2c45cd76bd572bc718ec07bba5666ec09acc337edfcc226f81c36949655"
 			spellCaption := f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Length == 15 && f.Width == 0 && f.RawX == 8004 && f.RawY == 8089 &&
@@ -523,6 +528,15 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 		x, y, w, h := v[1], v[0], v[3]-v[1], v[2]-v[0]
 		fillCaller := oracle.Addr{Off: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 2}), Seg: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 4})}
+		if len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) && ([4]int{x, y, w, h}) == ([4]int{184, 80, 128, 96}) {
+			for _, word := range l.words {
+				if word.Number != nil {
+					l.footerTransition = true
+					g.listLog("hud-damage-retired", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}})
+					break
+				}
+			}
+		}
 		if l.hudActive && len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) && ([4]int{x, y, w, h}) == ([4]int{184, 8, 128, 168}) {
 			l.footerTransition = true
 			g.listLog("hud-panel-redraw", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}})
@@ -1165,6 +1179,11 @@ func (g *liveGame) installListFields() {
 			if f.BackgroundOverride != nil {
 				w.Background = *f.BackgroundOverride
 			}
+			if l.hudFooterRestore && w.Button && w.Foreground == 7 && w.X == 8 && w.Y == 189 && source == "Next" && l.footerCompatible(f.MenuSignature) {
+				r := o.Regs()
+				p := paintReturn{o.Caller(), r.SS, r.SP + 4}
+				l.hudFooterReturn = &p
+			}
 			if w.X < 0 || w.Y < 0 || w.X+w.Width > 320 || w.Y+w.height() > 200 {
 				panic("列表欄位越界")
 			}
@@ -1307,7 +1326,15 @@ func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]
 				copy(px[((y+yy)*640+x+xx)*4:][:3], bg[:])
 			}
 		}
-		for i, ch := range []rune(catalog[w.Key]) {
+		text := catalog[w.Key]
+		if w.Number != nil {
+			var ok bool
+			text, ok = hudIntegerText(text, *w.Number)
+			if !ok {
+				panic("右側數值模板不符")
+			}
+		}
+		for i, ch := range []rune(text) {
 			alpha, ok := glyphs.Glyphs[string(ch)]
 			if !ok || len(alpha) != glyphs.Size*glyphs.Height {
 				panic("列表字型缺字")
@@ -1332,7 +1359,10 @@ func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]
 }
 func (g *liveGame) listReceipt(result map[string]any) {
 	l := g.list
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 || l.feedback != nil || l.serviceNotice != nil || l.creationNameReturn != nil || l.creationFooterPending {
+	if l.hudFooterRestore || l.hudFooterReturn != nil {
+		panic("瞄準底列尚未完成撤除或復色")
+	}
+	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 || len(l.hudPanelPaints) > 0 || l.feedback != nil || l.serviceNotice != nil || l.creationNameReturn != nil || l.creationFooterPending {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))

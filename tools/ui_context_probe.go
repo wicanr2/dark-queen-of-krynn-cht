@@ -264,6 +264,11 @@ func main() {
 	var pending []pendingCall
 	registered := map[oracle.Addr]bool{}
 	observe := os.Args[4] == "observe"
+	var hudPanels func() []map[string]any
+	if observe && os.Getenv("DQK_CONTEXT_HUD_PANEL") == "1" {
+		hudPanels = observeHUDPanels(o)
+	}
+
 	var displayChanges []map[string]any
 	videoTrace := observe && os.Getenv("DQK_CONTEXT_VIDEO") == "1"
 	if videoTrace {
@@ -296,14 +301,22 @@ func main() {
 			}
 		})
 		previous := o.VideoLayoutState()
-		displayChanges = append(displayChanges, map[string]any{"step": o.Steps(), "layout": previous})
+		layoutRecord := func(layout oracle.VideoWriteEvent) map[string]any {
+			record := map[string]any{"step": o.Steps(), "layout": layout}
+			if hudPanels != nil {
+				menu, valid := readMenuSource(o)
+				record["menu_valid"], record["menu_snapshot"] = valid, menu
+			}
+			return record
+		}
+		displayChanges = append(displayChanges, layoutRecord(previous))
 		o.SetStepGuard(func(_ *oracle.Oracle) error {
 			if o.Steps() < 220000000 || o.Steps() > last {
 				return nil
 			}
 			next := o.VideoLayoutState()
 			if next.DisplayStart != previous.DisplayStart || next.Mode != previous.Mode || next.Pitch != previous.Pitch || next.Unchained != previous.Unchained {
-				displayChanges = append(displayChanges, map[string]any{"step": o.Steps(), "layout": next})
+				displayChanges = append(displayChanges, layoutRecord(next))
 				previous = next
 			}
 			return nil
@@ -695,6 +708,9 @@ func main() {
 		result["limits"] = "Original MZ cold boot with normal keys; observation only, no translation or GUI claim. Varargs and BP chain entries remain raw candidates."
 	}
 	result["paragraphs"], result["pending_paragraphs"] = paragraphs, len(paragraphPending)
+	if hudPanels != nil {
+		result["hud_panels"] = hudPanels()
+	}
 	if seedFiles != nil {
 		result["seed_save_files"] = seedFiles
 	}
@@ -708,4 +724,65 @@ func main() {
 	}
 	writeJSON(filepath.Join(out, "receipt.json"), result)
 	fmt.Printf("observe=%t calls=%d shield_candidates=%d checkpoints=%d pending=%d\n", observe, len(calls), len(matches), len(checkpoints), len(pending))
+}
+
+// 一次性觀測原始 sub_1803F；原名與 IDA／執行期位址的對照見規格 001。
+func observeHUDPanels(o *oracle.Oracle) func() []map[string]any {
+	entry := oracle.Addr{Seg: 0x088e, Off: 0x085f}
+	finish := oracle.Addr{Seg: 0x088e, Off: 0x0a18}
+	if hex.EncodeToString(o.Bytes(entry, 11)) != "558bec83ec02803eb7c600" || o.Byte(finish) != 0xcb {
+		panic("右側更新函式 bytes 不符")
+	}
+	var events []map[string]any
+	var pending []pendingCall
+	registered := map[oracle.Addr]bool{}
+	o.OnCall(entry, func(_ *oracle.Oracle) {
+		r := o.Regs()
+		target := o.Caller()
+		stack := make([]uint16, 8)
+		for i := range stack {
+			stack[i] = o.StackWord(i)
+		}
+		e := map[string]any{"step": o.Steps(), "regs": r, "stack": stack, "caller": target, "raw_c6b7": o.Byte(oracle.Addr{Seg: r.DS, Off: 0xc6b7}), "entry_bytes": "558bec83ec02803eb7c600"}
+		if menu, ok := readMenuSource(o); ok {
+			e["menu_snapshot"] = menu
+		}
+		events = append(events, e)
+		pending = append(pending, pendingCall{len(events) - 1, target, r.SS, r.SP})
+		if !registered[target] {
+			registered[target] = true
+			o.OnCall(target, func(_ *oracle.Oracle) {
+				if len(pending) == 0 {
+					return
+				}
+				p := pending[len(pending)-1]
+				now := o.Regs()
+				if p.addr != target || p.ss != now.SS || p.sp+4 != now.SP {
+					return
+				}
+				if _, ok := events[p.index]["return_instruction_step"]; !ok {
+					panic("右側函式沒有 retf 證據")
+				}
+				events[p.index]["return_step"] = o.Steps()
+				pending = pending[:len(pending)-1]
+			})
+		}
+	})
+	o.OnCall(finish, func(_ *oracle.Oracle) {
+		if len(pending) == 0 {
+			panic("右側函式 retf 未配對")
+		}
+		p := pending[len(pending)-1]
+		r := o.Regs()
+		if p.ss != r.SS || p.sp != r.SP {
+			panic("右側函式 retf 堆疊不符")
+		}
+		events[p.index]["return_instruction_step"] = o.Steps()
+	})
+	return func() []map[string]any {
+		if len(pending) != 0 {
+			panic("右側函式觀測未結束")
+		}
+		return events
+	}
 }
