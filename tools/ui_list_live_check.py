@@ -273,8 +273,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    cast=provenance.get("cast_extension")
     bar=provenance.get("bar_extension")
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if cast:
+        from cast_ui_inputs import check_sources as check_cast_sources
+        source_args=check_cast_sources(*source_args)
     if bar:
         from bar_ui_inputs import check_sources
         source_args=check_sources(*source_args)
@@ -297,7 +301,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if item_context:
         base=inputs.parent.parent/item_context["base"]
         for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
@@ -415,7 +419,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     if page_proof:
         proof=page_proof
         path=inputs.parent.parent/proof["source_path"]
-        expected_sha=proof["source_sha256"] if bar else proof["sha256"]
+        expected_sha=proof["source_sha256"] if (cast or bar) else proof["sha256"]
         assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==expected_sha
         assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
     if creation:
@@ -1078,7 +1082,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 row_positions.discard(pos)
     for e in b["list_events"]:
         kind = e["Kind"]
-        if kind == "paragraph-before-glyph":
+        if kind == "memory-list-closed":
+            assert cast and config["Headers"][-1]["SHA256"]=="41b8dd827bde29bd2677001414cc57fb5111abb92366cc5e7179c24c8304d341"
+            original=next(f for f in trace["fill_events"] if f["converted_step"]==e["Step"])
+            assert not original["within_list"] and original["native_rect"]==[184,8,128,168]
+            assert original["stack"][:2]==[0x1b,0xb72]
+            assert e["detail"]==dict(caller={"Seg":0xb72,"Off":0x1b},native_rect=original["native_rect"])
+            for position,word in list(words.items()):
+                if word["Group"]!="footer":
+                    del words[position]
+                    row_positions.discard(position)
+            page=None
+        elif kind == "paragraph-before-glyph":
             p = paragraph_by_step[e["Step"]]
             binding = paragraph_bindings(p)[0]
             components = [binding["Key"]]
@@ -1723,7 +1738,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         added=set(literal_batch["new_keys"])
         seen={e["detail"]["page"]["Key"] for e in paragraph_entries}&added
         visible={k for f,s in zip(b["frames"],b["list_frames"]) if not f["held"] and s.get("paragraph") for k in s["paragraph"]["Components"]}&added
-        assert seen and visible==seen,"new catalog text not visible"
+        assert visible==seen and (seen or cast),"new catalog text not visible"
         result["literal_catalog"]={"eligible_keys":len(literal_batch["keys"]),"new_keys":len(added),
             "added_bindings":literal_batch["added_bindings"],"observed_new_keys":sorted(seen),"visible_new_keys":sorted(visible)}
         result["limits"]="既有正式 ECL 譯文沿四種已證實顯示情境批次接入；本次 GUI 只驗普通宮殿狀態後進酒館與交談，不能將目錄數換算成已走過的玩家路徑。短句、相鄰片段及新手札引用保留缺口；正式入口與全遊戲中文化未完成。"
@@ -1738,9 +1753,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
     if short_ecl:
         seen={e["detail"]["page"]["Key"] for e in short_events}
         visible={k for f,s in zip(b["frames"],b["list_frames"]) if not f["held"] and s.get("paragraph") for k in s["paragraph"]["Components"]}&set(short_ecl["keys"])
-        assert seen and visible==seen and seen&set(short_ecl["new_keys"])
+        assert visible==seen and (cast or (seen and seen&set(short_ecl["new_keys"])))
         result["short_ecl"]=dict(eligible=len(short_ecl["keys"]),new_keys=len(short_ecl["new_keys"]),added_bindings=short_ecl["added_bindings"],observed_keys=sorted(seen),visible_keys=sorted(visible))
         result["limits"]="80h 字面短敘事的 DRAFT 接入；本輪正常 GUI 只驗酒館標題一個新增短鍵及既有長台詞、離開後城市恢復。資料接入數不作玩家路徑覆蓋率，間接型別回退另作受控測試。相鄰片段、新引用、其他介面及正式入口仍待完成。"
+    if cast:
+        cast_base=inputs.parent.parent/cast["base"]
+        result["cast"]={"source_rows":len(cast["data"]["rows"]),"source_aliases":len(cast["data"]["aliases"]),
+            "new_keys":len(set(en).difference(catalog(cast_base/"en.tsv"))),
+            "closed_events":sum(e["Kind"]=="memory-list-closed" for e in b["list_events"])}
+        result["limits"]="正常首戰角色的兩頁記憶法術、選取與取消返回；沒有本輪新 ECL 敘事、完整施法、戰鬥勝利、其他角色、正式入口或全遊戲中文化聲明。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

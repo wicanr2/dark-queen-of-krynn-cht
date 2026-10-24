@@ -130,6 +130,7 @@ type listState struct {
 	headerTransition       bool
 	headerReturn           *paintReturn
 	footerTransition       bool
+	memoryListOpen         bool
 	fieldWrapper           *listFieldWrapper
 	clockReturn            *paintReturn
 	clockKeys              map[string]bool
@@ -287,7 +288,15 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	b, e = os.ReadFile(requestPath)
 	must(e)
 	must(json.Unmarshal(b, &l.request))
-	if len(l.config.Headers) != 2 || len(l.config.Rows) == 0 || len(l.config.Fields) == 0 || len(l.request.Actions) == 0 || o.Steps() != l.request.Start {
+	validHeaders := len(l.config.Headers) == 2
+	if len(l.config.Headers) == 3 {
+		h := l.config.Headers[2]
+		// 正常戰鬥的記憶清單與營地法術書共用指標，完整原文不同。
+		// 只增加本作已觀測的第三個來源，保留既有兩個標題。
+		validHeaders = h.Pane == "grimoire" && h.Segment == 0x333e && h.Offset == 0xa7c4 &&
+			h.Key == "header.41b8dd827bde29bd2677" && h.SHA256 == "41b8dd827bde29bd2677001414cc57fb5111abb92366cc5e7179c24c8304d341"
+	}
+	if !validHeaders || len(l.config.Rows) == 0 || len(l.config.Fields) == 0 || len(l.request.Actions) == 0 || o.Steps() != l.request.Start {
 		panic("列表輸入不符")
 	}
 	for _, key := range []string{"answer.yes", "answer.no", "format.string"} {
@@ -492,6 +501,19 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			v[i] = int(int16(o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 6 + uint16(i*2)})))
 		}
 		x, y, w, h := v[1], v[0], v[3]-v[1], v[2]-v[0]
+		fillCaller := oracle.Addr{Off: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 2}), Seg: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 4})}
+		if l.memoryListOpen && len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) &&
+			([4]int{x, y, w, h}) == ([4]int{184, 8, 128, 168}) {
+			for p, word := range l.words {
+				if word.Group != "footer" {
+					delete(l.words, p)
+				}
+			}
+			l.pane, l.memoryListOpen, l.descriptorContext = "", false, false
+			l.pendingHeader, g.page = nil, nil
+			l.footerTransition = true
+			g.listLog("memory-list-closed", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}})
+		}
 		g.invalidateListParagraph(x, y, w, h, "native fill")
 		if len(l.paints) == 0 && x <= 8 && y <= 8 && x+w >= 312 && y+h >= 184 {
 			for _, f := range l.config.Fields {
@@ -564,6 +586,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			l.headerTransition = false
 			l.headerReturn = nil
 			l.pane = ""
+			l.memoryListOpen = false
 			l.descriptorContext = false
 			l.trackListPage, l.rowPagePending = false, false
 			g.listLog("pane-invalidate", [4]int{x, y, w, h})
@@ -849,9 +872,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			hadSuffix := l.pendingHeader != nil
 			l.pane = ""
 			l.descriptorContext = false
+			l.memoryListOpen = false
 			for _, h := range l.config.Headers {
 				if s[7] == h.Segment && s[6] == h.Offset && digest([]byte(format)) == h.SHA256 {
 					l.pane = h.Pane
+					l.memoryListOpen = h.Key == "header.41b8dd827bde29bd2677"
 				}
 			}
 			if l.pane != "" && l.pendingHeader != nil {
