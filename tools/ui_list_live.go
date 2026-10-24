@@ -34,16 +34,17 @@ type listHeader struct {
 	SHA256          string
 }
 type listConfig struct {
-	Headers       []listHeader
-	Rows          []listRow
-	Fields        []listField
-	Paragraphs    []listParagraph
-	HUDParagraphs []listHUDParagraph `json:",omitempty"`
-	Menus         map[string]string
-	PaneLists     []listPaneSource
-	RowCallers    []oracle.Addr
-	Background    byte
-	FineWindows   [][2]uint64 `json:"fine_windows"`
+	Headers          []listHeader
+	Rows             []listRow
+	Fields           []listField
+	Paragraphs       []listParagraph
+	OriginalPrefixes []originalPrefixBinding `json:",omitempty"`
+	HUDParagraphs    []listHUDParagraph      `json:",omitempty"`
+	Menus            map[string]string
+	PaneLists        []listPaneSource
+	RowCallers       []oracle.Addr
+	Background       byte
+	FineWindows      [][2]uint64 `json:"fine_windows"`
 }
 type listPaneSource struct {
 	RowFillPage                           bool

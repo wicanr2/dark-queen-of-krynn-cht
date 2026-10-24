@@ -22,6 +22,7 @@
 |---|---|
 | 中文題名 | 沿用使用者稱呼「黑暗之后」；來源盤點時核對封面，不自行改名 |
 | 優先順序 | 使用者要求先完成中文化，再做全量 HD；目前集中遊戲譯文與接入，攻略地圖重繪及 HD 批次延後 |
+| 驗證與 HD 審查上限 | 使用者要求採代表性抽驗，避免逐場景重複全驗。HD 同批最多審查兩輪，第二輪後接受結果，不因美化偏好再開第三輪；來源與交付仍依既有權利邊界。抽驗入口為本檔第 7 節與 `CONTEXT.md` 的目前有效證據。 |
 | 技術起點 | 參照前作的 dosgolem 執行原版與輸出覆繪方法；本作可執行性、掛勾與相容性逐項重驗 |
 | 其他語言 | 本輪先處理繁中，不把前作五語擴充視為本作已授權交付範圍 |
 | HD 與介面 | 角色管理選單採使用者選定的 20 像素圓體及原版按鈕位置；其他字級、HD 倍率、風格、快捷鍵與工具列未定案 |
@@ -158,6 +159,7 @@
 - 正常玩家路徑至少抽驗冷啟動、建角或載入、探索、對話、選單、戰鬥與存退讀。
   驗證捲動、反白、清除、返回、背景恢復及讀檔殘影；狀態注入不能取代正常路徑。
 - 單元測試全綠只證明內部檢查通過。完成聲明限於本作收據覆蓋範圍，未驗項保留未知。
+- 使用者已指定代表性抽驗。批次先檢查共同來源、型別、邊界與字型，再抽測正常玩家路徑；重複舊驗證僅限本輪改動影響的範圍。優先抽驗漏譯、英文閃爍、箭矢數量／加值及存讀檔，不以逐頁全驗拖延整批接入。
 - 證據足以接入玩家功能後停止深挖無關 helper。標準 DOS 硬體時序採公開規格與成熟模擬器
   契約，不為逐週期一致追查 driver、ISR 或 busy-wait。
 
@@ -223,7 +225,7 @@ bash tools/research-storage.sh restore workplace/probe/研究目錄/重播目錄
 也可把 `restore` 的參數改成研究目錄，一次還原該目錄內的封存紀錄。
 還原後原檔名、內容、權限及時間恢復，壓縮副本移除，才可執行既有稽核器或重播檢查。
 `verify` 只證明封存的原始位元組完整，不等於重新執行 GUI 或遊戲驗收。
-`pack` 預設保護 `combat-effects-20261024`、`passage-chain-live-20261024`、`combat-finish-20261024`、`combat-movement-20261024`、`ammo-rows-20261024`、`ammo-boundaries-20261024`、`combat-rounds-20261024`、`passage-chain-camp-20261024`、`journal-references-20261024`、`combat-spells-route-20261024`、`combat-aim-route-20261024`、`combat-fire-20261025`、`haste-battle-20261025`、`victory-text-20261025`、`captain-dialogue-20261025` 與 `journal59-route-20261025` 十六個目前批次及圖文來源，
+`pack` 預設保護 `combat-effects-20261024`、`passage-chain-live-20261024`、`combat-finish-20261024`、`combat-movement-20261024`、`ammo-rows-20261024`、`ammo-boundaries-20261024`、`combat-rounds-20261024`、`passage-chain-camp-20261024`、`journal-references-20261024`、`combat-spells-route-20261024`、`combat-aim-route-20261024`、`combat-fire-20261025`、`haste-battle-20261025`、`victory-text-20261025`、`captain-dialogue-20261025`、`journal59-route-20261025`、`voyage-text-20261025` 與 `passage-island-20261025` 十八個目前批次及圖文來源，
 僅選其他目錄至少 16 MiB 的 `receipt.json`；`cache` 只清本專案 `workplace/probe/gocache` 內容，保留目錄。
 
 ## 10. 共同決策與停止線

@@ -16,6 +16,7 @@ type listParagraph struct {
 	Foreground, Background, Clear byte
 	JournalEntry                  int    `json:",omitempty"`
 	PredecessorKey                string `json:",omitempty"`
+	prefix                        *originalPrefix
 }
 
 type serviceNotice struct {
@@ -423,6 +424,11 @@ func (g *liveGame) installListParagraphs() {
 			g.listLog("unknown-paragraph-original", map[string]any{"caller": caller, "reason": reason})
 		}
 		if binding == nil {
+			if ok {
+				binding = g.originalPrefixParagraph(ptr, caller, box, fg, bg, clear, source)
+			}
+		}
+		if binding == nil {
 			if ok && g.beginHUDParagraph(caller, box, fg, bg, clear, ptr, source) {
 				return
 			}
@@ -448,6 +454,10 @@ func (g *liveGame) installListParagraphs() {
 			bg = 8
 		}
 		text := g.catalog[binding.Key]
+		prefix := binding.prefix
+		if prefix != nil {
+			text = source
+		}
 		components := []string{binding.Key}
 		componentColors := []int{int(fg)}
 		outputBox := [4]int{box[0] * 2, box[1] * 2, box[2] * 2, box[3] * 2}
@@ -457,6 +467,7 @@ func (g *liveGame) installListParagraphs() {
 				return
 			}
 			text = g.page.Text + text
+			prefix = g.page.Prefix
 			components = append(append([]string{}, g.page.Components...), binding.Key)
 			previousColors := append([]int{}, g.page.ComponentColors...)
 			if len(previousColors) == 0 {
@@ -492,6 +503,7 @@ func (g *liveGame) installListParagraphs() {
 			return
 		}
 		page := storyPage{Step: o.Steps(), Key: binding.Key, Source: source, Text: text, Box: outputBox, Foreground: fg, Background: bg, Lines: lines, Clear: clear, Components: components}
+		page.Prefix = prefix
 		for _, color := range componentColors {
 			if color != int(fg) {
 				page.ComponentColors = componentColors
@@ -525,6 +537,7 @@ func (g *liveGame) installListParagraphs() {
 				p, r := l.paragraphPaints[len(l.paragraphPaints)-1], o.Regs()
 				if p.Addr == caller && p.SS == r.SS && p.SP == r.SP {
 					l.paragraphPaints = l.paragraphPaints[:len(l.paragraphPaints)-1]
+					g.captureOriginalPrefix(p)
 					g.listLog("paragraph-return", map[string]any{"caller": caller, "ss": r.SS, "sp": r.SP})
 					if notice := l.serviceNotice; notice != nil && !notice.Ready && caller == (oracle.Addr{Seg: 0x291a, Off: 0x0fd0}) {
 						menu, ok := readMenuSource(o)

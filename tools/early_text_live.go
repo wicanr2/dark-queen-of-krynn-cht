@@ -56,7 +56,8 @@ type storyPage struct {
 	Lines                  []string
 	Clear                  byte
 	Components             []string
-	ComponentColors        []int `json:"ComponentColors,omitempty"`
+	ComponentColors        []int           `json:"ComponentColors,omitempty"`
+	Prefix                 *originalPrefix `json:"Prefix,omitempty"`
 }
 type liveGame struct {
 	o             *oracle.Oracle
@@ -616,7 +617,11 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 					panic("段落來源與字色數量不符")
 				}
 				for i, key := range p.Components {
-					for range []rune(g.catalog[key]) {
+					text := g.catalog[key]
+					if p.Prefix != nil && key == p.Prefix.Key {
+						text = p.Prefix.Text
+					}
+					for range []rune(text) {
 						glyphColors = append(glyphColors, p.ComponentColors[i])
 					}
 				}
@@ -636,6 +641,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 						fg = pal[glyphColors[glyphIndex]]
 					}
 					glyphIndex++
+					if p.Prefix != nil && glyphIndex <= len(p.Prefix.Text) {
+						continue
+					}
 					alpha, ok := g.glyphs.Glyphs[string(ch)]
 					if !ok || len(alpha) != g.glyphs.Size*g.glyphs.Height {
 						panic("劇情字型缺字")
@@ -653,6 +661,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			}
 		}
 	}
+	if g.translate && g.page != nil {
+		drawOriginalPrefix(px, g.page)
+	}
 	if g.translate && g.list != nil {
 		g.composeList(px)
 		g.composeReader(px)
@@ -668,6 +679,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	if g.list != nil {
 		held = g.translate && (len(g.list.paints) > 0 || len(g.list.ammoPaints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition || g.list.clockReturn != nil || len(g.list.hudPending) > 0 || len(g.list.hudPanelPaints) > 0 || g.list.creationNameReturn != nil || g.list.creationFooterPending || (g.list.feedback != nil && g.list.feedback.Restoring) || (g.list.serviceNotice != nil && g.list.serviceNotice.Restoring))
 		if g.translate && g.cold != nil && g.cold.ui != nil && g.cold.ui.held() {
+			held = true
+		}
+		if g.translate && g.page != nil && g.page.Prefix != nil && len(g.list.paragraphPaints) > 0 {
 			held = true
 		}
 		if c := g.list.battleNotice; g.translate && c != nil && (!c.Ready || c.Restoring) {

@@ -6,6 +6,12 @@
 
 玩家須自備合法原版。原版遊戲、美術、手冊與掃描留在本機，不隨儲存庫提供。
 
+**[閱讀完整圖文版](workplace/probe/readme-gallery-preview-20261025/README.md)** ·
+[用瀏覽器開啟圖庫](workplace/probe/readme-gallery-preview-20261025/README.html)
+
+圖文版包含總覽圖、原版與 HD 試繪對照、實際遊戲截圖及地圖。
+下方圖片連結須在備有素材的本機工作區開啟；GitHub 保存介紹與重建工具。
+
 ## 故事背景
 
 在前兩次冒險之後，英雄們的事蹟傳到了帕蘭薩斯。羅拉娜將軍來信，感謝隊伍挫敗
@@ -27,11 +33,22 @@
 圖格包含動作與重複編號，不能當作怪物種類數；尚未確認的名稱保留來源編號。
 藍龍已有一組原版與 HD 試繪對照，其原版圖格已與首戰畫面核對。
 
+| 展示 | 原版 | HD |
+|---|---|---|
+| 怪物與戰鬥角色圖格 | [190 格總覽](workplace/probe/readme-gallery-preview-20261025/CPIC-original.png) | 全量尚未製作 |
+| 隊員戰鬥造型 | [98 格總覽](workplace/probe/readme-gallery-preview-20261025/CBODY-original.png) | 全量尚未製作 |
+| 藍龍試繪 | [原版圖格](workplace/probe/readme-gallery-preview-20261025/CPIC..6.png) | [HD 試繪](workplace/probe/readme-gallery-preview-20261025/hd-blue-dragon-r2.png)，未接入遊戲 |
+
 ## 人物頭像總覽
 
 31 張人物候選頭像排成一張總覽圖，並保留各張原圖供放大查看。
 人物身分尚待逐項核對；一張頭像已有原版與 HD 試繪對照，正式風格尚未定案。
 完整 PICA、PICB、PICC 已解圖庫另列，包含人物、怪物與場景。
+
+| 展示 | 原版 | HD |
+|---|---|---|
+| 人物候選頭像 | [31 張總覽](workplace/probe/readme-gallery-preview-20261025/portraits-original.png) | 全量尚未製作 |
+| PICA.7.1，身分待核 | [原版頭像](workplace/probe/readme-gallery-preview-20261025/PICA.7.1.png) | [HD 試繪](workplace/probe/readme-gallery-preview-20261025/hd-portrait-r1.png)，未接入遊戲 |
 
 ## 遊戲截圖
 
@@ -39,29 +56,28 @@
 每組取自相同原版狀態與輸入，保留裝備數量、加值及戰鬥結果。
 這些是實際遊戲畫格，尚未套用 HD；兩張 HD 試繪另行展示。
 
+| 畫面 | 原版 | 繁中顯示原型 |
+|---|---|---|
+| 單支箭矢與裝備清單 | [查看原版](workplace/probe/readme-gallery-preview-20261025/ammo-en.png) | [查看繁中](workplace/probe/readme-gallery-preview-20261025/ammo-zh.png) |
+| 首戰毒氣與傷害回報 | [查看原版](workplace/probe/readme-gallery-preview-20261025/battle-en.png) | [查看繁中](workplace/probe/readme-gallery-preview-20261025/battle-zh.png) |
+| 首戰敗北結語 | [查看原版](workplace/probe/readme-gallery-preview-20261025/defeat-en.png) | [查看繁中](workplace/probe/readme-gallery-preview-20261025/defeat-zh.png) |
+
 ## 遊戲內地圖
 
 展示正常探索流程中的森林畫面與原版區域圖。繁中攻略另有凱爾高斯地圖重繪原型，
 與遊戲內區域圖分開列出。攻略地圖使用重新繪製的線條及繁中標註，尚未接入遊戲。
 來源與核對範圍見[攻略地圖研究](docs/re/002-walkthrough-source.md)。
 
-## 開啟完整圖文版
-
-本機可直接開啟[圖文 README](workplace/probe/readme-gallery-preview-20261025/README.md)，
-或以瀏覽器開啟[完整圖庫頁](workplace/probe/readme-gallery-preview-20261025/README.html)。
-這兩個入口僅在備有本機素材的工作區有效，GitHub 不保存其中的圖像。
-
-| 展示區 | 目前內容 |
+| 地圖 | 展示與用途 |
 |---|---|
-| [怪物總覽](workplace/probe/readme-gallery-preview-20261025/README.html#monsters) | 原版 CPIC 190 格與隊員造型 98 格 |
-| [人物頭像總覽](workplace/probe/readme-gallery-preview-20261025/README.html#portraits) | 31 張候選頭像總覽及獨立原圖 |
-| [原版／HD 對照](workplace/probe/readme-gallery-preview-20261025/README.html#hd) | 藍龍與人物頭像各一組試繪，尚未接入遊戲 |
-| [遊戲截圖](workplace/probe/readme-gallery-preview-20261025/README.html#screens) | 裝備、戰鬥回報及敗北畫面的原版／繁中對照 |
-| [遊戲內地圖](workplace/probe/readme-gallery-preview-20261025/README.html#maps) | 原版探索與區域圖，另列繁中攻略地圖重繪原型 |
+| [森林探索](workplace/probe/readme-gallery-preview-20261025/forest.png) | 原版第一人稱探索畫面 |
+| [遊戲內區域圖](workplace/probe/readme-gallery-preview-20261025/area-map.png) | 原版正常探索流程中的區域圖，未套用繁中或 HD |
+| [凱爾高斯攻略重繪](workplace/probe/readme-gallery-preview-20261025/guide-caergoth.png) | 繁中攻略地圖原型，尚未接入遊戲 |
 
-圖文版同時提供 Markdown 與 HTML，收錄上述總覽圖、原版／HD 對照及遊戲截圖。
+## 重建本機圖文版
+
+圖文版同時提供 Markdown 與 HTML，含上述圖片及可放大查閱的獨立頭像。
 五份圖庫目前解出 360 格，另有 52 個繪圖區塊尚未解碼。
-原版及衍生圖像依專案規則只留本機，GitHub 上保存介紹與重建工具。
 
 在本專案既有 Docker 工具鏈、合法原版及本機研究素材齊備後，執行：
 
@@ -82,7 +98,8 @@ bash tools/readme-gallery.sh readme-gallery-my-preview
 ## 目前狀態
 
 已建立正常載入、建角、城內服務、裝備、法術清單、手札引用、首戰部分回報、勝利結算
-與港口敘事的繁中顯示原型。
+與港口及出航敘事的繁中顯示原型。
+也已抽驗保留隊員姓名的敘事接續。
 文字在原版繪製前辨識，並以連續畫格檢查過渡；這些仍是研究原型，尚無正式完整中文入口。
 手札正文與圖文元件已有校讀及驗證，說明面板、其餘敘事與玩家路徑仍待接入。
 詳細範圍與目前有效程式集中在 [CONTEXT.md](CONTEXT.md)，全量 HD 尚未開始。

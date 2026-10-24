@@ -202,7 +202,7 @@ def freeze(root,output,revision="r1",input_revision=None):
     probe=root/"workplace/probe"
     programs=output/("programs-"+revision);programs.mkdir()
     names=["early_text_live.go","ui_cold_prompts.go","ui_list_live.go","ui_list_paragraphs.go",
-        "ui_journal_reader.go","ui_journal_illustrations.go","ui_menu_source.go","oracle_video_observer.go","ui_hud_integer.go","ui_inventory_ammo.go","ui-list-live.sh"]
+        "ui_journal_reader.go","ui_journal_illustrations.go","ui_menu_source.go","oracle_video_observer.go","ui_hud_integer.go","ui_inventory_ammo.go","ui_passage_source.go","ui_original_prefix.go","ui-list-live.sh"]
     for name in names:shutil.copy2(root/"tools"/name,programs/name)
     shutil.copy2(probe/"ui-list-live",programs/"ui-list-live")
     profiles={"inputs-"+input_revision}|{p.name for p in output.glob("inputs-*-"+input_revision) if p.is_dir()}
