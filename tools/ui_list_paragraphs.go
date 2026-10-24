@@ -233,6 +233,9 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 				if pending.HideFooter {
 					for at, word := range l.words {
 						if word.Group == "footer" {
+							if c := l.movementCaption; c != nil && c.Reference != nil && word.Key == c.Word.Key {
+								continue
+							}
 							delete(l.words, at)
 						}
 					}

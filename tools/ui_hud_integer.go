@@ -36,3 +36,25 @@ func hudIntegerText(pattern string, value int32) (string, bool) {
 	}
 	return strings.Replace(pattern, "%d", strconv.FormatInt(int64(value), 10), 1), true
 }
+
+// 僅辨識原版已觀測的無尾空白與兩欄數字加尾空白，不推定移動規則。
+func movementCounter(source, prefix string) (int32, bool) {
+	if prefix == "" || !strings.HasPrefix(source, prefix) {
+		return 0, false
+	}
+	raw := source[len(prefix):]
+	number := strings.TrimPrefix(strings.TrimSuffix(raw, " "), " ")
+	value, err := strconv.ParseInt(number, 10, 32)
+	if err != nil || value < 0 {
+		return 0, false
+	}
+	canonical := strconv.FormatInt(value, 10)
+	padded := canonical
+	if len(padded) == 1 {
+		padded = " " + padded
+	}
+	if raw != canonical && raw != padded+" " {
+		return 0, false
+	}
+	return int32(value), true
+}

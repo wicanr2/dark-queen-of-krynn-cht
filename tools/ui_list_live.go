@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -67,6 +68,13 @@ type listFieldWrapper struct {
 	Caller oracle.Addr
 	Source string
 	X, Y   int
+}
+
+type listMovementCaption struct {
+	Entry     uint64
+	Paint     paintReturn
+	Word      listWord
+	Reference []byte
 }
 type listSpan struct {
 	Start, Length int
@@ -143,6 +151,7 @@ type listState struct {
 	footerTransition       bool
 	memoryListOpen         bool
 	fieldWrapper           *listFieldWrapper
+	movementCaption        *listMovementCaption
 	clockReturn            *paintReturn
 	clockKeys              map[string]bool
 	paragraphPaints        []paintReturn
@@ -218,6 +227,10 @@ func listString(o *oracle.Oracle, seg, off uint16) (string, bool) {
 func (l *listState) fieldStart(f listField, source string) (int, bool) {
 	if f.SourcePattern == "" {
 		return f.Start, f.SHA256 == digest([]byte(source))
+	}
+	if f.SourcePattern == "movement-left" {
+		_, ok := movementCounter(source, l.sources[f.Key])
+		return 0, ok && f.SHA256 == digest([]byte(l.sources[f.Key]))
 	}
 	if f.SourcePattern == "created-name" {
 		prefix := l.sources[f.Key]
@@ -360,6 +373,12 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		ageUnit := f.SourcePattern == "age-unit" && f.Pane == "callsite" && f.Group == "body" && f.RawX == 8032 && f.RawY == 8012 && f.Start == 0 && f.Length == 5 && f.Width == 0 &&
 			f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0xd3}) && f.UpperNative == nil && f.UpperFormatSHA256 == "" && f.Color == nil && f.BackgroundOverride == nil &&
 			f.SHA256 == digest([]byte("years")) && f.FormatSHA256 == digest([]byte("%s"))
+		movementStyle := f.Color != nil && ((f.UpperCaller == (oracle.Addr{Seg: 0x29e0, Off: 0x074f}) && f.UpperFormatSHA256 == "" && *f.Color == 0x8f && f.BackgroundOverride == nil) ||
+			(f.UpperCaller == (oracle.Addr{Seg: 0xceb, Off: 0x0995}) && f.UpperFormatSHA256 == digest([]byte("%s")) && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7))
+		movementLeft := f.SourcePattern == "movement-left" && movementStyle && f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Width == 0 &&
+			f.Key == "ui.5af65b05298fbefb97ac" && f.Length == len(l.sources[f.Key]) && len(f.SHA256) == 64 && f.Key == "ui."+f.SHA256[:20] &&
+			f.SHA256 == digest([]byte(l.sources[f.Key])) && f.RawX == 8004 && f.RawY == 189 && f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) &&
+			f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.FormatSHA256 == digest([]byte("%s"))
 		creationPrompt := f.SourcePattern == "" && f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Length == 16 && f.Width == 124 &&
 			f.RawX == 8004 && f.RawY == 189 && f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0xceb, Off: 0x995}) &&
 			f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.FormatSHA256 == digest([]byte("%s")) &&
@@ -433,11 +452,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0x4630}) && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == "" && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
 				f.SHA256 == "ec5608fbca6974ee4604c38946916a68781c2eac792a0384deec8c151eb62d34"
-			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption {
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption && !movementLeft {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
-		if f.SourcePattern != "" && !createdName && !ageUnit {
+		if f.SourcePattern != "" && !createdName && !ageUnit && !movementLeft {
 			if f.SourcePattern != "clock-period" || f.Pane != "callsite" || f.Group != "body" || f.UpperCaller != (oracle.Addr{Seg: 0x205e, Off: 0x53c}) || f.RawX != 8104 || f.RawY != 8060 || f.Start != 0 || f.Length != 2 || f.Width != 0 {
 				panic("未知時間欄位契約")
 			}
@@ -895,6 +914,26 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 							l.footerTransition = false
 							g.listLog("footer-feedback-ready", map[string]any{"entry_step": feedback.Entry, "caller": at, "ss": r.SS, "sp": r.SP})
 						}
+						if c := l.movementCaption; c != nil && c.Reference == nil && c.Paint == p.Return {
+							rect := [4]int{c.Word.X, c.Word.Y, c.Word.Width, c.Word.height()}
+							if !l.creationFooterKnown || l.creationFooterPending || o.VideoLayoutState().DisplayStart != l.creationFooterPage {
+								l.erase(rect[0], rect[1], rect[2], rect[3])
+								l.movementCaption = nil
+								g.listLog("movement-caption-unavailable", map[string]any{"entry_step": c.Entry, "native_rect": rect})
+							} else {
+								c.Reference = listRectPixels(o.Indexed(), rect)
+								var removed []listWord
+								for _, word := range l.snapshot() {
+									if word.Group == "footer" && word.Button {
+										removed = append(removed, word)
+										delete(l.words, [2]int{word.X, word.Y})
+									}
+								}
+								l.footerTransition = false
+								g.listLog("movement-caption-ready", map[string]any{"entry_step": c.Entry, "caller": at, "ss": r.SS, "sp": r.SP,
+									"native_rect": rect, "reference_sha256": digest(c.Reference), "removed_buttons": removed})
+							}
+						}
 						l.fieldWrapper = nil
 					}
 					if c := l.clockReturn; c != nil && c.Addr == at && c.SS == r.SS && c.SP == r.SP {
@@ -1196,6 +1235,12 @@ func (g *liveGame) installListFields() {
 				l.erase(w.X, w.Y, w.Width, 8)
 				l.words[[2]int{w.X, w.Y}] = w
 			}
+			if f.SourcePattern == "movement-left" {
+				l.movementCaption = nil
+				if f.Color != nil && *f.Color == 0x8f {
+					l.movementCaption = &listMovementCaption{Entry: o.Steps(), Paint: l.fieldWrapper.Return, Word: w}
+				}
+			}
 			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": digest([]byte(source)), "source_start": start,
 				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix", "menu_signature": f.MenuSignature}))
 			if f.Pane == "menu-text" && f.Caller == (oracle.Addr{Seg: 0x266d, Off: 0x11f}) {
@@ -1263,6 +1308,7 @@ func (g *liveGame) updateList() error {
 		panic("列表步數未前進")
 	}
 	must(g.o.Run(batch))
+	g.syncMovementCaption()
 	if g.o.Steps() == a.End {
 		g.capture()
 		g.checkpoints[len(g.checkpoints)-1]["label"] = a.Label
@@ -1272,6 +1318,30 @@ func (g *liveGame) updateList() error {
 	}
 	return nil
 }
+
+// 字串入口負責建立譯文。原版色號區塊失配時只撤除覆層，不從畫面辨字。
+func (g *liveGame) syncMovementCaption() {
+	l := g.list
+	c := l.movementCaption
+	if c == nil || c.Reference == nil {
+		return
+	}
+	position := [2]int{c.Word.X, c.Word.Y}
+	word, ok := l.words[position]
+	if !ok || word.Key != c.Word.Key {
+		l.movementCaption = nil
+		return
+	}
+	rect := [4]int{word.X, word.Y, word.Width, word.height()}
+	current := listRectPixels(g.o.Indexed(), rect)
+	if !bytes.Equal(current, c.Reference) {
+		delete(l.words, position)
+		l.movementCaption = nil
+		g.listLog("movement-caption-retired", map[string]any{"entry_step": c.Entry, "native_rect": rect,
+			"reference_sha256": digest(c.Reference), "actual_sha256": digest(current)})
+	}
+}
+
 func (g *liveGame) composeList(px []byte) {
 	for _, word := range g.list.snapshot() {
 		glyphs := g.glyphs
