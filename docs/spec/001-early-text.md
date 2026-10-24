@@ -858,6 +858,46 @@ IDA 的原位元串解碼分支為 `2143:0091`，型別 `80h`；`81h` 走另一�
 封存時兩個路徑須共用專案根，例如 `/project` 與 `/project/workplace/probe/ecl-source-20261024`，
 只對該研究子目錄覆蓋可寫掛載。
 
+### 相鄰敘事片段的 DRAFT 研究
+
+工作區為 `workplace/probe/passage-chain-20261024/`。
+[passage_chain_probe.go](../../tools/passage_chain_probe.go) 在一般按鍵下保存 `333E:AE5C` 與
+`333E:B7F9` 的原始值、原始 script segment、完整段落、首字形及返回位置，先與控制組核對。
+script dump 只讀傳統記憶體，不能由游標名稱猜測檔案偏移或區塊邊界。
+相鄰候選、完整校讀稿及 `11`／`18 11` 的控制語意仍分開處理。
+未取得前瞻來源與實際執行證據前，不將候選整句接入正式呈現。
+
+正常酒館的四次來源已將游標對回原版 HLIB 區塊 4，見
+[研究 005](../re/005-translation-catalog.md#2026-10-24相鄰片段的游標來源與整句子集)。
+區塊偏移為原始基址 offset 加進入敘事前游標，取低 16 bit；原始值、區塊偏移及檔案偏移分欄保存。
+不把整個 segment dump 的雜湊當作檔案區塊身分，區塊外的記憶體不屬於檔案。
+
+[passage_chain_inputs.py](../../tools/passage_chain_inputs.py) 只建立獨立的校讀／前瞻原型輸入。
+先用 `native /project /project/workplace/probe/passage-chain-20261024` 核對四次來源及八個成對狀態，
+再以 `prepare` 的相同兩個路徑參數建立全新 `chain-inputs-r1`。
+每個來源需完整原版區塊雜湊、精確 offset、`12h 80h` 開頭及直接 `11h 80h` 接續；
+碰到 `18h`、`33h` 或其他指令立即停止，不越過控制指令合句。
+來源區塊、封包與片段 key 只進本機索引，顯示字串仍由 UTF-8 TSV 提供。
+
+本批選出 144 個已有整句校讀稿的鍵、155 處來源、306 個不同片段鍵。
+英文至多 96 字元、繁中至多 144 字元，僅為保守的原型篩選，尚未驗證原版等待、捲動或中文分頁。
+其餘 178 個候選分別為 38 個待校讀、72 個無符合條件的清除起點／控制邊界、68 個長句。
+306 個片段尚未進現行呈現目錄，不能把子集建立視為解除 819 鍵差額。
+
+一般按鍵請求採 `kind=text` 或 `kind=named`；Return 用 `kind=named, key=Return`，
+不將控制字元交給 `TypeKeys`。四組有效重播為 `bar-r1`、`battle-wait-r1`、`battle-wait-r2`、`after-battle-r2`，
+各自有 observe／control 收據；失敗的 Return 請求保留但不列有效重播。
+Go 二進位及來源固定於 `programs-r1`；不可在執行中改寫來源或二進位。
+
+Python 工具在既有固定容器內執行，`/project` 唯讀，只對本研究目錄覆蓋可寫掛載，
+使用目前 UID/GID、離線網路、外層逾時及資源限制。`guards` 的相同參數核對八個邊界／指令變造及四檔乾淨重建。
+術語及字型校讀沿 [translation_check.py](../../tools/translation_check.py)，來源為子集 `en.tsv`，
+譯文為 `zh-TW.review.tsv`，輸出同子集，搭配正式 `workplace/translation/glossary.tsv`、
+前作 `font/jf-openhuninn-2.1.ttf` 唯讀掛載與 `--review-only --style-approved --batch-id chain-review`。
+FontTools 容器與字型雜湊由本機索引保存。
+`evidence`／`audit` 同樣接專案根與研究目錄，封存前需有來源核對、變造、重建與術語校讀報告。
+144 則檢查通過、七項既有語境註記沿用；本輪沒有新增 GUI 驗收或正常相鄰片段證據。
+
 ## 待驗後才能 READY
 
 - 首段完整劇情的上層入口已由研究 004 解出；仍需補齊其他格式字串、組句、輸入名稱、
