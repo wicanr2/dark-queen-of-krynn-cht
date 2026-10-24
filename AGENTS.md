@@ -223,7 +223,7 @@ bash tools/research-storage.sh restore workplace/probe/研究目錄/重播目錄
 也可把 `restore` 的參數改成研究目錄，一次還原該目錄內的封存紀錄。
 還原後原檔名、內容、權限及時間恢復，壓縮副本移除，才可執行既有稽核器或重播檢查。
 `verify` 只證明封存的原始位元組完整，不等於重新執行 GUI 或遊戲驗收。
-`pack` 預設保護 `combat-effects-20261024`、`passage-chain-live-20261024`、`combat-finish-20261024`、`combat-movement-20261024`、`ammo-rows-20261024`、`ammo-boundaries-20261024`、`combat-rounds-20261024`、`passage-chain-camp-20261024`、`journal-references-20261024`、`combat-spells-route-20261024`、`combat-aim-route-20261024`、`combat-fire-20261025`、`haste-battle-20261025` 與 `victory-text-20261025` 十四個目前批次及圖文來源，
+`pack` 預設保護 `combat-effects-20261024`、`passage-chain-live-20261024`、`combat-finish-20261024`、`combat-movement-20261024`、`ammo-rows-20261024`、`ammo-boundaries-20261024`、`combat-rounds-20261024`、`passage-chain-camp-20261024`、`journal-references-20261024`、`combat-spells-route-20261024`、`combat-aim-route-20261024`、`combat-fire-20261025`、`haste-battle-20261025`、`victory-text-20261025` 與 `captain-dialogue-20261025` 十五個目前批次及圖文來源，
 僅選其他目錄至少 16 MiB 的 `receipt.json`；`cache` 只清本專案 `workplace/probe/gocache` 內容，保留目錄。
 
 ## 10. 共同決策與停止線

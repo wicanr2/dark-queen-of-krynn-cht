@@ -14,7 +14,8 @@ type listParagraph struct {
 	Caller                        oracle.Addr
 	NativeBox                     [4]int
 	Foreground, Background, Clear byte
-	JournalEntry                  int `json:",omitempty"`
+	JournalEntry                  int    `json:",omitempty"`
+	PredecessorKey                string `json:",omitempty"`
 }
 
 type serviceNotice struct {
@@ -358,6 +359,22 @@ func (g *liveGame) installListParagraphs() {
 		source := l.sources[p.Key]
 		suffix := digest([]byte(source))[:20]
 		literal := p.Key == "ecl."+suffix
+		if literal && len(source) == 1 && p.PredecessorKey == "" {
+			panic("單字元敘事缺少前文限制")
+		}
+		if p.PredecessorKey != "" {
+			valid := false
+			for _, previous := range l.config.Paragraphs {
+				if previous.Key == p.PredecessorKey && previous.Clear == 1 && previous.NativeBox == p.NativeBox &&
+					previous.Background == p.Background && previous.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x1d81}) {
+					valid = true
+				}
+			}
+			if !valid || !literal || len(source) != 1 || p.Clear != 0 || p.Foreground != 3 ||
+				p.Caller != (oracle.Addr{Seg: 0x26b4, Off: 0x1d53}) || p.JournalEntry != 0 {
+				panic("敘事前文限制不符")
+			}
+		}
 		message := p.Key == "message."+suffix && p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x3320}) && p.Foreground == 7 && p.Clear == 1
 		service := p.Key == "service-message."+suffix && p.Caller.Seg == 0x291a &&
 			(p.Caller.Off == 0x0eee || p.Caller.Off == 0x0fd0 || p.Caller.Off == 0x0c7f) &&
@@ -420,6 +437,10 @@ func (g *liveGame) installListParagraphs() {
 				fallback("nonliteral short ECL source")
 				return
 			}
+		}
+		if !paragraphPredecessor(binding, g.page) {
+			fallback("paragraph predecessor mismatch")
+			return
 		}
 		if strings.HasPrefix(binding.Key, "service-message.") {
 			bg = byte(l.config.Background)
@@ -518,4 +539,13 @@ func (g *liveGame) installListParagraphs() {
 			})
 		}
 	})
+}
+
+// 限定最近一個完整片段；不把同頁較早出現的文字當成目前的語境。
+func paragraphPredecessor(binding *listParagraph, page *storyPage) bool {
+	if binding.PredecessorKey == "" {
+		return true
+	}
+	return page != nil && len(page.Components) > 0 && page.Key == binding.PredecessorKey &&
+		page.Components[len(page.Components)-1] == binding.PredecessorKey
 }

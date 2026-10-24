@@ -282,33 +282,39 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    captain=provenance.get('captain_extension')
+    captain_path=None
+    if captain:
+        if (inputs.parent.parent/captain['source_path']).resolve()==(observed/'receipt.json').resolve():
+            captain_path=dict(source_path=captain['source_path'],page_validation=captain['data']['page_validation'])
     victory=provenance.get('victory_extension')
     victory_path=None
     if victory:
         selected=[p for p in victory['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1,'unknown victory path'
-        victory_path=selected[0]
+        assert len(selected)==1 or (not selected and captain_path),'unknown victory path'
+        victory_path=selected[0] if selected else None
     exploration_cast=provenance.get('exploration_cast_extension')
     exploration_path=exploration_cast if exploration_cast and (inputs.parent.parent/exploration_cast['source_path']).resolve()==(observed/'receipt.json').resolve() else None
-    if exploration_cast:assert exploration_path or victory_path,'unknown exploration cast path'
+    if exploration_cast:assert exploration_path or victory_path or captain_path,'unknown exploration cast path'
     fire=provenance.get('fire_extension')
     fire_path=None
     if fire:
         selected=[p for p in fire['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1 or not selected and (exploration_path or victory_path),'unknown fire path'
+        assert len(selected)==1 or not selected and (exploration_path or victory_path or captain_path),'unknown fire path'
         fire_path=selected[0] if selected else None
     magic_toggle=provenance.get('magic_toggle_extension')
     magic_path=None
     if magic_toggle:
         if (inputs.parent.parent/magic_toggle['source_path']).resolve()==(observed/'receipt.json').resolve():magic_path=magic_toggle
-        else:assert fire_path or exploration_path or victory_path,'unknown magic toggle path'
+        else:assert fire_path or exploration_path or victory_path or captain_path,'unknown magic toggle path'
     spell_route=provenance.get('spell_route_extension')
     spell_path=None
     if spell_route:
         if (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve():spell_path=spell_route
-        else:assert magic_path or fire_path or exploration_path or victory_path,'unknown spell route path'
-    scoped_path=victory_path or exploration_path or fire_path or magic_path or spell_path
-    scoped_data=victory if victory_path else exploration_cast if exploration_path else fire if fire_path else magic_toggle if magic_path else spell_route
+        else:assert magic_path or fire_path or exploration_path or victory_path or captain_path,'unknown spell route path'
+    if captain:assert captain_path or victory_path or exploration_path or fire_path or magic_path or spell_path,'unknown captain path'
+    scoped_path=captain_path or victory_path or exploration_path or fire_path or magic_path or spell_path
+    scoped_data=captain if captain_path else victory if victory_path else exploration_cast if exploration_path else fire if fire_path else magic_toggle if magic_path else spell_route
     journal_refs=provenance.get('journal_reference_extension')
     journal_path=None
     if journal_refs:
@@ -349,6 +355,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds,fire) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if captain:
+        from captain_ui_inputs import check_sources as check_captain_sources
+        source_args=check_captain_sources(*source_args)
     if victory:
         from victory_ui_inputs import check_sources as check_victory_sources
         source_args=check_victory_sources(*source_args)
@@ -1634,6 +1643,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 bg = p["background"] or 8
             if not p["clear"]:
                 assert page is not None and page["Box"] == box and page["Background"] == bg
+                if binding.get('PredecessorKey'):
+                    assert page['Key']==page['Components'][-1]==binding['PredecessorKey']
                 component_colors = page.get("ComponentColors",[page["Foreground"]]*len(page["Components"]))+component_colors
                 components = page["Components"]+components
             text = "".join(zh[key] for key in components)
@@ -1663,8 +1674,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert e["detail"]["caller"] == p["caller"]
             bindings_here = paragraph_bindings(p)
             if bindings_here:
-                assert not p["clear"] and page is None
-                assert e["detail"]["reason"] == "missing compatible predecessor"
+                binding=bindings_here[0]
+                if binding.get('PredecessorKey') and (page is None or page['Key']!=binding['PredecessorKey'] or page['Components'][-1]!=binding['PredecessorKey']):
+                    assert e['detail']['reason']=='paragraph predecessor mismatch'
+                else:
+                    assert not p["clear"] and page is None
+                    assert e["detail"]["reason"] == "missing compatible predecessor"
             else:
                 assert e["detail"]["reason"] == "source or context mismatch"
             page = None
@@ -2569,6 +2584,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if victory_path:
             result['victory']=dict(source_path=victory_path['source_path'],fields=len(victory['data']['fields']),ancestor_sampling=inherited)
             result['limits']='DRAFT 首戰勝利、每人經驗前綴、無戰利品與返回探索；數字保持原版，未驗其他結算或連續整場 GUI。'
+        if captain_path:
+            result['captain']=dict(source_path=captain_path['source_path'],predecessor=captain['data']['binding']['PredecessorKey'],ancestor_sampling=inherited)
+            result['limits']='DRAFT 正常 Explain 的開引號、自介接續及 Return 換頁；不改原版腳本或存檔，未驗其餘劇情及正式入口。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
