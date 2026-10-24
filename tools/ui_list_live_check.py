@@ -273,6 +273,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    boundary=provenance.get("ammo_boundary_extension")
+    boundary_path=None
+    if boundary:
+        from ammo_boundary_inputs import row_model as ammo_row_model
+        matches=[p for p in boundary['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
+        assert len(matches)==1,'unknown ammo boundary path'
+        boundary_path=matches[0]
+    else:
+        from ammo_ui_inputs import row_model as ammo_row_model
     ammo=provenance.get("ammo_extension")
     movement=provenance.get("movement_extension")
     movement_path=None
@@ -290,6 +299,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if boundary:
+        from ammo_boundary_inputs import check_sources as check_ammo_boundary_sources
+        source_args=check_ammo_boundary_sources(*source_args)
     if ammo:
         from ammo_ui_inputs import check_sources as check_ammo_sources
         source_args=check_ammo_sources(*source_args)
@@ -347,6 +359,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         page_proof=movement_path["page_validation"]
     if ammo:
         page_proof=ammo["page_validation"]
+    if boundary:
+        page_proof=boundary_path['page_validation']
     movement_reference=None
     if movement:
         witness=movement["data"]["quick_witness"]
@@ -961,8 +975,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         source = wrapper["vararg_1_candidate"]["text"]
         row = bindings.get((pane, sha(source.encode())))
         if row is None and pane=="inventory" and any(r["Pane"]=="inventory" and any(s["Key"]=="inventory.423c677c12e0b601c34c" for s in r["Spans"]) for r in config["Rows"]):
-            from ammo_ui_inputs import row_model
-            row=row_model(source,en)
+            row=ammo_row_model(source,en)
             if row is not None:
                 bindings[(pane,row["SHA256"])]=row
         within_list = any(p["step"] <= wrapper["step"] <= p["return_instruction_step"] for p in trace["list_events"])
@@ -1541,8 +1554,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     row_positions.add((word["X"], word["Y"]))
         elif kind=="ammo-row-render-return":
             w=wrappers_by_step[e["detail"]["entry_step"]]
-            from ammo_ui_inputs import row_model
-            assert row_model(w["vararg_1_candidate"]["text"],en) is not None
+            assert ammo_row_model(w["vararg_1_candidate"]["text"],en) is not None
             assert e["Step"]==w["return_step"]
             assert e["detail"]==dict(entry_step=w["step"],source_sha256=sha(w["vararg_1_candidate"]["text"].encode()),caller=w["caller"],ss=w["return_ss"],sp=w["return_sp"])
         elif kind == "field-before-glyph":
@@ -2068,8 +2080,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["movement"]=dict(counter_values=[r["value"] for r in movement_path["counters"]],fields=len(movement["data"]["fields"]),menus=len(movement["data"]["menus"]))
     if ammo:
         result["ammo"]=dict(dynamic_row_forms=len(set(bindings)-configured_bindings),
-            source_path=ammo["source_path"],scope="正常備妥、分半、集合與反白；不宣稱本作已取得 +1 箭。")
-        result["limits"]="正常方向鍵的移動力底列及復原／完成查驗；數字與移動結果保留原版，不重算移動規則，不宣稱整場戰鬥或正式入口完成。"
+            source_path=(boundary_path or ammo)["source_path"],scope="正常備妥、分半、集合與反白；不宣稱本作已取得 +1 箭。")
+    if boundary:
+        result['ammo_boundary']=dict(aliases=len(boundary['data']['aliases']),added_rows=len(boundary['data']['rows']),source_rows=len(boundary_path['records']))
+        result["limits"]="正常單支／複數箭與弩箭的背包顯示；購買另有原版無頭收據，不稱為連續 GUI、正式入口或全遊戲完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

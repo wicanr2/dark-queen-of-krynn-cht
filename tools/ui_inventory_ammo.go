@@ -12,6 +12,21 @@ type ammoRowParts struct {
 	ReadyStart, NameStart int
 }
 
+func inventoryAmmoForm(key string) int {
+	switch key {
+	case "inventory.05800e70aa10c86f5ab8", "inventory.ea0151c4cf78b351118d":
+		return 1
+	case "inventory.423c677c12e0b601c34c", "inventory.d3e53a2e348022ba16a6":
+		return 2
+	}
+	return 0
+}
+
+func ammoQuantityMatches(key string, quantity int32) bool {
+	form := inventoryAmmoForm(key)
+	return (form == 1 && quantity == 1) || (form == 2 && quantity > 1)
+}
+
 // 只拆已觀測的背包列格式。數量與加值仍由原版輸出，不改寫或重算。
 func matchAmmoRow(text, root, yes, no string) (ammoRowParts, bool) {
 	fail := func() (ammoRowParts, bool) { return ammoRowParts{}, false }

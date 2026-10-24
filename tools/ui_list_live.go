@@ -291,11 +291,11 @@ func (l *listState) rowSpans(binding listRow, text string) ([]listSpan, bool) {
 	}
 	ready, name := binding.Spans[0], binding.Spans[1]
 	if ready.Start != 1 || (l.sources[ready.Key] != l.sources["answer.yes"] && l.sources[ready.Key] != l.sources["answer.no"]) ||
-		name.Key != "inventory.423c677c12e0b601c34c" || name.Length != len(l.sources[name.Key]) || name.Key != "inventory."+digest([]byte(l.sources[name.Key]))[:20] {
+		inventoryAmmoForm(name.Key) == 0 || name.Length != len(l.sources[name.Key]) || name.Key != "inventory."+digest([]byte(l.sources[name.Key]))[:20] {
 		return nil, false
 	}
 	parts, ok := matchAmmoRow(text, l.sources[name.Key], l.sources["answer.yes"], l.sources["answer.no"])
-	if !ok {
+	if !ok || !ammoQuantityMatches(name.Key, parts.Quantity) {
 		return nil, false
 	}
 	readyKey := "inventory." + digest([]byte(parts.Ready))[:20]
@@ -1037,7 +1037,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			if !allowed {
 				continue
 			}
-			if l.pane == "inventory" && len(spans) == 2 && spans[1].Key == "inventory.423c677c12e0b601c34c" {
+			if l.pane == "inventory" && len(spans) == 2 && inventoryAmmoForm(spans[1].Key) != 0 {
 				r, at := o.Regs(), o.Caller()
 				l.ammoPaints = append(l.ammoPaints, listAmmoPaint{Return: paintReturn{at, r.SS, r.SP + 4}, Entry: o.Steps(), SourceSHA: sha})
 				if !ammoRegistered[at] {
