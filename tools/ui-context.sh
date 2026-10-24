@@ -66,6 +66,8 @@ case "${1:-}" in
       "${boot_args[@]}" \
       -e GOMEMLIMIT=512MiB \
       -e "DQK_CONTEXT_VIDEO=${DQK_CONTEXT_VIDEO:-0}" \
+      -e "DQK_CONTEXT_FOOTER_STEPS=${DQK_CONTEXT_FOOTER_STEPS:-}" \
+      -e "DQK_CONTEXT_PARAGRAPH_MENUS=${DQK_CONTEXT_PARAGRAPH_MENUS:-0}" \
       -e "DQK_CONTEXT_ALL_MENUS=${DQK_CONTEXT_ALL_MENUS:-0}" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" \
       --entrypoint /probe/ui-context-probe "$GO_IMAGE" \

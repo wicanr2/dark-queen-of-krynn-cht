@@ -15,3 +15,4 @@
 | [003：dosgolem 正常冷啟動基線](003-startup.md) | [#3](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3) |
 | [004：劇情段落的繪製前入口](004-story-text.md) | [#4](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4) |
 | [005：文字候選與繁中譯表](005-translation-catalog.md) | [#7](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7) |
+| [006：README 圖文與原版圖庫](006-readme-gallery.md) | 使用者指定的故事、圖鑑、原版／HD 試繪、截圖及地圖 |

@@ -670,6 +670,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		if g.translate && g.cold != nil && g.cold.ui != nil && g.cold.ui.held() {
 			held = true
 		}
+		if c := g.list.battleNotice; g.translate && c != nil && (!c.Ready || c.Restoring) {
+			held = true
+		}
 	}
 	if held {
 		if len(g.lastPixels) == 0 {

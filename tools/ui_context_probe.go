@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/wicanr2/dosgolem/oracle"
@@ -116,6 +117,18 @@ func main() {
 		}
 		last = a.End
 		labels[a.Label] = true
+	}
+	footerProbeSteps := map[uint64]bool{}
+	for _, field := range strings.Split(os.Getenv("DQK_CONTEXT_FOOTER_STEPS"), ",") {
+		if field == "" {
+			continue
+		}
+		step, err := strconv.ParseUint(field, 10, 64)
+		must(err)
+		if step < req.Start || step > last || len(footerProbeSteps) >= 64 {
+			panic("底列來源取樣步數越界或超過 64 點")
+		}
+		footerProbeSteps[step] = true
 	}
 	out := os.Args[3]
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
@@ -344,6 +357,11 @@ func main() {
 			paragraphs = append(paragraphs, map[string]any{"step": o.Steps(), "regs": r, "stack": s, "caller": target,
 				"source": read(s[10], s[9]), "native_box": [4]int{int(byte(s[2])) * 8, int(byte(s[3])) * 8, (int(byte(s[4])) + 1) * 8, (int(byte(s[5])) + 1) * 8},
 				"foreground": byte(s[6]), "background": byte(s[7]), "clear": byte(s[8])})
+			if os.Getenv("DQK_CONTEXT_PARAGRAPH_MENUS") == "1" {
+				menu, valid := readMenuSource(o)
+				paragraphs[len(paragraphs)-1]["menu_valid"] = valid
+				paragraphs[len(paragraphs)-1]["menu_snapshot"] = menu
+			}
 			paragraphPending = append(paragraphPending, pendingCall{len(paragraphs) - 1, target, r.SS, r.SP + 4})
 			if !paragraphRegistered[target] {
 				paragraphRegistered[target] = true
@@ -377,7 +395,7 @@ func main() {
 			}
 		})
 		o.OnCall(oracle.Addr{Seg: 0x1bb6, Off: 0x151f}, func(_ *oracle.Oracle) {
-			if !refresh {
+			if !refresh && !footerProbeSteps[o.Steps()] {
 				return
 			}
 			refresh = false

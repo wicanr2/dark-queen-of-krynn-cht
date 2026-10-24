@@ -45,7 +45,11 @@ type listHUDPending struct {
 	Words               []listWord
 	HideFooter          bool
 	KeepFooterSignature string
+	AutomaticDamage     bool
 }
+
+// 原版 Quick 期間的九鈕戰鬥描述。只辨識顯示語境，不改施法或傷害判定。
+const automaticSpellMenuSignature = "c5b214e0c009d9bf9bb1be3435f8b0c72be521577ac3912c57dfa55d39b0a5c2"
 
 type listHUDPanelPending struct {
 	Paint     paintReturn
@@ -134,7 +138,19 @@ func (g *liveGame) validateHUDParagraphs() {
 		status := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 88, 312, 176})
 		miss := p.Caller == (oracle.Addr{Seg: 0x22f4, Off: 0x048f}) && p.NativeBox == ([4]int{184, 104, 312, 136})
 		death := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 112, 312, 176})
-		if !(weapon || status || miss || death) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
+		defeatRows := map[oracle.Addr]struct {
+			y   int
+			key string
+		}{
+			{Seg: 0x27c7, Off: 0x148e}: {40, "round.7dac946f666da2007a13"},
+			{Seg: 0x27c7, Off: 0x14b0}: {48, "round.cb9c29877d1d0994294e"},
+			{Seg: 0x27c7, Off: 0x14d2}: {56, "round.fc2486907daf61f75699"},
+		}
+		row, knownDefeat := defeatRows[p.Caller]
+		defeat := knownDefeat && p.NativeBox == ([4]int{16, row.y, 304, 184}) && p.IntegerTemplateKey == "" &&
+			len(p.Spans) == 1 && p.Spans[0].Key == row.key && p.Spans[0].Rect == ([4]int{16, row.y, 288, 8}) &&
+			p.SHA256 == digest([]byte(g.list.sources[row.key]))
+		if !(weapon || status || miss || death || defeat) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
 			panic("右側段落來源不符")
 		}
 		if p.IntegerTemplateKey != "" {
@@ -176,6 +192,11 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 				if !ok || menu.Signature != p.KeepFooterSignature || !l.footerCompatible(menu.Signature) {
 					continue
 				}
+			} else if l.aimDamageKey(p.IntegerTemplateKey) {
+				menu, ok := readMenuSource(o)
+				if !ok || menu.Signature != automaticSpellMenuSignature {
+					continue
+				}
 			}
 		} else if p.SHA256 != digest([]byte(source)) {
 			continue
@@ -205,7 +226,8 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 		paint := paintReturn{caller, r.SS, r.SP + 4}
 		l.paragraphPaints = append(l.paragraphPaints, paint)
 		l.hudActive = true
-		l.hudPending = append(l.hudPending, listHUDPending{paint, o.Steps(), words, p.HideFooter, p.KeepFooterSignature})
+		l.hudPending = append(l.hudPending, listHUDPending{paint, o.Steps(), words, p.HideFooter, p.KeepFooterSignature,
+			p.OrdinaryDamage && l.aimDamageKey(p.IntegerTemplateKey)})
 		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("hud-before-glyph", map[string]any{"caller": caller, "native_box": box, "source_sha256": digest([]byte(source)), "source_pointer": ptr, "spans": p.Spans, "words": words}))
 		if l.hudReturns == nil {
 			l.hudReturns = map[oracle.Addr]bool{}
@@ -226,6 +248,10 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 				}
 				l.paragraphPaints = l.paragraphPaints[:len(l.paragraphPaints)-1]
 				l.hudPending = l.hudPending[:len(l.hudPending)-1]
+				if pending.AutomaticDamage {
+					// 自動施法沒有瞄準選單待復色；完整傷害回報返回後即可提交。
+					l.footerTransition = false
+				}
 				for _, word := range pending.Words {
 					l.erase(word.X, word.Y, word.Width, word.height())
 					l.words[[2]int{word.X, word.Y}] = word
@@ -233,6 +259,10 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 				if pending.HideFooter {
 					for at, word := range l.words {
 						if word.Group == "footer" {
+							// 自動施法的原生底列跨越右側回報；由原版填色或覆寫撤除。
+							if word.Key == "round.1a0e55074a01fc9262bb" && word.X == 8 && word.Y == 178 && word.Width == 152 {
+								continue
+							}
 							if c := l.movementCaption; c != nil && c.Reference != nil && word.Key == c.Word.Key {
 								continue
 							}

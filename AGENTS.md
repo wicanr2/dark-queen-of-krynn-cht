@@ -101,6 +101,7 @@
 | IDA Pro 9.4、`.i64`、overlay 與交叉參照 | `/home/anr2/.codex/skills/use-ida-pro-9-4/SKILL.md`，再依其入口讀對應工具鏈規範 |
 | 中文版面與 Gold Box 畫面比較 | `/home/anr2/.codex/skills/research-pc98-golden-box-ui/SKILL.md`；PC-98 是參考，不預設本作使用其布局 |
 | 新文件或研究目錄 | `/home/anr2/.codex/knowledge-base/local/project-document-responsibilities.md` |
+| README 圖文與圖庫重建 | `/home/anr2/.codex/knowledge-base/local/retro-remake-readme-standard.md`；本作入口 [研究 006](docs/re/006-readme-gallery.md)，使用 `bash tools/readme-gallery.sh readme-gallery-新的名稱`，需既有合法原版與本機試繪，輸出本機 HTML，不代表正式遊戲或全量 HD |
 | 授權文件 | `/home/anr2/.codex/knowledge-base/local/rrsal-1.0.md`，使用 RRSAL-1.0；第三方元件保留各自授權 |
 | 正式版號與交付目錄 | `/home/anr2/.codex/knowledge-base/local/retro-remake-release-versioning.md`、`retro-remake-dist-all-output.md` |
 | HD 原型或其他共同決策 | `/home/anr2/.codex/skills/grill-me/SKILL.md`、`/home/anr2/.codex/skills/grilling/SKILL.md` |
@@ -222,7 +223,7 @@ bash tools/research-storage.sh restore workplace/probe/研究目錄/重播目錄
 也可把 `restore` 的參數改成研究目錄，一次還原該目錄內的封存紀錄。
 還原後原檔名、內容、權限及時間恢復，壓縮副本移除，才可執行既有稽核器或重播檢查。
 `verify` 只證明封存的原始位元組完整，不等於重新執行 GUI 或遊戲驗收。
-`pack` 預設保護 `combat-effects-20261024`、`passage-chain-live-20261024`、`combat-finish-20261024`、`combat-movement-20261024`、`ammo-rows-20261024` 與 `ammo-boundaries-20261024` 六個目前批次，
+`pack` 預設保護 `combat-effects-20261024`、`passage-chain-live-20261024`、`combat-finish-20261024`、`combat-movement-20261024`、`ammo-rows-20261024`、`ammo-boundaries-20261024`、`combat-rounds-20261024` 與 `passage-chain-camp-20261024` 八個目前批次及圖文來源，
 僅選其他目錄至少 16 MiB 的 `receipt.json`；`cache` 只清本專案 `workplace/probe/gocache` 內容，保留目錄。
 
 ## 10. 共同決策與停止線

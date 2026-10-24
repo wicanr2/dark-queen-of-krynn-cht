@@ -273,13 +273,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    rounds=provenance.get("round_extension")
+    round_path=None
+    if rounds:
+        selected=[p for p in rounds['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
+        assert len(selected)==1,'unknown combat round path'
+        round_path=selected[0]
     boundary=provenance.get("ammo_boundary_extension")
     boundary_path=None
     if boundary:
         from ammo_boundary_inputs import row_model as ammo_row_model
         matches=[p for p in boundary['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(matches)==1,'unknown ammo boundary path'
-        boundary_path=matches[0]
+        assert len(matches)==1 or (not matches and round_path),'unknown ammo boundary path'
+        boundary_path=matches[0] if matches else None
     else:
         from ammo_ui_inputs import row_model as ammo_row_model
     ammo=provenance.get("ammo_extension")
@@ -296,9 +302,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
     party_cast=provenance.get("party_cast_extension")
     cast=provenance.get("cast_extension")
     bar=provenance.get("bar_extension")
-    hud_field_bindings=[row["binding"] for extension in (hud,effects,finish) if extension
+    hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if rounds:
+        from combat_rounds_inputs import check_sources as check_round_sources
+        source_args=check_round_sources(*source_args)
     if boundary:
         from ammo_boundary_inputs import check_sources as check_ammo_boundary_sources
         source_args=check_ammo_boundary_sources(*source_args)
@@ -335,6 +344,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         finish=None
     if ammo:
         movement=finish=effects=hud=None
+    if rounds:
+        hud=rounds
     short_ecl=provenance.get("short_ecl_extension")
     literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
@@ -359,8 +370,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         page_proof=movement_path["page_validation"]
     if ammo:
         page_proof=ammo["page_validation"]
-    if boundary:
+    if boundary_path:
         page_proof=boundary_path['page_validation']
+    if rounds:
+        page_proof=round_path['page_validation']
     movement_reference=None
     if movement:
         witness=movement["data"]["quick_witness"]
@@ -692,10 +705,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_words={}
     hud_records=[]
     if hud:
-        if effects or finish or movement:
-            from combat_effects_inputs import hud_records as derive_hud_records
+        if rounds or effects or finish or movement:
+            if rounds:
+                from combat_rounds_inputs import hud_records as derive_hud_records
+            else:
+                from combat_effects_inputs import hud_records as derive_hud_records
             hud_records=derive_hud_records(trace,config["HUDParagraphs"],en)
-            assert hud_records==(movement_path["records"] if movement else (finish or effects)["data"]["records"])
+            assert hud_records==(round_path['records'] if rounds else movement_path["records"] if movement else (finish or effects)["data"]["records"])
         else:hud_records=hud["data"]["records"]
         assert {e["Step"] for e in hud_entries}=={r["step"] for r in hud_records}
     else:assert not hud_entries and not hud_returns
@@ -726,6 +742,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
         assert returned["detail"]==dict(entry_step=e["Step"],caller=p["caller"],ss=p["regs"]["SS"],sp=(p["regs"]["SP"]+4)&65535,
             words=words_here,footer_hidden=binding.get("HideFooter",False))
         hud_words[e["Step"]]=words_here
+    hud_source_clears=[]
+    rounds_copy_images=[]
+    if rounds:
+        if observed.name=='observe-r14':
+            from combat_rounds_inputs import copy_witness
+            witness=copy_witness(observed.parent)
+            rounds_copy_images=[(witness['step'],observed.parent/witness['path'])]
+        for record in hud_records:
+            x,y,right,bottom=record['binding']['NativeBox']
+            fills=[f for f in trace['fill_events'] if record['step']<f['converted_step']<record['first_glyph'] and f['native_rect']==[x,y,right-x,bottom-y]]
+            assert len(fills)==1,('missing original HUD clear',record['step'])
+            hud_source_clears.append(fills[0]['converted_step'])
     hud_update_entries=[e for e in b["list_events"] if e["Kind"]=="hud-update-entry"]
     hud_update_returns=[e for e in b["list_events"] if e["Kind"]=="hud-update-return"]
     assert len(hud_update_entries)==len(hud_update_returns)
@@ -765,6 +793,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
         new_buttons=[c for c in trace["calls"] if c["step"]>last_retire and c["caller"]=={"Seg":0xceb,"Off":0x1be}]
         new_signature=trace["menus"][new_buttons[0]["menu_index"]]["Signature"]
         footer_restored=max(c["return_step"] for c in new_buttons if trace["menus"][c["menu_index"]]["Signature"]==new_signature)
+    elif rounds:
+        # 自動施法沿用原版傷害框清除；來源限定為具原生選單見證的魔法傷害模板。
+        retire_fills=[]
+        aim_keys={p['IntegerTemplateKey'] for p in config['HUDParagraphs'] if p.get('KeepFooterSignature')}
+        for record in hud_records:
+            if record['binding'].get('IntegerTemplateKey') not in aim_keys:continue
+            fill=next(f for f in trace['fill_events'] if f['step']>record['return_step'] and f['native_rect']==[184,80,128,96])
+            assert fill['stack'][:2]==[0x1b,0xb72] and not fill['within_list']
+            retire_fills.append(fill)
+        assert [e['Step'] for e in hud_retired]==[f['converted_step'] for f in retire_fills]
+        for event in hud_retired:
+            assert event['detail']==dict(caller=dict(Seg=0xb72,Off=0x1b),native_rect=[184,80,128,96])
     else:assert not hud_retired
     paragraph_entries = [e for e in b["list_events"] if e["Kind"] == "paragraph-before-glyph"]
     paragraph_fallbacks = [e for e in b["list_events"] if e["Kind"] == "unknown-paragraph-original"]
@@ -795,7 +835,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if not field.get("SourcePattern"):
             return field["Start"] if sha(text.encode()) == field["SHA256"] else None
         if field["SourcePattern"]=="movement-left":
-            assert movement and field in [row["binding"] for row in movement["data"]["fields"][:2]]
+            movement_source=provenance.get('movement_extension')
+            assert movement_source and field in [row["binding"] for row in movement_source["data"]["fields"][:2]]
             from movement_ui_inputs import counter
             return 0 if counter(text,en[field["Key"]]) is not None else None
         if field["SourcePattern"]=="created-name":
@@ -1095,10 +1136,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
                             and v["format"]["text"]!="%c" and overlap((native(v["stack"][3]),native(v["stack"][2]),8*len(v["vararg_1_candidate"]["text"] if v["format"]["text"]=="%s" else v["format"]["text"]),8))]
                 if changes:
                     # 終點已換頁時，取覆寫前的獨立原版色號快照。
-                    sample=next(v for v in trace["fill_events"] if c["return_step"]<v["return_instruction_step"]<min(changes) and v.get("indexed_after"))
-                    data=(observed/sample["indexed_after"]).read_bytes()
-                    indices={data[yy*320+xx] for yy in range(y,y+8) for xx in range(x,x+rect[2])}
-                    colors={tuple(checkpoint["palette"][v]) for v in indices}
+                    samples=[v for v in trace["fill_events"] if c["return_step"]<v["return_instruction_step"]<min(changes) and v.get("indexed_after")]
+                    if samples:
+                        data=(observed/samples[0]["indexed_after"]).read_bytes()
+                        indices={data[yy*320+xx] for yy in range(y,y+8) for xx in range(x,x+rect[2])}
+                        colors={tuple(checkpoint["palette"][v]) for v in indices}
+                    else:
+                        assert rounds, '缺少欄位背景的原版色號快照'
+                        original_frame=next(v for v in a['frames'] if c['return_step']<v['step']<min(changes) and not v['held'])
+                        # 英文側不畫翻譯；取文字已返回且尚未被覆寫的實際 GPU 像素。
+                        image=Image.open(en_run/original_frame['File']).convert('RGB')
+                        assert image.size==(640,400)
+                        colors=set(image.crop((x*2,y*2,(x+rect[2])*2,(y+8)*2)).getdata())
                 bg=tuple(checkpoint["palette"][23]);fg=tuple(checkpoint["palette"][c["stack"][4]&15])
                 assert bg in colors and colors<={bg,fg,tuple(checkpoint["palette"][0]),tuple(checkpoint["palette"][15])}, ("background sample",source["text"],c["step"],checkpoint["label"],colors,bg,fg)
                 verified_field_backgrounds.add((f["Key"],background))
@@ -1204,6 +1253,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
     # 從有原版來源的事件重建每幀詞框位置，避免遺漏捲動頂列仍通過像素合成檢查。
     words, pending_suffix, model, row_positions = {}, None, [], set()
     feedback, feedback_intervals, service_scroll_checks = None, [], []
+    battle_warning,battle_warning_intervals=None,[]
+    warning_witness=rounds['data']['notice_witness'] if rounds else None
+    warning_pixels={}
+    if warning_witness:
+        x,y,w,h=warning_witness['rect']
+        for name in ('before','ready'):
+            raw=(inputs.parent.parent/warning_witness[name+'_index']).read_bytes()
+            warning_pixels[name]=b''.join(raw[row*320+x:row*320+x+w] for row in range(y,y+h))
+            assert sha(warning_pixels[name])==warning_witness[name+'_sha256']
     notice, notice_intervals = None, []
     expected_notices = {p["step"] for p in native_paragraphs if p["caller"] == {"Seg":0x291A,"Off":0xFD0}
                         and any(f in trade_bindings for f in paragraph_bindings(p))}
@@ -1217,7 +1275,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     def feedback_pane(step):
         return next((pane for when,pane in reversed(timeline) if when <= step),"")
     expected_feedback = {step for step in feedback_candidates if feedback_pane(step) in ("shop-stock","inventory")}
-    assert {e["Step"] for e in b["list_events"] if e["Kind"] == "unknown-feedback-original"} == set(feedback_candidates)-expected_feedback
+    expected_battle_warning={warning_witness['entry']} & set(feedback_candidates) if warning_witness else set()
+    assert {e["Step"] for e in b["list_events"] if e["Kind"] == "unknown-feedback-original"} == set(feedback_candidates)-expected_feedback-expected_battle_warning
+    assert {e['Step'] for e in b['list_events'] if e['Kind']=='battle-warning-entry'}==expected_battle_warning
     assert {e["Step"] for e in b["list_events"] if e["Kind"] == "footer-feedback-capture"} == expected_feedback
     if any(e["Kind"] == "footer-feedback-capture" for e in b["list_events"]):
         service = item_context or trade or provenance["service_extension"]
@@ -1247,11 +1307,56 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 row_positions.discard(pos)
     for e in b["list_events"]:
         kind = e["Kind"]
-        if kind=="hud-before-glyph":
+        if kind=='battle-warning-entry':
+            assert warning_witness and battle_warning is None and not e['Pane']
+            assert e['Step']==warning_witness['entry'] and not any(w['Group']=='footer' for w in words.values())
+            wrapper=wrappers_by_step[e['Step']]
+            assert wrapper['caller']=={'Seg':0x88e,'Off':0x1560} and wrapper['format']['text']=='%s'
+            assert e['detail']==dict(source_sha256=sha(wrapper['vararg_1_candidate']['text'].encode()),native_rect=warning_witness['rect'],before_sha256=warning_witness['before_sha256'])
+            battle_warning=dict(entry=e['Step'],entry_index=b['list_events'].index(e),phase='painting',restoring_index=None)
+        elif kind=='battle-warning-ready':
+            assert battle_warning and battle_warning['phase']=='painting'
+            wrapper=wrappers_by_step[battle_warning['entry']];call=calls_by_step[warning_witness['field_entry']]
+            pages={int(k) for k in call['video_pages']};assert len(pages)==1 and sum(call['video_pages'].values())==176*8
+            assert e['Step']==wrapper['return_step']==warning_witness['returned']
+            assert e['detail']==dict(entry_step=wrapper['step'],caller=wrapper['caller'],ss=wrapper['return_ss'],sp=wrapper['return_sp'],
+                native_rect=warning_witness['rect'],reference_sha256=warning_witness['ready_sha256'],paint_page=next(iter(pages)))
+            battle_warning.update(phase='ready',ready=e['Step'],ready_index=b['list_events'].index(e))
+        elif kind=='battle-warning-restore-begin':
+            assert battle_warning and battle_warning['phase']=='ready' and e['Step']>=warning_witness['return_key_at']
+            assert e['detail']['entry_step']==battle_warning['entry'] and e['detail']['native_rect']==warning_witness['rect']
+            assert e['detail']['actual_sha256'] not in (warning_witness['before_sha256'],warning_witness['ready_sha256'])
+            battle_warning.update(phase='restoring',restoring=e['Step'],restoring_index=b['list_events'].index(e))
+        elif kind=='battle-warning-closed':
+            assert battle_warning and battle_warning['phase'] in ('ready','restoring')
+            assert warning_witness['return_key_at']<=e['Step']<=warning_witness['restored_by']
+            assert e['detail']==dict(entry_step=battle_warning['entry'],native_rect=warning_witness['rect'],before_sha256=warning_witness['before_sha256'],actual_sha256=warning_witness['before_sha256'])
+            erase(warning_witness['rect'])
+            battle_warning_intervals.append(dict(battle_warning,closed=e['Step'],closed_index=b['list_events'].index(e)))
+            battle_warning=None
+        elif kind=="hud-before-glyph":
             p=paragraph_by_step[e["Step"]]
             x,y,right,bottom=p["native_box"]
             erase((x,y,right-x,bottom-y))
             page=None
+        elif kind=='spell-caption-ready':
+            assert rounds
+            call=calls_by_step[e['detail']['entry_step']]
+            wrapper=trace['wrappers'][call['wrapper_index']]
+            assert call['format']['text']=='%s' and call['vararg_1_candidate']['text']=='Spell:Magic Missile'
+            checkpoint=next(c for c in trace['checkpoints'] if c['step']>wrapper['return_step'])
+            raw=(observed/(checkpoint['label']+'.idx')).read_bytes()
+            reference=b''.join(raw[y*320+8:y*320+160] for y in range(178,186))
+            assert sha(raw)==checkpoint['indexed_sha256']
+            assert e['Step']==wrapper['return_step']
+            assert e['detail']==dict(entry_step=call['step'],caller=wrapper['caller'],ss=wrapper['return_ss'],sp=wrapper['return_sp'],
+                native_rect=[8,178,152,8],reference_sha256=sha(reference))
+        elif kind=='spell-caption-retired':
+            assert rounds and any(w['Key']=='round.1a0e55074a01fc9262bb' for w in words.values())
+            ready=next(v for v in b['list_events'] if v['Kind']=='spell-caption-ready' and v['detail']['entry_step']==e['detail']['entry_step'])
+            assert ready['Step']<e['Step'] and e['detail']['native_rect']==[8,178,152,8]
+            assert e['detail']['reference_sha256']==ready['detail']['reference_sha256']!=e['detail']['actual_sha256']
+            erase((8,178,152,8))
         elif kind=="movement-caption-ready":
             assert movement and movement_path["source_path"]==movement["data"]["quick_source"]
             counter_record=movement_path["counters"][0]
@@ -1278,6 +1383,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
             if e["detail"]["footer_hidden"]:
                 for pos,w in list(words.items()):
                     if w["Group"]=="footer":
+                        if rounds and w['Key']=='round.1a0e55074a01fc9262bb' and (w['X'],w['Y'],w['Width'])==(8,178,152):
+                            continue
                         if active_movement_caption and w["Key"]==active_movement_caption["key"]:
                             continue
                         del words[pos]
@@ -1602,18 +1709,25 @@ def check(en_run, zh_run, inputs, control, observed, output):
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
         model.append((e["Step"], expected_words, sorted(row_positions), page))
-    assert feedback is None and notice is None and pending_clear_index is None
+    assert feedback is None and notice is None and battle_warning is None and pending_clear_index is None
     for actual in (a,b):
         assert (actual.get("paragraphs") or []) == page_history
         assert actual.get("final_paragraph") == (model[-1][3] if model else None)
     def footer_hidden_at(step):
         hidden=[e for e in hud_returns if e["Step"]<step and e["detail"]["footer_hidden"]]
+        if rounds and hidden and any(hidden[-1]['Step']<e['Step']<step and e['detail']['word']['Group']=='footer' for e in fields):
+            return False
         return bool(hidden) and not any(c["caller"]=={"Seg":0xCEB,"Off":0x1BE}
             and hidden[-1]["Step"]<c["step"]<step for c in trace["calls"])
     # 原版可能已隱去底列而仍保留舊表指標，終點與中途截點使用同一生命週期。
-    final_button = next(c for c in reversed(trace["calls"]) if c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE})
-    final_signature = menu_signature(final_button)
-    final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
+    final_button = next((c for c in reversed(trace["calls"]) if c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}),None)
+    if final_button:
+        final_signature = menu_signature(final_button)
+        final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
+    else:
+        assert rounds and not trace['menus'] and typed_buttons
+        final_signature=""
+        final_keys=set()
     if footer_hidden_at(trace["checkpoints"][-1]["step"]):
         final_keys=set()
     for actual in (a, b):
@@ -1644,10 +1758,16 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert any(previous<f["step"]<step<following and f["native_rect"]==[184,8,128,168] for f in trace["fill_events"])
                 continue
             if footer_hidden_at(checkpoint["step"]):
-                assert not any(w["Group"]=="footer" for w in layouts[checkpoint["step"]]["words"] or [])
+                footers=[w for w in layouts[checkpoint['step']]['words'] or [] if w['Group']=='footer']
+                if rounds:
+                    assert all(w['Key']=='round.1a0e55074a01fc9262bb' and (w['X'],w['Y'],w['Width'])==(8,178,152) for w in footers)
+                else:assert not footers
                 continue
             buttons = [c for c in trace["calls"] if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
             if not buttons:
+                if rounds:
+                    assert typed_buttons and not any(w.get('Button') for w in layouts[checkpoint['step']]['words'] or [])
+                    continue
                 if battle_source:
                     previous_buttons=[c for c in battle_source["calls"] if c["step"]<checkpoint["step"] and c["caller"]=={"Seg":0xCEB,"Off":0x1BE}]
                     assert previous_buttons and previous_buttons[-1]["return_step"]<trace["request"]["start_steps"]
@@ -1702,6 +1822,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     idx=(observed/(checkpoint["label"]+".idx")).read_bytes()
                     x,y,w,h=movement["data"]["quick_witness"]["native_rect"]
                     changed=changed or b"".join(idx[row*320+x:row*320+x+w] for row in range(y,y+h))!=movement_reference
+                if rounds and f['Key']=='round.1a0e55074a01fc9262bb':
+                    ready=next(v for v in b['list_events'] if v['Kind']=='spell-caption-ready' and v['detail']['entry_step']==event['Step'])
+                    idx=(observed/(checkpoint['label']+'.idx')).read_bytes()
+                    changed=changed or sha(b''.join(idx[row*320+8:row*320+160] for row in range(178,186)))!=ready['detail']['reference_sha256']
                 if not changed:
                     assert word in (layouts[checkpoint["step"]]["words"] or []), ("missing retained prompt",checkpoint["label"],f["Key"])
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
@@ -1715,7 +1839,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         captions=[e for e in fields if e["detail"]["key"]==key]
         assert [e["Step"] for e in captions]==[r["step"] for r in movement_path["counters"]]
         movement_reprints=len(captions)>1 and len({r["value"] for r in movement_path["counters"]})>1
-    assert cleared or any(p["Clear"] for p in page_history) or feedback_intervals or battle_field_cycles or movement_reprints, "沒有列表清除、段落替換、回報復原或已驗證欄位重印"
+    assert cleared or any(p["Clear"] for p in page_history) or feedback_intervals or battle_field_cycles or movement_reprints or hud_source_clears, "沒有列表清除、段落替換、回報復原或已驗證欄位重印"
     for event, (start, targets) in zip(cleared, clear_baselines):
         assert start < event["Step"] and event["detail"]["targets"] == targets
     assert all(e["detail"]["pixels"] == len({y*320+x for w in e["detail"]["targets"] for y in range(w["Y"],w["Y"]+w.get("Height",8)) for x in range(w["X"],w["X"]+w["Width"])}) for e in cleared)
@@ -1817,6 +1941,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert len(b["frames"]) == len(b["list_frames"])
     for frame, state in zip(b["frames"], b["list_frames"]):
         assert frame["step"] == state["step"] and frame["step"] in originals
+        for interval in battle_warning_intervals:
+            count=state['list_event_count']
+            if interval['entry_index']<count<=interval['ready_index'] or (interval['restoring_index'] is not None and interval['restoring_index']<count<=interval['closed_index']):
+                assert frame['held'],('battle warning transition exposed',frame['step'])
+            if interval['ready_index']<count<=interval['closed_index'] and not frame['held']:
+                assert any(w['Key']=='round.50e28de96686ceec7dc0' for w in state['words'] or [])
+            if frame['step']==interval['closed']:
+                x,y,w,h=warning_witness['rect'];image=Image.frombytes('P',(w,h),warning_pixels['before'])
+                image.putpalette([component for color in state['palette'] for component in color])
+                expected=image.convert('RGBA').resize((w*2,h*2),Image.Resampling.NEAREST).tobytes()
+                raw=pixels(en_run,originals[frame['step']]);actual=b''.join(raw[(row*640+x*2)*4:(row*640+(x+w)*2)*4] for row in range(y*2,(y+h)*2))
+                assert actual==expected,'battle warning original restoration pixels'
         if movement and movement_path["source_path"]==movement["data"]["quick_source"] and frame["step"]>=movement["data"]["quick_witness"]["step"] and not frame["held"]:
             x,y,w,h=movement["data"]["quick_witness"]["native_rect"]
             image=Image.frombytes("P",(w,h),movement_reference)
@@ -1873,6 +2009,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                         e,w=origins[-1];record=next(r for r in hud_records if r["step"]==e["Step"])
                         if record["paint_page"]!=native_state["display_start"]:
                             candidates=[(cp["step"],observed/(cp["label"]+".png")) for cp in trace["checkpoints"] if cp["step"]>=record["return_step"]]
+                            candidates += [(step,path) for step,path in rounds_copy_images if step>=record['return_step']]
                             if effects:
                                 candidates += [(cp["step"],inputs.parent.parent/cp["path"]) for cp in effects_copy_witness["images"] if cp["step"]>=record["return_step"]]
                             _,native_image=min(candidates,key=lambda item:item[0])
@@ -2078,12 +2215,17 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["limits"]="正常首戰的命中、一般傷害、閃電吐息與死亡回報；保留原版數值及勝負，沒有宣稱勝利、整場戰鬥或正式入口完成。"
     if movement:
         result["movement"]=dict(counter_values=[r["value"] for r in movement_path["counters"]],fields=len(movement["data"]["fields"]),menus=len(movement["data"]["menus"]))
-    if ammo:
+    if ammo and not rounds:
         result["ammo"]=dict(dynamic_row_forms=len(set(bindings)-configured_bindings),
             source_path=(boundary_path or ammo)["source_path"],scope="正常備妥、分半、集合與反白；不宣稱本作已取得 +1 箭。")
-    if boundary:
+    if boundary and not rounds:
         result['ammo_boundary']=dict(aliases=len(boundary['data']['aliases']),added_rows=len(boundary['data']['rows']),source_rows=len(boundary_path['records']))
         result["limits"]="正常單支／複數箭與弩箭的背包顯示；購買另有原版無頭收據，不稱為連續 GUI、正式入口或全遊戲完成。"
+    if rounds:
+        result['rounds']=dict(source_path=round_path['source_path'],records=len(round_path['records']),aliases=len(rounds['data']['aliases']),paragraphs=len(rounds['data']['paragraphs']))
+        result['rounds']['original_clear_transactions']=len(hud_source_clears)
+        result['rounds']['battle_warning_intervals']=battle_warning_intervals
+        result['limits']='首戰正常續行至敗北的分段重播；原版傷害、包紮及勝負不變，未驗勝利或正式入口。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
