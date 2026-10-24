@@ -12,7 +12,7 @@ import time
 ROOT=Path('/project')
 PROBE=ROOT/'workplace/probe'
 INDEX=PROBE/'storage-index.json'
-KEEP={'combat-effects-20261024','passage-chain-live-20261024','combat-finish-20261024','combat-movement-20261024','ammo-rows-20261024','ammo-boundaries-20261024','combat-rounds-20261024','passage-chain-camp-20261024','journal-references-20261024'}
+KEEP={'combat-effects-20261024','passage-chain-live-20261024','combat-finish-20261024','combat-movement-20261024','ammo-rows-20261024','ammo-boundaries-20261024','combat-rounds-20261024','passage-chain-camp-20261024','journal-references-20261024','combat-spells-route-20261024'}
 CHUNK=1024*1024
 
 

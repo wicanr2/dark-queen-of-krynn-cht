@@ -282,6 +282,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    spell_route=provenance.get('spell_route_extension')
+    spell_path=None
+    if spell_route:
+        assert (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve(),'unknown spell route path'
+        spell_path=spell_route
     journal_refs=provenance.get('journal_reference_extension')
     journal_path=None
     if journal_refs:
@@ -292,19 +297,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
     round_path=None
     if rounds:
         selected=[p for p in rounds['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1 or (not selected and journal_path),'unknown combat round path'
+        assert len(selected)==1 or (not selected and (journal_path or spell_path)),'unknown combat round path'
         round_path=selected[0] if selected else None
     boundary=provenance.get("ammo_boundary_extension")
     boundary_path=None
     if boundary:
         from ammo_boundary_inputs import row_model as ammo_row_model
         matches=[p for p in boundary['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(matches)==1 or (not matches and (round_path or journal_path)),'unknown ammo boundary path'
+        assert len(matches)==1 or (not matches and (round_path or journal_path or spell_path)),'unknown ammo boundary path'
         boundary_path=matches[0] if matches else None
     else:
         from ammo_ui_inputs import row_model as ammo_row_model
     if journal_refs:
-        assert journal_path or round_path or boundary_path,'unknown journal reference path'
+        assert journal_path or round_path or boundary_path or spell_path,'unknown journal reference path'
     ammo=provenance.get("ammo_extension")
     movement=provenance.get("movement_extension")
     movement_path=None
@@ -322,6 +327,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if spell_route:
+        from spell_route_inputs import check_sources as check_spell_route_sources
+        source_args=check_spell_route_sources(*source_args)
     if journal_refs:
         from journal_reference_inputs import check_sources as check_journal_reference_sources
         source_args=check_journal_reference_sources(*source_args)
@@ -366,10 +374,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         movement=finish=effects=hud=None
     if rounds:
         hud=rounds
-    if journal_path:
-        # 父批資料已逐層核對；宮殿及抵城沒有箭列、戰鬥或自動施法交易。
+    if journal_path or spell_path:
+        # 父批資料已逐層核對；本次原版路徑另由完整來源指定。
         rounds=boundary=ammo=movement=finish=effects=hud=party_cast=cast=bar=None
-        hud_field_bindings=[]
+        if spell_path:
+            hud=spell_route
+        else:
+            hud_field_bindings=[]
     short_ecl=provenance.get("short_ecl_extension")
     literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
@@ -379,7 +390,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         battle_source=check_battle_sources(*parent_args,trace)
     else:battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
     ancestor_journal_sets={}
-    if journal_path:
+    if journal_path or spell_path:
         # 完整驗過父批資料後，改按本次原版實際輸出檢查，不要求重演酒館新增項。
         if literal_batch:ancestor_journal_sets['literal']=set(literal_batch['new_keys'])
         if short_ecl:ancestor_journal_sets['short']=set(short_ecl['keys'])
@@ -406,6 +417,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         page_proof=round_path['page_validation']
     if journal_path:
         page_proof=journal_path['page_validation']
+    if spell_path:
+        page_proof=spell_path['page_validation']
     movement_reference=None
     if movement:
         witness=movement["data"]["quick_witness"]
@@ -530,7 +543,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     if page_proof:
         proof=page_proof
         path=inputs.parent.parent/proof["source_path"]
-        expected_sha=proof["source_sha256"] if (cast or bar) else proof["sha256"]
+        expected_sha=proof["source_sha256"] if (cast or bar or spell_path) else proof["sha256"]
         assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==expected_sha
         assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
     if creation:
@@ -746,7 +759,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_words={}
     hud_records=[]
     if hud:
-        if rounds or effects or finish or movement:
+        if spell_path:
+            from combat_rounds_inputs import hud_records as derive_hud_records
+            hud_records=derive_hud_records(trace,config['HUDParagraphs'],en)
+            assert hud_records==spell_route['data']['records']
+        elif rounds or effects or finish or movement:
             if rounds:
                 from combat_rounds_inputs import hud_records as derive_hud_records
             else:
@@ -785,7 +802,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         hud_words[e["Step"]]=words_here
     hud_source_clears=[]
     rounds_copy_images=[]
-    if rounds:
+    if rounds or spell_path:
         if observed.name=='observe-r14':
             from combat_rounds_inputs import copy_witness
             witness=copy_witness(observed.parent)
@@ -1442,7 +1459,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert not original["within_list"] and original["native_rect"]==[184,8,128,168] and original["stack"][:2]==[0x1b,0xb72]
             assert e["detail"]==dict(caller={"Seg":0xb72,"Off":0x1b},native_rect=original["native_rect"])
         elif kind == "memory-list-closed":
-            assert cast and config["Headers"][-1]["SHA256"]=="41b8dd827bde29bd2677001414cc57fb5111abb92366cc5e7179c24c8304d341"
+            assert (cast or spell_path) and config["Headers"][-1]["SHA256"]=="41b8dd827bde29bd2677001414cc57fb5111abb92366cc5e7179c24c8304d341"
             original=next(f for f in trace["fill_events"] if f["converted_step"]==e["Step"])
             assert not original["within_list"] and original["native_rect"]==[184,8,128,168]
             assert original["stack"][:2]==[0x1b,0xb72]
@@ -1766,7 +1783,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         final_signature = menu_signature(final_button)
         final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
     else:
-        assert (rounds or journal_path) and not trace['menus'] and typed_buttons
+        assert (rounds or journal_path or spell_path) and not trace['menus'] and typed_buttons
         final_signature=""
         final_keys=set()
     if footer_hidden_at(trace["checkpoints"][-1]["step"]):
@@ -1806,7 +1823,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 continue
             buttons = [c for c in trace["calls"] if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
             if not buttons:
-                if rounds or journal_path:
+                if rounds or journal_path or spell_path:
                     assert typed_buttons and not any(w.get('Button') for w in layouts[checkpoint['step']]['words'] or [])
                     continue
                 if battle_source:
@@ -2241,7 +2258,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["party_cast"]={"source_rows":len(party_cast["data"]["rows"]),"new_rows":len(party_cast["data"]["added_rows"]),
             "new_keys":len(set(en).difference(catalog(party_base/"en.tsv")))}
         result["limits"]="Joris 正常記憶清單的兩頁、選取與取消；原版判定維持不變，不外推其他角色、完整施法、戰鬥或正式入口。"
-    if hud:
+    if hud and not spell_path:
         hud_base=inputs.parent.parent/hud["base"]
         result["party_cast"]["scope"]="inherited catalog"
         result["party_cast"]["new_keys"]=len(set(catalog(hud_base/"en.tsv")).difference(catalog(party_base/"en.tsv")))
@@ -2267,7 +2284,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result['rounds']['original_clear_transactions']=len(hud_source_clears)
         result['rounds']['battle_warning_intervals']=battle_warning_intervals
         result['limits']='首戰正常續行至敗北的分段重播；原版傷害、包紮及勝負不變，未驗勝利或正式入口。'
-    if journal_path:
+    if journal_path or spell_path:
         inherited={}
         for name,keys in ancestor_journal_sets.items():
             expected=set()
@@ -2280,9 +2297,24 @@ def check(en_run, zh_run, inputs, control, observed, output):
             visible_keys={k for f,s in zip(b['frames'],b['list_frames']) if not f['held'] and s.get('paragraph') for k in s['paragraph']['Components']}&keys
             assert observed_keys==visible_keys==expected,('journal ancestor text',name,expected,observed_keys,visible_keys)
             inherited[name]=dict(expected=sorted(expected),observed=sorted(observed_keys),visible=sorted(visible_keys))
-        result['journal_references']=dict(formatted_ids=len(journal_refs['ids']),literal_sources=len(journal_refs['sources']),
-            added_bindings=len(journal_refs['added']),new_aliases=len(journal_refs['aliases']),source_path=journal_path['source_path'],ancestor_sampling=inherited)
-        result['limits']='DRAFT 全冊引用資料；正常 GUI 只回驗第 54／65 則，不將其餘資料當作正常引用證據。'
+        if journal_path:
+            result['journal_references']=dict(formatted_ids=len(journal_refs['ids']),literal_sources=len(journal_refs['sources']),
+                added_bindings=len(journal_refs['added']),new_aliases=len(journal_refs['aliases']),source_path=journal_path['source_path'],ancestor_sampling=inherited)
+            result['limits']='DRAFT 全冊引用資料；正常 GUI 只回驗第 54／65 則，不將其餘資料當作正常引用證據。'
+        if spell_path:
+            records=spell_route['data']['rows']
+            expected={r['row']['SHA256'] for r in records}
+            accepted_hashes={e['detail']['source_sha256'] for e in accepted}
+            expected_keys={span['Key'] for r in records for span in r['row']['Spans']}
+            assert len(expected_keys)==len(records),'ambiguous spell source names'
+            visible_keys={w['Key'] for f,s in zip(b['frames'],b['list_frames']) if not f['held'] for w in s.get('words') or []}
+            # 原版會把首列重印為既有 field 綁定；兩份 catalog 都相同才接受別名。
+            visible_aliases={key:sorted(k for k in visible_keys if (en[k],zh[k])==(en[key],zh[key])) for key in expected_keys}
+            missing={key for key,aliases in visible_aliases.items() if not aliases}
+            assert expected<=accepted_hashes and not missing,('spell route rows',expected-accepted_hashes,missing)
+            result['spell_route']=dict(rows=len(records),added_rows=len(spell_route['data']['added_rows']),
+                source_path=spell_path['source_path'],ancestor_sampling=inherited,visible_aliases=visible_aliases)
+            result['limits']='DRAFT 正常首戰三頁記憶法術清單及退出；未驗本條路徑施法成功或戰鬥勝利。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
