@@ -342,8 +342,10 @@ func (g *liveGame) installListParagraphs() {
 			digest([]byte(l.sources[journalTemplateKey]))[:20] == strings.TrimPrefix(journalTemplateKey, "ui.") &&
 			strings.Count(l.sources[journalTemplateKey], "%s") == 1 &&
 			strings.Replace(l.sources[journalTemplateKey], "%s", strconv.Itoa(p.JournalEntry), 1) == source
-		literalJournal := literal && p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x1d81}) && p.Foreground == 7 && p.Clear == 1 &&
-			strings.HasSuffix(source, " AS JOURNAL ENTRY "+strconv.Itoa(p.JournalEntry)+".")
+		number, knownNumber := journalLiteralNumber(source)
+		literalJournal := literal && p.Caller.Seg == 0x26b4 && (p.Foreground == 7 || p.Foreground == 3) &&
+			((p.Caller.Off == 0x1d81 && p.Clear == 1) || (p.Caller.Off == 0x1d53 && p.Clear == 0)) &&
+			knownNumber && number == p.JournalEntry
 		if p.JournalEntry != 0 && (p.JournalEntry < 1 || p.JournalEntry > 99 || (!formattedJournal && !literalJournal)) {
 			panic("手札編號與完整原文不符")
 		}

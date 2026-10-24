@@ -16,6 +16,22 @@ import (
 
 const journalTemplateKey = "ui.aa93370ee0689e9a462e"
 
+// 原始 ECL 引用尾綴；控制資料不是翻譯。保留原版井號及空白形狀的區別。
+func journalLiteralNumber(source string) (int, bool) {
+	for _, marker := range []string{" AS JOURNAL ENTRY ", " AS JOURNAL ENTRY # "} {
+		at := strings.LastIndex(source, marker)
+		if at < 0 || !strings.HasSuffix(source, ".") {
+			continue
+		}
+		token := source[at+len(marker) : len(source)-1]
+		number, err := strconv.Atoi(token)
+		if err == nil && number >= 1 && number <= 99 && strconv.Itoa(number) == token {
+			return number, true
+		}
+	}
+	return 0, false
+}
+
 type readerPage struct {
 	Entry     int
 	Heading   string

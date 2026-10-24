@@ -15,7 +15,16 @@ def sha(data):
 
 
 def read(path):
-    return json.loads(path.read_text())
+    # 長重播逐幀保存相同色盤。只共用唯讀色盤，完整保留所有畫格與原始 JSON 值。
+    palettes = {}
+    def intern_palette(record):
+        palette = record.get('palette')
+        if (isinstance(palette,list) and len(palette)==256 and all(isinstance(c,list) and len(c)==3
+            and all(type(v) is int for v in c) for c in palette)):
+            key=tuple(tuple(c) for c in palette)
+            record['palette']=palettes.setdefault(key,palette)
+        return record
+    return json.loads(path.read_text(),object_hook=intern_palette)
 
 
 def check_battle_sources(inputs, config, provenance, en, zh, glyphs, trace):
@@ -273,21 +282,29 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    journal_refs=provenance.get('journal_reference_extension')
+    journal_path=None
+    if journal_refs:
+        selected=[p for p in journal_refs['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
+        assert len(selected)<=1,'ambiguous journal reference path'
+        journal_path=selected[0] if selected else None
     rounds=provenance.get("round_extension")
     round_path=None
     if rounds:
         selected=[p for p in rounds['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1,'unknown combat round path'
-        round_path=selected[0]
+        assert len(selected)==1 or (not selected and journal_path),'unknown combat round path'
+        round_path=selected[0] if selected else None
     boundary=provenance.get("ammo_boundary_extension")
     boundary_path=None
     if boundary:
         from ammo_boundary_inputs import row_model as ammo_row_model
         matches=[p for p in boundary['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(matches)==1 or (not matches and round_path),'unknown ammo boundary path'
+        assert len(matches)==1 or (not matches and (round_path or journal_path)),'unknown ammo boundary path'
         boundary_path=matches[0] if matches else None
     else:
         from ammo_ui_inputs import row_model as ammo_row_model
+    if journal_refs:
+        assert journal_path or round_path or boundary_path,'unknown journal reference path'
     ammo=provenance.get("ammo_extension")
     movement=provenance.get("movement_extension")
     movement_path=None
@@ -305,6 +322,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if journal_refs:
+        from journal_reference_inputs import check_sources as check_journal_reference_sources
+        source_args=check_journal_reference_sources(*source_args)
     if rounds:
         from combat_rounds_inputs import check_sources as check_round_sources
         source_args=check_round_sources(*source_args)
@@ -346,6 +366,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         movement=finish=effects=hud=None
     if rounds:
         hud=rounds
+    if journal_path:
+        # 父批資料已逐層核對；宮殿及抵城沒有箭列、戰鬥或自動施法交易。
+        rounds=boundary=ammo=movement=finish=effects=hud=party_cast=cast=bar=None
+        hud_field_bindings=[]
     short_ecl=provenance.get("short_ecl_extension")
     literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
@@ -354,6 +378,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
         parent_args=check_literal_catalog_sources(*literal_args)
         battle_source=check_battle_sources(*parent_args,trace)
     else:battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
+    ancestor_journal_sets={}
+    if journal_path:
+        # 完整驗過父批資料後，改按本次原版實際輸出檢查，不要求重演酒館新增項。
+        if literal_batch:ancestor_journal_sets['literal']=set(literal_batch['new_keys'])
+        if short_ecl:ancestor_journal_sets['short']=set(short_ecl['keys'])
+        literal_batch=short_ecl=None
     inherited_creation_fields=read(inputs.parent.parent/battle["base"]/"inputs.json")["Fields"] if battle else []
     creation_tracking=any(f["Pane"]=="menu-text" and f["Caller"]=={"Seg":0x1BB6,"Off":0x1BE} for f in inherited_creation_fields)
     item_context=provenance.get("item_context_extension")
@@ -374,6 +404,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         page_proof=boundary_path['page_validation']
     if rounds:
         page_proof=round_path['page_validation']
+    if journal_path:
+        page_proof=journal_path['page_validation']
     movement_reference=None
     if movement:
         witness=movement["data"]["quick_witness"]
@@ -676,6 +708,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert f["Key"] == "message."+sha(en[f["Key"]].encode())[:20]
             assert f["Caller"] == {"Seg":0x26B4,"Off":0x3320} and f["Foreground"] == 7 and f["Clear"] == 1
             origins = [item for item in provenance["paragraph_bindings"] if item["binding"] == f]
+            if not origins and journal_refs:
+                # 模板展開資料另查正式來源，不偽造尚未走過的原版引用觀測。
+                assert f in journal_refs['added'] and f['JournalEntry'] in journal_refs['ids']
+                alias=journal_refs['aliases'][f['Key']]
+                assert alias['template_key']=='ui.aa93370ee0689e9a462e' and alias['entry']==f['JournalEntry']
+                argument=str(f['JournalEntry']);template=provenance['formatted_paragraph_templates'][alias['template_key']]
+                assert en[f['Key']]==template['en'].replace('%s',argument)
+                assert zh[f['Key']]==template['zh'].replace('%s',argument)
+                continue
             assert origins
             for item in origins:
                 assert item["kind"] == "formatted-journal-reference"
@@ -1725,7 +1766,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         final_signature = menu_signature(final_button)
         final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
     else:
-        assert rounds and not trace['menus'] and typed_buttons
+        assert (rounds or journal_path) and not trace['menus'] and typed_buttons
         final_signature=""
         final_keys=set()
     if footer_hidden_at(trace["checkpoints"][-1]["step"]):
@@ -1765,7 +1806,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 continue
             buttons = [c for c in trace["calls"] if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
             if not buttons:
-                if rounds:
+                if rounds or journal_path:
                     assert typed_buttons and not any(w.get('Button') for w in layouts[checkpoint['step']]['words'] or [])
                     continue
                 if battle_source:
@@ -2226,6 +2267,22 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result['rounds']['original_clear_transactions']=len(hud_source_clears)
         result['rounds']['battle_warning_intervals']=battle_warning_intervals
         result['limits']='首戰正常續行至敗北的分段重播；原版傷害、包紮及勝負不變，未驗勝利或正式入口。'
+    if journal_path:
+        inherited={}
+        for name,keys in ancestor_journal_sets.items():
+            expected=set()
+            for p in native_paragraphs:
+                key='ecl.'+sha(p['source']['text'].encode())[:20]
+                if key in keys and any(f['Key']==key and f['Caller']==p['caller'] and f['NativeBox']==p['native_box']
+                    and all(f[k]==p[v] for k,v in (('Foreground','foreground'),('Background','background'),('Clear','clear')))
+                    for f in config['Paragraphs']):expected.add(key)
+            observed_keys={e['detail']['page']['Key'] for e in paragraph_entries}&keys
+            visible_keys={k for f,s in zip(b['frames'],b['list_frames']) if not f['held'] and s.get('paragraph') for k in s['paragraph']['Components']}&keys
+            assert observed_keys==visible_keys==expected,('journal ancestor text',name,expected,observed_keys,visible_keys)
+            inherited[name]=dict(expected=sorted(expected),observed=sorted(observed_keys),visible=sorted(visible_keys))
+        result['journal_references']=dict(formatted_ids=len(journal_refs['ids']),literal_sources=len(journal_refs['sources']),
+            added_bindings=len(journal_refs['added']),new_aliases=len(journal_refs['aliases']),source_path=journal_path['source_path'],ancestor_sampling=inherited)
+        result['limits']='DRAFT 全冊引用資料；正常 GUI 只回驗第 54／65 則，不將其餘資料當作正常引用證據。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
