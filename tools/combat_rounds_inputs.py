@@ -18,6 +18,7 @@ STUDY='combat-rounds-20261024'
 RUNS={1:12,3:8,4:8,13:16,10:9,9:8}
 DYING='round.3639be1dab675907c6bf'
 AUTOMATIC_MENU='c5b214e0c009d9bf9bb1be3435f8b0c72be521577ac3912c57dfa55d39b0a5c2'
+AUTOMATIC_MENUS={AUTOMATIC_MENU,'b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b'}
 
 
 def hud_records(trace,bindings,en):
@@ -32,7 +33,7 @@ def hud_records(trace,bindings,en):
                 if not p.get('menu_valid'):continue
                 signature=p['menu_snapshot']['Signature']
                 if b.get('OrdinaryDamage'):
-                    if signature!=AUTOMATIC_MENU:continue
+                    if signature not in AUTOMATIC_MENUS:continue
                 elif signature!=b.get('KeepFooterSignature'):continue
             if (key and number is not None) or (not key and b['SHA256']==digest(source)):matches.append((b,number))
         if not matches:continue

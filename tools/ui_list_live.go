@@ -221,6 +221,24 @@ func (g *liveGame) listLog(kind string, detail any) int {
 func (l *listState) erase(x, y, w, h int) {
 	for p, v := range l.words {
 		if v.X < x+w && v.X+v.Width > x && v.Y < y+h && v.Y+v.height() > y {
+			// 右框譯文經驗證只佔一列；較高的框另遮住原版折行。
+			// 原版只清除下方時，保留上列字墨並縮短背景遮罩。
+			if x <= v.X && x+w >= v.X+v.Width && y >= v.Y+8 && y < v.Y+v.height() && y+h >= v.Y+v.height() {
+				hud := false
+				for _, paragraph := range l.config.HUDParagraphs {
+					for _, span := range paragraph.Spans {
+						hud = hud || (v.Key == span.Key && v.X == span.Rect[0] && v.Y == span.Rect[1] && v.Width == span.Rect[2] && v.height() <= span.Rect[3])
+					}
+				}
+				if hud {
+					v.Height = y - v.Y
+					if v.Height == 8 {
+						v.Height = 0
+					}
+					l.words[p] = v
+					continue
+				}
+			}
 			delete(l.words, p)
 		}
 	}
@@ -492,7 +510,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x088e, Off: 0x16fb}) && f.UpperNative != nil && *f.UpperNative == ([2]int{184, blueY}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.Color != nil && *f.Color == 0x82 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23
 			knownSpell := (f.Length == 15 && f.SHA256 == "ec5608fbca6974ee4604c38946916a68781c2eac792a0384deec8c151eb62d34") ||
-				(f.Key == "round.1a0e55074a01fc9262bb" && f.Length == 19 && f.SHA256 == digest([]byte(l.sources[f.Key])))
+				(battleSpellCaptionField(f) && f.Length == len(l.sources[f.Key]) && f.SHA256 == digest([]byte(l.sources[f.Key])))
 			spellCaption := f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && knownSpell && f.Width == 0 && f.RawX == 8004 && f.RawY == 8089 &&
 				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0x4630}) && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == "" && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil
@@ -1372,7 +1390,7 @@ func (g *liveGame) installListFields() {
 					l.movementCaption = &listMovementCaption{Entry: o.Steps(), Paint: l.fieldWrapper.Return, Word: w}
 				}
 			}
-			if f.Key == "round.1a0e55074a01fc9262bb" {
+			if battleSpellCaptionField(f) {
 				l.spellCaption = &listMovementCaption{Entry: o.Steps(), Paint: l.fieldWrapper.Return, Word: w}
 			}
 			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": digest([]byte(source)), "source_start": start,
@@ -1490,6 +1508,16 @@ func validMagicToggleField(f listField, source string) bool {
 		f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
 		f.FormatSHA256 == digest([]byte("%s")) && f.SHA256 == digest([]byte(source)) && f.Key == "ui."+f.SHA256[:20] &&
 		f.MenuSignature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b"
+}
+
+// 已有魔法飛彈與本批完整來源鍵共用同一個原版施法底列生命週期。
+func battleSpellCaptionField(f listField) bool {
+	return len(f.SHA256) == 64 && (f.Key == "round.1a0e55074a01fc9262bb" || f.Key == "fire-spell."+f.SHA256[:20]) &&
+		f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Width == 0 &&
+		f.Caller == (oracle.Addr{Seg: 0x0b72, Off: 0x027c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0x4630}) &&
+		f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) && f.RawX == 8004 && f.RawY == 8089 &&
+		f.Color != nil && *f.Color == 0x8f && f.FormatSHA256 == digest([]byte("%s")) && f.MenuSignature == "" &&
+		f.SourcePattern == "" && f.UpperFormatSHA256 == "" && f.BackgroundOverride == nil
 }
 
 func (g *liveGame) syncSpellCaption() {
@@ -1628,7 +1656,13 @@ func (g *liveGame) listReceipt(result map[string]any) {
 		panic("瞄準底列尚未完成撤除或復色")
 	}
 	if len(l.paints) > 0 || len(l.ammoPaints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 || len(l.hudPanelPaints) > 0 || l.feedback != nil || l.serviceNotice != nil || l.creationNameReturn != nil || l.creationFooterPending {
-		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
+		pending := map[string]any{"paints": len(l.paints), "ammo_paints": len(l.ammoPaints), "fills": len(l.fills), "scrolls": len(l.scrolls),
+			"clear": l.clearPending, "await_page_flip": l.awaitPageFlip, "menus": len(l.menus), "buttons": len(l.buttons),
+			"footer_transition": l.footerTransition, "header_transition": l.headerTransition, "header_return": l.headerReturn != nil,
+			"row_page": l.rowPagePending, "track_list_page": l.trackListPage, "await_glyphs": len(l.awaitGlyphs), "clock_return": l.clockReturn != nil,
+			"paragraph_paints": len(l.paragraphPaints), "hud_panel_paints": len(l.hudPanelPaints), "feedback": l.feedback != nil,
+			"service_notice": l.serviceNotice != nil, "creation_name_return": l.creationNameReturn != nil, "creation_footer_pending": l.creationFooterPending}
+		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample, "pending": pending}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))
 		panic(fmt.Sprintf("列表呈現未完成：paint=%d fill=%d scroll=%d clear=%t", len(l.paints), len(l.fills), len(l.scrolls), l.clearPending))

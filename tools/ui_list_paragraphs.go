@@ -51,6 +51,10 @@ type listHUDPending struct {
 // 原版 Quick 期間的九鈕戰鬥描述。只辨識顯示語境，不改施法或傷害判定。
 const automaticSpellMenuSignature = "c5b214e0c009d9bf9bb1be3435f8b0c72be521577ac3912c57dfa55d39b0a5c2"
 
+func automaticDamageMenu(signature string) bool {
+	return signature == automaticSpellMenuSignature || signature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b"
+}
+
 type listHUDPanelPending struct {
 	Paint     paintReturn
 	Entry     uint64
@@ -138,6 +142,14 @@ func (g *liveGame) validateHUDParagraphs() {
 		status := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 88, 312, 176})
 		miss := p.Caller == (oracle.Addr{Seg: 0x22f4, Off: 0x048f}) && p.NativeBox == ([4]int{184, 104, 312, 136})
 		death := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 112, 312, 176})
+		tailSources := map[int]string{
+			104: "e6f16936a01e776202d7148017f7c770f31925d4f97f5312106a685880a34152",
+			136: "bcf47e35fc5fe9b78d1ce32a9b98b05adeb3e2aae129207ef29f5fdaeb290f93",
+			152: "a95140d02db9873ba8a6300365dbbaf0f6cd0d25d7fda0141df8ff30ee7b07ee",
+		}
+		tail := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, p.NativeBox[1], 312, 176}) &&
+			tailSources[p.NativeBox[1]] == p.SHA256 && p.IntegerTemplateKey == "" && len(p.Spans) == 1 &&
+			p.SHA256 == digest([]byte(g.list.sources[p.Spans[0].Key]))
 		defeatRows := map[oracle.Addr]struct {
 			y   int
 			key string
@@ -150,7 +162,7 @@ func (g *liveGame) validateHUDParagraphs() {
 		defeat := knownDefeat && p.NativeBox == ([4]int{16, row.y, 304, 184}) && p.IntegerTemplateKey == "" &&
 			len(p.Spans) == 1 && p.Spans[0].Key == row.key && p.Spans[0].Rect == ([4]int{16, row.y, 288, 8}) &&
 			p.SHA256 == digest([]byte(g.list.sources[row.key]))
-		if !(weapon || status || miss || death || defeat) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
+		if !(weapon || status || miss || death || tail || defeat) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
 			panic("右側段落來源不符")
 		}
 		if p.IntegerTemplateKey != "" {
@@ -165,8 +177,11 @@ func (g *liveGame) validateHUDParagraphs() {
 		}
 		for _, span := range p.Spans {
 			x, y, w, h := span.Rect[0], span.Rect[1], span.Rect[2], span.Rect[3]
-			if span.Start != 0 || span.Length <= 0 || g.list.sources[span.Key] == "" || len(g.list.sources[span.Key]) != span.Length ||
-				g.catalog[span.Key] == "" || x != p.NativeBox[0] || y != p.NativeBox[1] || w <= 0 || h < 8 || x+w > p.NativeBox[2] || y+h > p.NativeBox[3] ||
+			quantityName := weapon && span.Start == 2 && h == 8 && (g.list.sources[span.Key] == "Javelin" || g.list.sources[span.Key] == "Javelins")
+			wrappedBow := weapon && span.Start == 15 && span.Length == 3 && g.list.sources[span.Key] == "Bow" && span.Rect == ([4]int{184, 64, 24, 8})
+			aligned := x == p.NativeBox[0]+span.Start*8 && y == p.NativeBox[1]
+			if (span.Start != 0 && !quantityName && !wrappedBow) || span.Length <= 0 || g.list.sources[span.Key] == "" || len(g.list.sources[span.Key]) != span.Length ||
+				g.catalog[span.Key] == "" || (!aligned && !wrappedBow) || w <= 0 || h < 8 || x+w > p.NativeBox[2] || y+h > p.NativeBox[3] ||
 				len([]rune(g.catalog[span.Key]))*g.glyphs.Size > w*2 {
 				panic("右側段落切片或字框不符")
 			}
@@ -194,7 +209,7 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 				}
 			} else if l.aimDamageKey(p.IntegerTemplateKey) {
 				menu, ok := readMenuSource(o)
-				if !ok || menu.Signature != automaticSpellMenuSignature {
+				if !ok || !automaticDamageMenu(menu.Signature) {
 					continue
 				}
 			}
@@ -260,7 +275,7 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 					for at, word := range l.words {
 						if word.Group == "footer" {
 							// 自動施法的原生底列跨越右側回報；由原版填色或覆寫撤除。
-							if word.Key == "round.1a0e55074a01fc9262bb" && word.X == 8 && word.Y == 178 && word.Width == 152 {
+							if c := l.spellCaption; c != nil && c.Reference != nil && word == c.Word {
 								continue
 							}
 							if c := l.movementCaption; c != nil && c.Reference != nil && word.Key == c.Word.Key {

@@ -282,18 +282,24 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    fire=provenance.get('fire_extension')
+    fire_path=None
+    if fire:
+        selected=[p for p in fire['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
+        assert len(selected)==1,'unknown fire path'
+        fire_path=selected[0]
     magic_toggle=provenance.get('magic_toggle_extension')
     magic_path=None
     if magic_toggle:
-        assert (inputs.parent.parent/magic_toggle['source_path']).resolve()==(observed/'receipt.json').resolve(),'unknown magic toggle path'
-        magic_path=magic_toggle
+        if (inputs.parent.parent/magic_toggle['source_path']).resolve()==(observed/'receipt.json').resolve():magic_path=magic_toggle
+        else:assert fire_path,'unknown magic toggle path'
     spell_route=provenance.get('spell_route_extension')
     spell_path=None
     if spell_route:
         if (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve():spell_path=spell_route
-        else:assert magic_path,'unknown spell route path'
-    scoped_path=magic_path or spell_path
-    scoped_data=magic_toggle if magic_path else spell_route
+        else:assert magic_path or fire_path,'unknown spell route path'
+    scoped_path=fire_path or magic_path or spell_path
+    scoped_data=fire if fire_path else magic_toggle if magic_path else spell_route
     journal_refs=provenance.get('journal_reference_extension')
     journal_path=None
     if journal_refs:
@@ -331,9 +337,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
     party_cast=provenance.get("party_cast_extension")
     cast=provenance.get("cast_extension")
     bar=provenance.get("bar_extension")
-    hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds) if extension
+    hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds,fire) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if fire:
+        from combat_fire_inputs import check_sources as check_fire_sources
+        source_args=check_fire_sources(*source_args)
     if magic_toggle:
         from magic_toggle_inputs import check_sources as check_magic_toggle_sources
         source_args=check_magic_toggle_sources(*source_args)
@@ -772,7 +781,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if scoped_path:
             from combat_rounds_inputs import hud_records as derive_hud_records
             hud_records=derive_hud_records(trace,config['HUDParagraphs'],en)
-            assert hud_records==scoped_data['data']['records']
+            assert hud_records==(fire_path['records'] if fire_path else scoped_data['data']['records'])
         elif rounds or effects or finish or movement:
             if rounds:
                 from combat_rounds_inputs import hud_records as derive_hud_records
@@ -812,7 +821,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
         hud_words[e["Step"]]=words_here
     hud_source_clears=[]
     rounds_copy_images=[]
+    fire_copy_witness=None
     if rounds or scoped_path:
+        if fire_path:
+            from combat_fire_inputs import copy_witnesses
+            copies=copy_witnesses(inputs.parent.parent.parent.parent,observed.parent)
+            assert copies==read(observed.parent/'copy-witnesses.json')
+            copy_key,=[k for k,p in fire['data']['paths'].items() if p['source_path']==fire_path['source_path']]
+            fire_copy_witness=copies[copy_key]
+            rounds_copy_images=[(v['step'],inputs.parent.parent/v['path']) for v in fire_copy_witness['images']]
         if observed.name=='observe-r14':
             from combat_rounds_inputs import copy_witness
             witness=copy_witness(observed.parent)
@@ -861,7 +878,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         new_buttons=[c for c in trace["calls"] if c["step"]>last_retire and c["caller"]=={"Seg":0xceb,"Off":0x1be}]
         new_signature=trace["menus"][new_buttons[0]["menu_index"]]["Signature"]
         footer_restored=max(c["return_step"] for c in new_buttons if trace["menus"][c["menu_index"]]["Signature"]==new_signature)
-    elif rounds:
+    elif rounds or fire_path:
         # 自動施法沿用原版傷害框清除；來源限定為具原生選單見證的魔法傷害模板。
         retire_fills=[]
         aim_keys={p['IntegerTemplateKey'] for p in config['HUDParagraphs'] if p.get('KeepFooterSignature')}
@@ -1210,7 +1227,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                         indices={data[yy*320+xx] for yy in range(y,y+8) for xx in range(x,x+rect[2])}
                         colors={tuple(checkpoint["palette"][v]) for v in indices}
                     else:
-                        assert rounds, '缺少欄位背景的原版色號快照'
+                        assert rounds or fire_path, '缺少欄位背景的原版色號快照'
                         original_frame=next(v for v in a['frames'] if c['return_step']<v['step']<min(changes) and not v['held'])
                         # 英文側不畫翻譯；取文字已返回且尚未被覆寫的實際 GPU 像素。
                         image=Image.open(en_run/original_frame['File']).convert('RGB')
@@ -1324,6 +1341,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     battle_warning,battle_warning_intervals=None,[]
     battle_status,battle_status_intervals=None,[]
     status_witnesses={w['entry']:w for w in magic_toggle['data']['notices']} if magic_path else {}
+    fire_captions={w['entry']:w for w in fire_path['captions']} if fire_path else {}
+    fire_movement_witnesses={}
+    active_fire_caption=None
     status_pixels={}
     for entry,witness in status_witnesses.items():
         x,y,w,h=witness['rect']
@@ -1386,6 +1406,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
     def erase(rect):
         for pos, w in list(words.items()):
             if intersects(w, rect):
+                x,y,width,height=rect
+                hud=any(w['Key']==s['Key'] and (w['X'],w['Y'],w['Width'])==tuple(s['Rect'][:3]) and w.get('Height',8)<=s['Rect'][3]
+                    for p in config.get('HUDParagraphs',[]) for s in p['Spans'])
+                if (hud and x<=w['X'] and x+width>=w['X']+w['Width'] and
+                    w['Y']+8<=y<w['Y']+w.get('Height',8)<=y+height):
+                    w=dict(w,Height=y-w['Y'])
+                    if w['Height']==8:w.pop('Height')
+                    words[pos]=w
+                    continue
                 del words[pos]
                 row_positions.discard(pos)
     for e in b["list_events"]:
@@ -1457,37 +1486,71 @@ def check(en_run, zh_run, inputs, control, observed, output):
             erase((x,y,right-x,bottom-y))
             page=None
         elif kind=='spell-caption-ready':
-            assert rounds
+            assert rounds or fire_path
             call=calls_by_step[e['detail']['entry_step']]
             wrapper=trace['wrappers'][call['wrapper_index']]
-            assert call['format']['text']=='%s' and call['vararg_1_candidate']['text']=='Spell:Magic Missile'
-            checkpoint=next(c for c in trace['checkpoints'] if c['step']>wrapper['return_step'])
+            assert call['format']['text']=='%s'
+            if fire_path:
+                witness=fire_captions[call['step']]
+                checkpoint=next(c for c in trace['checkpoints'] if c['step']==wrapper['return_step'])
+                rect=witness['rect']
+                active_fire_caption=witness
+                assert call['vararg_1_candidate']['text']==en[witness['key']]
+            else:
+                assert call['vararg_1_candidate']['text']=='Spell:Magic Missile'
+                checkpoint=next(c for c in trace['checkpoints'] if c['step']>wrapper['return_step'])
+                rect=[8,178,152,8]
             raw=(observed/(checkpoint['label']+'.idx')).read_bytes()
-            reference=b''.join(raw[y*320+8:y*320+160] for y in range(178,186))
+            x,y,width,height=rect
+            reference=b''.join(raw[row*320+x:row*320+x+width] for row in range(y,y+height))
             assert sha(raw)==checkpoint['indexed_sha256']
+            if fire_path:assert sha(reference)==witness['reference_sha256']
             assert e['Step']==wrapper['return_step']
             assert e['detail']==dict(entry_step=call['step'],caller=wrapper['caller'],ss=wrapper['return_ss'],sp=wrapper['return_sp'],
-                native_rect=[8,178,152,8],reference_sha256=sha(reference))
+                native_rect=rect,reference_sha256=sha(reference))
         elif kind=='spell-caption-retired':
-            assert rounds and any(w['Key']=='round.1a0e55074a01fc9262bb' for w in words.values())
+            if fire_path:
+                assert active_fire_caption and active_fire_caption['entry']==e['detail']['entry_step']
+                rect=active_fire_caption['rect']
+                assert any(w['Key']==active_fire_caption['key'] for w in words.values())
+                active_fire_caption=None
+            else:
+                assert rounds and any(w['Key']=='round.1a0e55074a01fc9262bb' for w in words.values())
+                rect=[8,178,152,8]
             ready=next(v for v in b['list_events'] if v['Kind']=='spell-caption-ready' and v['detail']['entry_step']==e['detail']['entry_step'])
-            assert ready['Step']<e['Step'] and e['detail']['native_rect']==[8,178,152,8]
+            assert ready['Step']<e['Step'] and e['detail']['native_rect']==rect
             assert e['detail']['reference_sha256']==ready['detail']['reference_sha256']!=e['detail']['actual_sha256']
-            erase((8,178,152,8))
+            erase(rect)
         elif kind=="movement-caption-ready":
-            assert movement and movement_path["source_path"]==movement["data"]["quick_source"]
-            counter_record=movement_path["counters"][0]
-            call=calls_by_step[counter_record["step"]]
-            wrapper=trace["wrappers"][call["wrapper_index"]]
-            witness=movement["data"]["quick_witness"]
+            if fire_path:
+                call=calls_by_step[e['detail']['entry_step']]
+                wrapper=trace['wrappers'][call['wrapper_index']]
+                field,=[f for f in config['Fields'] if f.get('SourcePattern')=='movement-left' and f.get('Color')==0x8f and f['UpperCaller']==wrapper['caller']]
+                assert call['format']['text']=='%s' and call['vararg_1_candidate']['text'].startswith(en[field['Key']])
+                checkpoint=next(c for c in trace['checkpoints'] if c['step']>wrapper['return_step'])
+                raw=(observed/checkpoint['indexed_file']).read_bytes()
+                assert sha(raw)==checkpoint['indexed_sha256']
+                rect=[8,189,field['Length']*8,8]
+                reference=b''.join(raw[y*320+8:y*320+8+rect[2]] for y in range(189,197))
+                witness=dict(step=wrapper['return_step'],native_rect=rect,reference_sha256=sha(reference))
+                counter_record=dict(step=call['step'])
+                counter_key=field['Key']
+                fire_movement_witnesses[call['step']]=witness
+            else:
+                assert movement and movement_path["source_path"]==movement["data"]["quick_source"]
+                counter_record=movement_path["counters"][0]
+                call=calls_by_step[counter_record["step"]]
+                wrapper=trace["wrappers"][call["wrapper_index"]]
+                witness=movement["data"]["quick_witness"]
+                counter_key=movement['data']['fields'][0]['binding']['Key']
             removed=sorted((w for w in words.values() if w["Group"]=="footer" and w.get("Button")),key=lambda w:(w["Y"],w["X"]))
             assert e["Step"]==wrapper["return_step"]==witness["step"]
             assert e["detail"]==dict(entry_step=counter_record["step"],caller=wrapper["caller"],ss=wrapper["return_ss"],sp=wrapper["return_sp"],
-                native_rect=witness["native_rect"],reference_sha256=witness["reference_sha256"],removed_buttons=removed)
+                native_rect=witness["native_rect"],reference_sha256=witness["reference_sha256"],removed_buttons=(removed or None) if fire_path else removed)
             for w in removed:del words[(w["X"],w["Y"])]
-            active_movement_caption=dict(key=movement["data"]["fields"][0]["binding"]["Key"],entry=counter_record["step"],rect=witness["native_rect"],reference=witness["reference_sha256"])
+            active_movement_caption=dict(key=counter_key,entry=counter_record["step"],rect=witness["native_rect"],reference=witness["reference_sha256"])
         elif kind=="movement-caption-retired":
-            assert active_movement_caption and movement
+            assert active_movement_caption and (movement or fire_path)
             c=active_movement_caption;detail=e["detail"]
             assert detail["entry_step"]==c["entry"] and detail["native_rect"]==c["rect"] and detail["reference_sha256"]==c["reference"]
             assert len(detail["actual_sha256"])==64 and detail["actual_sha256"]!=c["reference"]
@@ -1500,6 +1563,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
             if e["detail"]["footer_hidden"]:
                 for pos,w in list(words.items()):
                     if w["Group"]=="footer":
+                        if active_fire_caption and w['Key']==active_fire_caption['key']:
+                            continue
                         if rounds and w['Key']=='round.1a0e55074a01fc9262bb' and (w['X'],w['Y'],w['Width'])==(8,178,152):
                             continue
                         if active_movement_caption and w["Key"]==active_movement_caption["key"]:
@@ -1883,7 +1948,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 continue
             if footer_hidden_at(checkpoint["step"]):
                 footers=[w for w in layouts[checkpoint['step']]['words'] or [] if w['Group']=='footer']
-                if rounds:
+                if fire_path:
+                    assert all(any(w['Key']==c['key'] and (w['X'],w['Y'],w['Width'])==tuple(c['rect'][:3]) for c in fire_captions.values()) or
+                        any(f.get('SourcePattern')=='movement-left' and w['Key']==f['Key'] and (w['X'],w['Y'],w['Width'])==(8,189,f['Length']*8) for f in config['Fields']) for w in footers)
+                elif rounds:
                     assert all(w['Key']=='round.1a0e55074a01fc9262bb' and (w['X'],w['Y'],w['Width'])==(8,178,152) for w in footers)
                 else:assert not footers
                 continue
@@ -1952,6 +2020,16 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     ready=next(v for v in b['list_events'] if v['Kind']=='spell-caption-ready' and v['detail']['entry_step']==event['Step'])
                     idx=(observed/(checkpoint['label']+'.idx')).read_bytes()
                     changed=changed or sha(b''.join(idx[row*320+8:row*320+160] for row in range(178,186)))!=ready['detail']['reference_sha256']
+                if fire_path and event['Step'] in fire_captions:
+                    witness=fire_captions[event['Step']]
+                    idx=(observed/(checkpoint['label']+'.idx')).read_bytes()
+                    x,y,width,height=witness['rect']
+                    changed=changed or sha(b''.join(idx[row*320+x:row*320+x+width] for row in range(y,y+height)))!=witness['reference_sha256']
+                if fire_path and event['Step'] in fire_movement_witnesses:
+                    witness=fire_movement_witnesses[event['Step']]
+                    idx=(observed/checkpoint['label']).with_suffix('.idx').read_bytes()
+                    x,y,width,height=witness['native_rect']
+                    changed=changed or sha(b''.join(idx[row*320+x:row*320+x+width] for row in range(y,y+height)))!=witness['reference_sha256']
                 if not changed:
                     assert word in (layouts[checkpoint["step"]]["words"] or []), ("missing retained prompt",checkpoint["label"],f["Key"])
     cleared = [e for e in b["list_events"] if e["Kind"] == "pane-cleared"]
@@ -2145,7 +2223,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert native_state["display_start"]==layout["DisplayStart"]
             if not frame["held"]:
                 for word in state["words"] or []:
-                    origins=[(e,w) for e in hud_entries if e["Step"]<=frame["step"] for w in hud_words[e["Step"]] if w==word]
+                    origins=[(e,w) for e in hud_entries if e['Step']<=frame['step'] for w in hud_words[e['Step']]
+                        if {k:v for k,v in w.items() if k!='Height'}=={k:v for k,v in word.items() if k!='Height'} and
+                        word.get('Height',8)<=w.get('Height',8)]
                     if origins:
                         e,w=origins[-1];record=next(r for r in hud_records if r["step"]==e["Step"])
                         if record["paint_page"]!=native_state["display_start"]:
@@ -2404,6 +2484,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert {w['key'] for w in status_witnesses.values()}<=visible
             result['magic_toggle']=dict(fields=len(magic_toggle['data']['fields']),intervals=battle_status_intervals,source_path=magic_path['source_path'],ancestor_sampling=inherited)
             result['limits']='DRAFT 正常 Alt-M 三次切換與原版按鈕恢復；未驗勝利或完整中文入口。'
+        if fire_path:
+            result['fire']=dict(source_path=fire_path['source_path'],records=len(hud_records),captions=len(fire_captions),ancestor_sampling=inherited,
+                original_copy_witness=fire_copy_witness)
+            result['limits']='DRAFT 原版自動施法支線的分段繁中顯示；火焰、保護及武器名稱不改數值，未驗勝利或完整中文入口。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
