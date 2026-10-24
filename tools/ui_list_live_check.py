@@ -125,11 +125,84 @@ def check_battle_sources(inputs, config, provenance, en, zh, glyphs, trace):
     return source_trace
 
 
+def check_literal_catalog_sources(inputs,config,provenance,en,zh,glyphs):
+    from ui_list_inputs import catalog
+    proof=provenance["literal_catalog_extension"]
+    base=inputs.parent.parent/proof["base"]
+    assert base.resolve().is_relative_to(inputs.parent.parent.resolve())
+    assert set(proof["base_files"])=={p.name for p in base.iterdir() if p.is_file()}
+    for name,h in proof["base_files"].items():assert sha((base/name).read_bytes())==h
+    old,parent=read(base/"inputs.json"),read(base/"provenance.json")
+    assert {k:v for k,v in provenance.items() if k!="literal_catalog_extension"}==parent
+    assert set(config)==set(old)
+    assert all(config[k]==old[k] for k in config if k not in ("Paragraphs","fine_windows")),"literal catalog inherited config mismatch"
+    texts=Path("/catalogs")
+    for name,h in proof["formal_files"].items():assert sha((texts/name).read_bytes())==h
+    assert sha((texts/"passage-candidates.json").read_bytes())==proof["fragments_sha256"]
+    source,target=catalog(texts/"en.tsv"),catalog(texts/"zh-TW.tsv")
+    fragments=set()
+    for group in read(texts/"passage-candidates.json")["groups"]:
+        for item in group["sources"]:
+            fragments.update(f["key"] for f in item["fragments"])
+    wanted=[];excluded=[]
+    for key,value in source.items():
+        if not key.startswith("ecl.") or key not in target:continue
+        assert key=="ecl."+sha(value.encode())[:20]
+        why=""
+        if len(value)<16:why="name-length"
+        elif key in fragments:why="passage-fragment"
+        elif any(ord(c)>127 for c in value) or re.search(r"[\x00-\x1f]",value+target[key]) or "\\" in value+target[key] or "%" in value:why="control-or-format"
+        elif "JOURNAL ENTRY" in value:why="journal"
+        elif len(target[key])>144:why="length"
+        if why:excluded.append(dict(key=key,reason=why))
+        else:wanted.append(key)
+    assert proof["keys"]==sorted(wanted) and proof["excluded"]==excluded,"literal catalog key selection mismatch"
+    old_en,old_zh=catalog(base/"en.tsv"),catalog(base/"zh-TW.tsv")
+    assert proof["new_keys"]==[k for k in sorted(wanted) if k not in old_en]
+    assert en==dict(old_en,**{k:source[k] for k in wanted})
+    assert zh==dict(old_zh,**{k:target[k] for k in wanted}),"literal catalog translation mismatch"
+    style_values=[]
+    for record in proof["styles"]:
+        path=inputs.parent.parent/record["source_path"]
+        assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==record["source_sha256"]
+        trace=read(path);p=next(p for p in trace["paragraphs"] if p["step"]==record["step"])
+        style={"Caller":p["caller"],"NativeBox":p["native_box"],"Foreground":p["foreground"],"Background":p["background"],"Clear":p["clear"]}
+        assert record["style"]==style and p["caller"]["Seg"]==0x26B4
+        assert p["native_box"]==[8,136,312,184] and p["background"]==0 and p["foreground"] in (3,7)
+        assert (p["caller"]["Off"],p["clear"]) in ((0x1D53,0),(0x1D81,1))
+        assert {"Key":"ecl."+sha(p["source"]["text"].encode())[:20],"SHA256":sha(p["source"]["text"].encode()),**style} in old["Paragraphs"]
+        style_values.append(style)
+    assert {(s["Caller"]["Off"],s["Foreground"],s["Clear"]) for s in style_values}=={(0x1D53,3,0),(0x1D53,7,0),(0x1D81,3,1),(0x1D81,7,1)}
+    assert len(style_values)==4
+    expected=list(old["Paragraphs"]);old_set={json.dumps(p,sort_keys=True) for p in expected}
+    for key in sorted(wanted):
+        for style in style_values:
+            p={"Key":key,"SHA256":sha(source[key].encode()),**style}
+            if json.dumps(p,sort_keys=True) not in old_set:expected.append(p)
+    assert config["Paragraphs"]==expected and len(expected)-len(old["Paragraphs"])==proof["added_bindings"],"literal catalog binding matrix mismatch"
+    font=catalog(base/"font-zh-TW.tsv");font.update({k:target[k] for k in wanted})
+    assert catalog(inputs/"font-zh-TW.tsv")==font
+    previous=read(base/"glyphs-16.json")
+    assert all(glyphs[n]==previous[n] for n in ("size","height","font_sha256"))
+    assert all(glyphs["glyphs"][k]==v for k,v in previous["glyphs"].items())
+    assert set(glyphs["glyphs"])==set(previous["glyphs"])|(set("".join(font.values()))-set("\r\n\t")),"literal catalog glyph set mismatch"
+    outline=inputs.parent.parent/proof["outline_fallback"]["path"]
+    assert outline.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(outline.read_bytes())==proof["outline_fallback"]["sha256"]
+    fallback=read(outline)
+    assert all(fallback[n]==glyphs[n] for n in ("size","height","font_sha256"))
+    assert set(fallback["glyphs"])=={"描","泉"} and not (set(fallback["glyphs"])&set(previous["glyphs"]))
+    for char,value in fallback["glyphs"].items():
+        assert glyphs["glyphs"][char]==value and len(base64.b64decode(value))==320 and not any(base64.b64decode(value)[256:]),"literal catalog outline mismatch"
+    for name in set(proof["base_files"])-{"en.tsv","zh-TW.tsv","font-zh-TW.tsv","inputs.json","provenance.json","glyphs-16.json"}:
+        assert (inputs/name).read_bytes()==(base/name).read_bytes()
+    return base,old,parent,old_en,old_zh,previous
+
+
 def check(en_run, zh_run, inputs, control, observed, output):
     assert not output.exists()
     a, b, oracle, trace = [read(p / "receipt.json") for p in (en_run, zh_run, control, observed)]
     # 未進列表的正常路徑，Go 的空 slice 會輸出 null。
-    for field in ("list_events", "scroll_events"):
+    for field in ("list_events", "scroll_events", "wrappers", "fill_events", "menu_refresh_sources", "paragraphs", "menus"):
         if trace[field] is None:
             trace[field] = []
         assert isinstance(trace[field], list)
@@ -144,8 +217,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
-    battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
+    if literal_batch:
+        parent_args=check_literal_catalog_sources(inputs,config,provenance,en,zh,glyphs)
+        battle_source=check_battle_sources(*parent_args,trace)
+    else:battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
     inherited_creation_fields=read(inputs.parent.parent/battle["base"]/"inputs.json")["Fields"] if battle else []
     creation_tracking=any(f["Pane"]=="menu-text" and f["Caller"]=={"Seg":0x1BB6,"Off":0x1BE} for f in inherited_creation_fields)
     item_context=provenance.get("item_context_extension")
@@ -157,7 +234,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if item_context:
         base=inputs.parent.parent/item_context["base"]
         for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
@@ -1494,7 +1571,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if (str(zh_run), frame["File"]) not in verified_pngs:
             pixels(zh_run, frame)
         previous = expected_hash
-    assert translated_frames > 0
+    translated_content_frames=sum(not frame["held"] and bool(state["words"] or state.get("paragraph") or state.get("reader"))
+                                  for frame,state in zip(b["frames"],b["list_frames"]))
+    assert translated_content_frames > 0
     for interval in feedback_intervals:
         visible = [f for f in b["frames"] if interval["ready"] <= f["step"] < interval["restoring"] and not f["held"]]
         assert visible, "購買回報被過渡畫面遮住"
@@ -1575,6 +1654,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["battle_added_paragraphs"]=len(battle["paragraphs"])
         result["battle_field_cycles"]=battle_field_cycles
         result["limits"]="正常宮殿告別狀態後連續離城、凱爾高斯手札 65 與首次戰鬥、瞄準退出及首次攻擊。右側武器、攻擊及傷害回報仍原文，未宣稱整場戰鬥、正式入口或全遊戲中文化完成。"
+    if literal_batch:
+        result["translated_content_frames"]=translated_content_frames
+        added=set(literal_batch["new_keys"])
+        seen={e["detail"]["page"]["Key"] for e in paragraph_entries}&added
+        visible={k for f,s in zip(b["frames"],b["list_frames"]) if not f["held"] and s.get("paragraph") for k in s["paragraph"]["Components"]}&added
+        assert seen and visible==seen,"new catalog text not visible"
+        result["literal_catalog"]={"eligible_keys":len(literal_batch["keys"]),"new_keys":len(added),
+            "added_bindings":literal_batch["added_bindings"],"observed_new_keys":sorted(seen),"visible_new_keys":sorted(visible)}
+        result["limits"]="既有正式 ECL 譯文沿四種已證實顯示情境批次接入；本次 GUI 只驗普通宮殿狀態後進酒館與交談，不能將目錄數換算成已走過的玩家路徑。短句、相鄰片段及新手札引用保留缺口；正式入口與全遊戲中文化未完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

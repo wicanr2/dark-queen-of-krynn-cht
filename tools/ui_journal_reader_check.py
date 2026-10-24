@@ -44,7 +44,10 @@ def legacy_reader_model(inputs, config, native_paragraphs, accepted, runs):
             page = None
         event = accepted_by_step.get(step)
         if event:
-            bindings = [f for f in config["Paragraphs"] if f["Key"] == event["detail"]["page"]["Key"]]
+            bindings = [f for f in config["Paragraphs"] if f["Key"] == event["detail"]["page"]["Key"]
+                        and f["Caller"]==p["caller"] and f["NativeBox"]==p["native_box"]
+                        and [f[k] for k in ("Foreground","Background","Clear")]==[p[k] for k in ("foreground","background","clear")]
+                        and f["SHA256"]==sha(p["source"]["text"].encode())]
             assert len(bindings) == 1
             binding = bindings[0]
             entry = binding.get("JournalEntry",0)
@@ -161,7 +164,10 @@ def reader_model(inputs, config, native_paragraphs, accepted, runs):
                     auto,visible,index=None,None,0
                 event=accepted_by_step.get(p["step"])
                 if event:
-                    bindings=[f for f in config["Paragraphs"] if f["Key"]==event["detail"]["page"]["Key"]]
+                    bindings=[f for f in config["Paragraphs"] if f["Key"]==event["detail"]["page"]["Key"]
+                              and f["Caller"]==p["caller"] and f["NativeBox"]==p["native_box"]
+                              and [f[k] for k in ("Foreground","Background","Clear")]==[p[k] for k in ("foreground","background","clear")]
+                              and f["SHA256"]==sha(p["source"]["text"].encode())]
                     assert len(bindings)==1
                     binding=bindings[0];entry=binding.get("JournalEntry",0)
                     if entry:

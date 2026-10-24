@@ -774,6 +774,50 @@ AC 與 HP 來自同一次含 tab 的印字。以原版像素核對起點分別�
 本批維持 DRAFT，不宣稱整場戰鬥、右側原生段落、從 MZ 連續到首戰或正式入口完成。
 結果與重生入口見 [研究 005](../re/005-translation-catalog.md#2026-10-24離城手札-65-與首戰)。
 
+### 既有敘事契約的目錄批次擴充 DRAFT
+
+入口為 [literal_catalog.py](../../tools/literal_catalog.py)，研究目錄 `workplace/probe/literal-catalog-20261024/`。
+沿首戰的固定輸入擴充正式 ECL 譯文，保留全部既有欄位、段落、選單及閱讀資料。
+只使用已觀測的 `26B4:1D81` 整段清除與 `26B4:1D53` 接續，灰字或青字、黑色原生底與相同敘事框。
+每個來源仍核對完整原文雜湊，沒有不分大小寫、部分字串或任意呼叫端的替換。
+
+新增來源須有正式 TSV 譯文，為可列印 ASCII 原文且超過十五字元，排除姓名長度範圍、
+控制碼、格式字串、手札引用及相鄰段落候選片段。既有已驗短句與引用不受排除條件影響。
+譯文須通過原框單段容量及字型覆蓋檢查；接續仍要求相容前段與合併容量，失配保留原文及缺口紀錄。
+這是既有 DRAFT 資料格式的批次接入，不把靜態候選數當作已走過的玩家路徑。
+
+驗證須從正式 TSV 獨立重建新增 key、四種來源情境及字模聯集，並證明既有原版收據的選譯結果不變。
+另走一條尚未綁定的新正常路徑，比較原版狀態、實際 GPU 畫格、完整來源到首字形的順序及撤除。
+原始資料與大量譯文只留本機，正式主表與原版判定不變。
+
+原點陣超框的新字可由 [glyph_outline.py](../../tools/glyph_outline.py) 輸出同一圓體的原始 16px 輪廓，
+再以 [glyph_outline_capture.mjs](../../tools/glyph_outline_capture.mjs) 原尺寸擷取。
+只在完整輪廓位於原字格內時使用，不裁切、不壓縮字墨；全部舊點陣須逐位元組保留。
+
+本批有效資料為 `inputs-r3`，其 `inputs-r2` 父批只差細驗區間及原版來源紀錄。
+由 6,562 筆已有繁中譯文的 ECL 鍵選出 5,062 筆，新增 5,045 鍵及 20,231 個情境綁定。
+原文共 5,358 鍵、繁中 5,353 鍵，五個既有語意鍵仍保留；16px 字模共 2,729 個。
+809 筆短句、681 筆相鄰片段及十筆新手札引用未加入，原有已驗短句及引用保持原樣。
+
+工具在固定 Python 容器內執行，掛載 `/probe` 唯讀、`/catalogs` 為唯讀正式譯表、
+`/font` 為前作唯讀字型目錄，僅本研究子目錄覆蓋可寫掛載。
+`literal_catalog.py prepare /probe /catalogs /font/jf-openhuninn-2.1.ttf 研究目錄`
+建立 r2；先保存酒館正常原版觀測／控制與輪廓來源，不能由空目錄猜造來源。
+`return-inputs 研究目錄` 由五個實際原版狀態建立 r3，實測二進位及九份來源由 `run-r2.json` 固定。
+呈現沿 [ui-list-live.sh](../../tools/ui-list-live.sh) 的 en／zh 與 true 細驗參數。
+`baseline /probe 研究目錄` 核對三十一個舊段落的選譯不變；
+`reader-regression /probe 研究目錄` 以舊實際畫格核對手札 54、65，不冒充重新執行舊 GPU。
+`layout`、`guards`、`review` 接研究目錄，`rebuild` 接 `/probe /catalogs 字型檔 研究目錄 r4`，
+從全新暫存目錄重建 r2、r3 共三十份檔案。
+`evidence`／`audit` 必須使用同一專案根，例如
+`evidence /project /project/workplace/probe/literal-catalog-20261024`，只對該子目錄另掛可寫。
+字型輪廓工具分別使用固定 FontTools 與 Chromium 容器，不使用主機 runtime。
+前者執行 `glyph_outline.py 字型檔 已存在的全新輸出目錄 63cf 6cc9`，
+後者執行 `node glyph_outline_capture.mjs 該目錄`；本批接受的目錄為 `outline-r2`。
+`literal_catalog.py outline-pack 研究目錄` 封存其來源與點陣，
+字模生成入口為 `menu_glyphs.py 字型檔 TSV 輸出 16 outline-fallback.json`。
+未提供最後參數時沿原嚴格點陣路徑，超框即拒絕。
+
 ## 待驗後才能 READY
 
 - 首段完整劇情的上層入口已由研究 004 解出；仍需補齊其他格式字串、組句、輸入名稱、
