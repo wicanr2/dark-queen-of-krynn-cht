@@ -273,9 +273,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    party_cast=provenance.get("party_cast_extension")
     cast=provenance.get("cast_extension")
     bar=provenance.get("bar_extension")
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if party_cast:
+        from party_cast_inputs import check_sources as check_party_cast_sources
+        source_args=check_party_cast_sources(*source_args)
     if cast:
         from cast_ui_inputs import check_sources as check_cast_sources
         source_args=check_cast_sources(*source_args)
@@ -301,7 +305,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(party_cast or {}).get("page_validation") or (cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if item_context:
         base=inputs.parent.parent/item_context["base"]
         for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
@@ -1762,6 +1766,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
             "new_keys":len(set(en).difference(catalog(cast_base/"en.tsv"))),
             "closed_events":sum(e["Kind"]=="memory-list-closed" for e in b["list_events"])}
         result["limits"]="正常首戰角色的兩頁記憶法術、選取與取消返回；沒有本輪新 ECL 敘事、完整施法、戰鬥勝利、其他角色、正式入口或全遊戲中文化聲明。"
+    if party_cast:
+        result["cast"]["scope"]="inherited catalog"
+        party_base=inputs.parent.parent/party_cast["base"]
+        result["cast"]["new_keys"]=len(set(catalog(party_base/"en.tsv")).difference(catalog(cast_base/"en.tsv")))
+        result["party_cast"]={"source_rows":len(party_cast["data"]["rows"]),"new_rows":len(party_cast["data"]["added_rows"]),
+            "new_keys":len(set(en).difference(catalog(party_base/"en.tsv")))}
+        result["limits"]="Joris 正常記憶清單的兩頁、選取與取消；原版判定維持不變，不外推其他角色、完整施法、戰鬥或正式入口。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 
