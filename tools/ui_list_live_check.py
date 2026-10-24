@@ -282,27 +282,33 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    victory=provenance.get('victory_extension')
+    victory_path=None
+    if victory:
+        selected=[p for p in victory['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
+        assert len(selected)==1,'unknown victory path'
+        victory_path=selected[0]
     exploration_cast=provenance.get('exploration_cast_extension')
     exploration_path=exploration_cast if exploration_cast and (inputs.parent.parent/exploration_cast['source_path']).resolve()==(observed/'receipt.json').resolve() else None
-    if exploration_cast:assert exploration_path,'unknown exploration cast path'
+    if exploration_cast:assert exploration_path or victory_path,'unknown exploration cast path'
     fire=provenance.get('fire_extension')
     fire_path=None
     if fire:
         selected=[p for p in fire['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1 or not selected and exploration_path,'unknown fire path'
+        assert len(selected)==1 or not selected and (exploration_path or victory_path),'unknown fire path'
         fire_path=selected[0] if selected else None
     magic_toggle=provenance.get('magic_toggle_extension')
     magic_path=None
     if magic_toggle:
         if (inputs.parent.parent/magic_toggle['source_path']).resolve()==(observed/'receipt.json').resolve():magic_path=magic_toggle
-        else:assert fire_path or exploration_path,'unknown magic toggle path'
+        else:assert fire_path or exploration_path or victory_path,'unknown magic toggle path'
     spell_route=provenance.get('spell_route_extension')
     spell_path=None
     if spell_route:
         if (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve():spell_path=spell_route
-        else:assert magic_path or fire_path or exploration_path,'unknown spell route path'
-    scoped_path=exploration_path or fire_path or magic_path or spell_path
-    scoped_data=exploration_cast if exploration_path else fire if fire_path else magic_toggle if magic_path else spell_route
+        else:assert magic_path or fire_path or exploration_path or victory_path,'unknown spell route path'
+    scoped_path=victory_path or exploration_path or fire_path or magic_path or spell_path
+    scoped_data=victory if victory_path else exploration_cast if exploration_path else fire if fire_path else magic_toggle if magic_path else spell_route
     journal_refs=provenance.get('journal_reference_extension')
     journal_path=None
     if journal_refs:
@@ -343,6 +349,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds,fire) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if victory:
+        from victory_ui_inputs import check_sources as check_victory_sources
+        source_args=check_victory_sources(*source_args)
     if exploration_cast:
         from exploration_cast_inputs import check_sources as check_exploration_cast_sources
         source_args=check_exploration_cast_sources(*source_args)
@@ -432,6 +441,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
     page_proof=(finish or {}).get("page_validation") or (effects or {}).get("page_validation") or (hud or {}).get("page_validation") or (party_cast or {}).get("page_validation") or (cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    if victory_path:page_proof=victory_path['page_validation']
     if movement:
         page_proof=movement_path["page_validation"]
     if ammo:
@@ -925,6 +935,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
     def field_start(field, text):
         if not field.get("SourcePattern"):
             return field["Start"] if sha(text.encode()) == field["SHA256"] else None
+        if field['SourcePattern']=='victory-experience':
+            assert victory and field in victory['data']['fields'] and field['SHA256']==sha(en[field['Key']].encode())
+            from victory_ui_inputs import counter
+            return 0 if counter(text,en[field['Key']]) is not None else None
         if field["SourcePattern"]=="movement-left":
             movement_source=provenance.get('movement_extension')
             assert movement_source and field in [row["binding"] for row in movement_source["data"]["fields"][:2]]
@@ -1212,6 +1226,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert f['Pane']=='callsite' and c['stack'][4]==f['Color']==0x87
                 assert f['UpperCaller'] in ({'Seg':0x2c4a,'Off':0x4687},{'Seg':0x2c4a,'Off':0x46ad},{'Seg':0x310c,'Off':0x14dc},{'Seg':0x310c,'Off':0x14c0})
                 assert background==23 and f['Length']==len(source['text'])
+            elif victory_path and f in victory['data']['fields']:
+                assert f['Pane']=='callsite' and c['stack'][4]==f['Color']==0x87 and f['UpperCaller']['Seg']==0x27c7
+                assert background==23 and source['text'].startswith(en[f['Key']])
+                assert f['UpperNative']==[8,native(f['RawY'])] and f['Length']==len(en[f['Key']])
             else:
                 assert source["text"]=="Return" and f["Pane"]=="menu" and f["Group"]=="footer"
                 assert (start,f["Length"])==(0,6) and c["stack"][2:4]==[189,112]
@@ -2007,6 +2025,20 @@ def check(en_run, zh_run, inputs, control, observed, output):
             if signature not in config["Menus"]:
                 continue
             expected_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == signature}
+            if victory_path and signature=='7272d96e89c7974d280914813f2f4a2b4350bced877036575b8641c701a78f4e':
+                # 起點已畫好 Yes／No；本段只重印選中的 No。
+                # 完整表形仍在上方逐鈕核對，此處要求本次真正印出的按鈕全部可見。
+                printed=[c for c in buttons if menu_signature(c)==signature]
+                assert trace['request']['start_steps']==4206000000 and all(c['format']['text']=='No' for c in printed)
+                printed_hashes={sha(c['format']['text'].encode()) for c in printed}
+                expected_keys={f['Key'] for f in config['Fields'] if f['Pane']=='menu' and f['MenuSignature']==signature and f['SHA256'] in printed_hashes}
+                prompts=[c for c in trace['calls'] if button['return_step']<c['return_step']<checkpoint['step']
+                    and c['caller']=={'Seg':0xb72,'Off':0x27c} and c['format']['text']=='%s'
+                    and c['vararg_1_candidate']['text']=='Press        to continue.' and c['stack'][2:5]==[189,8032,0x70]
+                    and trace['wrappers'][c['wrapper_index']]['caller']=={'Seg':0xceb,'Off':0x4bd}]
+                if prompts:
+                    # 完整灰底提示已覆寫舊 No，Return 按鈕尚未開始列印。
+                    expected_keys=set()
             # 命名使用原版輸入框，先完整清掉上一個擲值選單；表指標暫未換掉。
             prompts = [c for c in trace["calls"] if button["step"] < c["step"] < checkpoint["step"]
                        and c["caller"] == {"Seg":0x266D,"Off":0x11F}
@@ -2534,6 +2566,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         if exploration_path:
             result['exploration_cast']=dict(source_path=exploration_path['source_path'],records=len(hud_records),fields=len(exploration_cast['data']['fields']),rows=len(exploration_cast['data']['rows']))
             result['limits']='DRAFT 正常探索施放加倍術、六人效果與老化回報、禁止施法、No 保留法術及返回；探索底列未知表形保留原文，未驗勝利或正式入口。'
+        if victory_path:
+            result['victory']=dict(source_path=victory_path['source_path'],fields=len(victory['data']['fields']),ancestor_sampling=inherited)
+            result['limits']='DRAFT 首戰勝利、每人經驗前綴、無戰利品與返回探索；數字保持原版，未驗其他結算或連續整場 GUI。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

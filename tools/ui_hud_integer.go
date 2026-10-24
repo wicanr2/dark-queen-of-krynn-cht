@@ -5,6 +5,19 @@ import (
 	"strings"
 )
 
+// 只驗完整前綴後的標準十進位顯示數字；不重算或改寫遊戲數值。
+func prefixedDisplayCount(source, prefix string) (uint32, bool) {
+	if prefix == "" || !strings.HasPrefix(source, prefix) {
+		return 0, false
+	}
+	raw := source[len(prefix):]
+	value, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil || strconv.FormatUint(value, 10) != raw {
+		return 0, false
+	}
+	return uint32(value), true
+}
+
 // 只辨識顯示字串的一個十進位參數，不讀取或改寫原版傷害資料。
 func hudIntegerTemplate(pattern string) bool {
 	if strings.Count(pattern, "%d") != 1 || strings.Contains(strings.Replace(pattern, "%d", "", 1), "%") {

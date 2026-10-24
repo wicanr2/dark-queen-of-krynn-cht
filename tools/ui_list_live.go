@@ -269,6 +269,10 @@ func (l *listState) fieldStart(f listField, source string) (int, bool) {
 		_, ok := movementCounter(source, l.sources[f.Key])
 		return 0, ok && f.SHA256 == digest([]byte(l.sources[f.Key]))
 	}
+	if f.SourcePattern == "victory-experience" {
+		_, ok := prefixedDisplayCount(source, l.sources[f.Key])
+		return 0, ok && f.SHA256 == digest([]byte(l.sources[f.Key]))
+	}
 	if f.SourcePattern == "created-name" {
 		prefix := l.sources[f.Key]
 		if len(source) < len(prefix)+4 || len(source) > len(prefix)+18 || source[:len(prefix)] != prefix || source[len(prefix)] != ' ' || source[len(source)-2:] != "? " {
@@ -521,11 +525,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.RawX == 8004 && f.RawY == 189 && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.SHA256 == digest([]byte(l.sources[f.Key])) &&
 				f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil
-			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption && !movementLeft && !dyingWarning && !validExplorationCastField(f, l.sources[f.Key]) {
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption && !movementLeft && !dyingWarning && !validExplorationCastField(f, l.sources[f.Key]) && !validVictoryResultField(f, l.sources[f.Key]) {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
-		if f.SourcePattern != "" && !createdName && !ageUnit && !movementLeft {
+		if f.SourcePattern != "" && !createdName && !ageUnit && !movementLeft && !validVictoryResultField(f, l.sources[f.Key]) {
 			if f.SourcePattern != "clock-period" || f.Pane != "callsite" || f.Group != "body" || f.UpperCaller != (oracle.Addr{Seg: 0x205e, Off: 0x53c}) || f.RawX != 8104 || f.RawY != 8060 || f.Start != 0 || f.Length != 2 || f.Width != 0 {
 				panic("未知時間欄位契約")
 			}
@@ -1596,7 +1600,7 @@ func (g *liveGame) composeList(px []byte) {
 	}
 }
 
-// DRAFT：只接正常探索施法已觀測的三個欄位，保留原版姓名與底列。
+// DRAFT：只接正常探索施法已觀測的欄位，保留原版姓名與底列。
 func validExplorationCastField(f listField, source string) bool {
 	if f.Pane != "callsite" || f.Group != "body" || f.Start != 0 || f.Length != len(source) || f.Width != 0 || f.FontSize != 0 ||
 		f.SourcePattern != "" || f.MenuSignature != "" || f.UpperFormatSHA256 != "" || f.SHA256 != digest([]byte(source)) ||
@@ -1616,6 +1620,25 @@ func validExplorationCastField(f listField, source string) bool {
 	s, ok := specs[f.SHA256]
 	return ok && f.UpperCaller == s.caller && f.RawX == s.x && f.RawY == s.y &&
 		*f.UpperNative == ([2]int{int(s.x-8000) * 2, int(s.y-8000) * 2})
+}
+
+func validVictoryResultField(f listField, source string) bool {
+	if f.Pane != "callsite" || f.Group != "body" || f.Start != 0 || f.Length != len(source) || f.Width != 0 || f.FontSize != 0 ||
+		f.MenuSignature != "" || f.UpperFormatSHA256 != "" || f.SHA256 != digest([]byte(source)) ||
+		f.FormatSHA256 != digest([]byte("%s")) || f.Caller != (oracle.Addr{Seg: 0xb72, Off: 0x27c}) ||
+		f.Color == nil || *f.Color != 0x87 || f.BackgroundOverride == nil || *f.BackgroundOverride != 23 || f.UpperNative == nil || f.RawX != 8004 {
+		return false
+	}
+	specs := map[string]struct{ off, y uint16 }{
+		"bc4ac4b84ba534bcc5252f00978df16dec0d1b7cae0f497bb5086342c6e46ead": {0x09f9, 8012},
+		"aa90baed1dda012893d90601e934ae838e7aabe99d446bf923899ede29abce27": {0x0a5f, 8020},
+		"7313f57bf6d1b1f1e3dbaabf162cc879dd4fba3150613ba0d031d2555883c844": {0x0a7b, 8028},
+		"4392706a5b968abedb617c002eb82b20e1f4695b89f19aedce38c5d83ed37961": {0x0adf, 8040},
+	}
+	s, ok := specs[f.SHA256]
+	prefix := f.SHA256 == "aa90baed1dda012893d90601e934ae838e7aabe99d446bf923899ede29abce27"
+	return ok && ((prefix && f.SourcePattern == "victory-experience") || (!prefix && f.SourcePattern == "")) &&
+		f.UpperCaller == (oracle.Addr{Seg: 0x27c7, Off: s.off}) && f.RawY == s.y && *f.UpperNative == ([2]int{8, int(s.y-8000) * 2})
 }
 
 // DRAFT：只接已由原版建角路徑觀測到的文字。文字框不作可點按鈕。
