@@ -176,6 +176,7 @@ type listState struct {
 	hudPending             []listHUDPending
 	hudReturns             map[oracle.Addr]bool
 	hudActive              bool
+	explorationEffects     bool
 	hudPanelPaints         []listHUDPanelPending
 	hudFooterRestore       bool
 	hudFooterReturn        *paintReturn
@@ -487,7 +488,8 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x995}) && f.Pane == "callsite" && f.Group == "footer" && f.RawX == 8004 && f.RawY == 189 &&
 				f.Width == 0 && f.Start == 0 && f.UpperFormatSHA256 == digest([]byte("%s")) &&
 				((f.Length == 5 && l.sources[f.Key] == "items") ||
-					(f.Length == len(l.sources[f.Key]) && (l.sources[f.Key] == "Is It a Deal?" || l.sources[f.Key] == "Will you sell it?")))
+					(f.Length == len(l.sources[f.Key]) && (l.sources[f.Key] == "Is It a Deal?" || l.sources[f.Key] == "Will you sell it?" ||
+						(f.SHA256 == "4a24b8af9cecf11b09456a1860e0e0c8652cae907b3180568e9e3c2ddfdcec22" && digest([]byte(l.sources[f.Key])) == "3d996c6634ba9017dd157e5e38c31a6f7be6b859a8dbf03ae9435765a8de6ca4"))))
 			loadPrompt := f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.Pane == "callsite" && f.Group == "footer" && f.RawX == 8004 && f.RawY == 189 &&
 				f.Start == 0 && (f.Width == 0 || slotWidth) && f.Length == len(l.sources[f.Key]) && f.Color != nil && ((f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x995}) && f.UpperFormatSHA256 == digest([]byte("%s")) && *f.Color == 0x70 &&
 				f.BackgroundOverride != nil && *f.BackgroundOverride == 7 &&
@@ -519,7 +521,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.RawX == 8004 && f.RawY == 189 && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.SHA256 == digest([]byte(l.sources[f.Key])) &&
 				f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil
-			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption && !movementLeft && !dyingWarning {
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption && !movementLeft && !dyingWarning && !validExplorationCastField(f, l.sources[f.Key]) {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
@@ -641,6 +643,13 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			g.listLog("memory-list-closed", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}})
 		}
 		g.invalidateListParagraph(x, y, w, h, "native fill")
+		if l.explorationEffects && len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) &&
+			([4]int{x, y, w, h}) == ([4]int{8, 8, 304, 176}) {
+			// 效果輪播後重新建立清單，先等原版底列完成，避免沿用另一頁的舊提示。
+			l.explorationEffects = false
+			l.footerTransition = true
+			g.listLog("exploration-cast-list-redraw", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}})
+		}
 		if len(l.paints) == 0 && x <= 8 && y <= 8 && x+w >= 312 && y+h >= 184 {
 			for _, f := range l.config.Fields {
 				if f.Pane == "menu-text" && f.Caller == (oracle.Addr{Seg: 0x266d, Off: 0x11f}) {
@@ -1028,6 +1037,12 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 							l.footerTransition = false
 							g.listLog("load-caption-ready", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP, "source_sha256": digest([]byte(p.Source))})
 						}
+						if at == (oracle.Addr{Seg: 0x2c4a, Off: 0x46ad}) && p.X == 8 && p.Y == 160 &&
+							digest([]byte(p.Source)) == "de3b46da4da8a98c381a34e6ef1326411f01962e4bb094b007055b41e1d37ce4" {
+							// 原版在清單上直接輪播效果，沒有另一套底列待重畫。
+							l.footerTransition = false
+							g.listLog("exploration-cast-heading-ready", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP, "source_sha256": digest([]byte(p.Source))})
+						}
 						if feedback := l.feedback; feedback != nil && feedback.Upper == p.Return {
 							feedback.Ready = true
 							l.footerTransition = false
@@ -1227,6 +1242,13 @@ func (g *liveGame) installListFields() {
 			returnMenu := ok && menu.Count == 1 && len(menu.Buttons) == 1 &&
 				menu.Buttons[0].SHA256 == digest([]byte("Return"))
 			if !preserved {
+				if ok && at == (oracle.Addr{Seg: 0x0ceb, Off: 0x0e18}) && menu.Signature == "cf58f5f75c722981e959125027e481a191483f9e49f397697e9ee4ccdc87322f" {
+					if word, found := l.words[[2]int{8, 189}]; found && word.Key == "field.07a4bf9e13d6c1befe74" &&
+						word.Group == "footer" && word.Width == 104 && !word.Button {
+						delete(l.words, [2]int{8, 189})
+						g.listLog("grimoire-prompt-retired", map[string]any{"caller": at, "menu_signature": signature, "word": word})
+					}
+				}
 				for p, w := range l.words {
 					returnPrompt := ok && !returnMenu && w.Foreground == 0 && w.Background == 7 &&
 						(l.sources[w.Key] == "Press" || l.sources[w.Key] == "to continue.")
@@ -1572,6 +1594,28 @@ func (g *liveGame) composeList(px []byte) {
 		}
 		g.composeWords(px, []listWord{word}, g.catalog, glyphs)
 	}
+}
+
+// DRAFT：只接正常探索施法已觀測的三個欄位，保留原版姓名與底列。
+func validExplorationCastField(f listField, source string) bool {
+	if f.Pane != "callsite" || f.Group != "body" || f.Start != 0 || f.Length != len(source) || f.Width != 0 || f.FontSize != 0 ||
+		f.SourcePattern != "" || f.MenuSignature != "" || f.UpperFormatSHA256 != "" || f.SHA256 != digest([]byte(source)) ||
+		f.FormatSHA256 != digest([]byte("%s")) || f.Caller != (oracle.Addr{Seg: 0xb72, Off: 0x27c}) ||
+		f.Color == nil || *f.Color != 0x87 || f.BackgroundOverride == nil || *f.BackgroundOverride != 23 || f.UpperNative == nil {
+		return false
+	}
+	specs := map[string]struct {
+		caller oracle.Addr
+		x, y   uint16
+	}{
+		"0653216d8920713c0db2c2571a0d6ed0c2b6b94194f37e53a7bb025391dfc8b0": {oracle.Addr{Seg: 0x2c4a, Off: 0x4687}, 8068, 8076},
+		"de3b46da4da8a98c381a34e6ef1326411f01962e4bb094b007055b41e1d37ce4": {oracle.Addr{Seg: 0x2c4a, Off: 0x46ad}, 8004, 8080},
+		"a086d98d6ee3de06dbc29db5306015c52247e07b2e6d774f229e39af8fdd1f46": {oracle.Addr{Seg: 0x310c, Off: 0x14dc}, 8004, 8080},
+		"6501d6e4ac16bd7d91b28cd7cd45032d91705b6770f10a4f48ef5e3d61d2d239": {oracle.Addr{Seg: 0x310c, Off: 0x14c0}, 8004, 8076},
+	}
+	s, ok := specs[f.SHA256]
+	return ok && f.UpperCaller == s.caller && f.RawX == s.x && f.RawY == s.y &&
+		*f.UpperNative == ([2]int{int(s.x-8000) * 2, int(s.y-8000) * 2})
 }
 
 // DRAFT：只接已由原版建角路徑觀測到的文字。文字框不作可點按鈕。

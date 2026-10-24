@@ -282,24 +282,27 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    exploration_cast=provenance.get('exploration_cast_extension')
+    exploration_path=exploration_cast if exploration_cast and (inputs.parent.parent/exploration_cast['source_path']).resolve()==(observed/'receipt.json').resolve() else None
+    if exploration_cast:assert exploration_path,'unknown exploration cast path'
     fire=provenance.get('fire_extension')
     fire_path=None
     if fire:
         selected=[p for p in fire['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1,'unknown fire path'
-        fire_path=selected[0]
+        assert len(selected)==1 or not selected and exploration_path,'unknown fire path'
+        fire_path=selected[0] if selected else None
     magic_toggle=provenance.get('magic_toggle_extension')
     magic_path=None
     if magic_toggle:
         if (inputs.parent.parent/magic_toggle['source_path']).resolve()==(observed/'receipt.json').resolve():magic_path=magic_toggle
-        else:assert fire_path,'unknown magic toggle path'
+        else:assert fire_path or exploration_path,'unknown magic toggle path'
     spell_route=provenance.get('spell_route_extension')
     spell_path=None
     if spell_route:
         if (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve():spell_path=spell_route
-        else:assert magic_path or fire_path,'unknown spell route path'
-    scoped_path=fire_path or magic_path or spell_path
-    scoped_data=fire if fire_path else magic_toggle if magic_path else spell_route
+        else:assert magic_path or fire_path or exploration_path,'unknown spell route path'
+    scoped_path=exploration_path or fire_path or magic_path or spell_path
+    scoped_data=exploration_cast if exploration_path else fire if fire_path else magic_toggle if magic_path else spell_route
     journal_refs=provenance.get('journal_reference_extension')
     journal_path=None
     if journal_refs:
@@ -340,6 +343,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds,fire) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if exploration_cast:
+        from exploration_cast_inputs import check_sources as check_exploration_cast_sources
+        source_args=check_exploration_cast_sources(*source_args)
     if fire:
         from combat_fire_inputs import check_sources as check_fire_sources
         source_args=check_fire_sources(*source_args)
@@ -1185,7 +1191,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995}
                     assert c["stack"][4] == f["Color"] == 0x70 and f["BackgroundOverride"] == 7
                     assert (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
-                        source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip())) or (creation and (
+                        source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:","Lose it? ") and start == 0 and f["Length"] == len(source["text"].rstrip())) or (creation and (
                         (source["text"] in ("add from where? ","add a character:") and start==0 and f["Length"]==16) or
                         (f.get("SourcePattern")=="created-name" and start==0 and f["Length"]==4 and re.fullmatch(r"Save [ -~]{1,15}\? ",source["text"]))))
             if f.get("UpperCaller")=={"Seg":0x2287,"Off":0x316A}:
@@ -1202,6 +1208,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert f["UpperCaller"]=={"Seg":0x205E,"Off":0x2A0}
                 assert f["Pane"]=="callsite" and f["Group"]=="body" and (start,f["Length"])==(0,4)
                 assert c["stack"][2:5]==[8008,8004,0x8c] and f["Color"]==0x8c
+            elif exploration_path and f in exploration_cast['data']['fields'] and f['Group']=='body':
+                assert f['Pane']=='callsite' and c['stack'][4]==f['Color']==0x87
+                assert f['UpperCaller'] in ({'Seg':0x2c4a,'Off':0x4687},{'Seg':0x2c4a,'Off':0x46ad},{'Seg':0x310c,'Off':0x14dc},{'Seg':0x310c,'Off':0x14c0})
+                assert background==23 and f['Length']==len(source['text'])
             else:
                 assert source["text"]=="Return" and f["Pane"]=="menu" and f["Group"]=="footer"
                 assert (start,f["Length"])==(0,6) and c["stack"][2:4]==[189,112]
@@ -1244,7 +1254,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert f["UpperCaller"] == {"Seg":0xCEB,"Off":0x995} and f["UpperNative"] == [0,192]
                 assert c["stack"][2:5] == [189,8004,0x70]
                 assert (movement_field and start==0 and f["Length"]==len(en[f["Key"]])) or (source["text"] == "items :" and (start,f["Length"]) == (0,5)) or (
-                    source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:") and start == 0 and f["Length"] == len(source["text"].rstrip())) or (creation and (
+                    source["text"] in ("Is It a Deal? ","Will you sell it? ","Game not saved. Load anyway? ","load from where? ","load which game:","Lose it? ") and start == 0 and f["Length"] == len(source["text"].rstrip())) or (creation and (
                     (source["text"] in ("add from where? ","add a character:") and start==0 and f["Length"]==16) or
                     (f.get("SourcePattern")=="created-name" and start==0 and f["Length"]==4 and re.fullmatch(r"Save [ -~]{1,15}\? ",source["text"]))))
             assert f["Color"] == 0x70 and background == 7
@@ -1771,12 +1781,33 @@ def check(en_run, zh_run, inputs, control, observed, output):
             erase(feedback["rect"])
             feedback_intervals.append({**feedback,"closed":e["Step"]})
             feedback = None
+        elif kind == "exploration-cast-list-redraw":
+            assert exploration_path
+            original=next(f for f in trace['fill_events'] if f['converted_step']==e['Step'])
+            assert original['native_rect']==[8,8,304,176] and original['stack'][:2]==[0x1b,0xb72]
+            assert e['detail']==dict(caller=dict(Seg=0xb72,Off=0x1b),native_rect=[8,8,304,176])
+        elif kind == "exploration-cast-heading-ready":
+            assert exploration_path
+            matches=[w for w in trace['wrappers'] if w['return_step']==e['Step'] and w['caller']=={'Seg':0x2c4a,'Off':0x46ad}]
+            assert len(matches)==1
+            w=matches[0]
+            assert w['format']['text']=='Haste' and [(w['stack'][n]&255)*8 for n in (2,3)]==[8,160]
+            assert e['detail']==dict(caller=w['caller'],ss=w['return_ss'],sp=w['return_sp'],source_sha256=sha(w['format']['text'].encode()))
         elif kind == "load-caption-ready":
             loading_wrappers=[w for w in trace["wrappers"] if w["return_step"]==e["Step"] and w["caller"]=={"Seg":0x2287,"Off":0x316A}]
             assert len(loading_wrappers)==1
             w=loading_wrappers[0]
             assert w["format"]["text"]=="Loading...Please Wait"
             assert e["detail"]=={"caller":w["caller"],"ss":w["return_ss"],"sp":w["return_sp"],"source_sha256":sha(w["format"]["text"].encode())}
+        elif kind == "grimoire-prompt-retired":
+            assert exploration_path
+            refresh=refresh_sources[e['Step']]
+            assert refresh['valid'] and refresh['caller']=={'Seg':0xceb,'Off':0xe18}
+            assert refresh['menu_snapshot']['Signature']=='cf58f5f75c722981e959125027e481a191483f9e49f397697e9ee4ccdc87322f'
+            word=words[(8,189)]
+            assert word['Key']=='field.07a4bf9e13d6c1befe74' and word['Width']==104 and en[word['Key']]=='Choose Spell:'
+            assert e['detail']==dict(caller=refresh['caller'],menu_signature=refresh['menu_snapshot']['Signature'],word=word)
+            del words[(8,189)]
         elif kind == "footer-render-entry":
             preserved = False
             retire_return_prompt=False
@@ -2273,10 +2304,22 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 elif copied_row_page != (state["render_page"],state["display_start"]):
                     # 服務返回可先複製整頁，重用列表不再填色。逐詞框驗原版畫格，不能只略過頁面條件。
                     allowed = service_row_keys | inventory_row_keys if (trade or ammo) else service_row_keys
+                    if exploration_path:
+                        allowed |= {s['Key'] for row in exploration_cast['data']['rows'] for s in row['row']['Spans']}
                     assert row_words and all(w["Key"] in allowed for w in row_words), ("unproved row page",frame["step"])
                     assert last_row_frame is not None
                     prior_frame, prior_state, prior_words = last_row_frame
-                    assert prior_words == row_words and prior_state["display_start"] == state["render_page"]
+                    cleared_rows=[]
+                    if exploration_path and prior_words!=row_words:
+                        # 禁止施法回報先清掉清單下方，再複製仍保留的上方列。
+                        # 逐一核對真正原版填色及剩餘列，保留其後的完整像素比較。
+                        clears=[f for f in trace['fill_events'] if prior_frame['step']<f['converted_step']<=frame['step']
+                            and f['stack'][:2]==[0x1b,0xb72] and not f['within_list']
+                            and f['native_rect'] in ([8,136,304,48],[8,144,304,40])]
+                        assert clears,'missing original partial list clear'
+                        cleared_rows=[f['native_rect'] for f in clears]
+                        prior_words=[w for w in prior_words if not any(intersects(w,r) for r in cleared_rows)]
+                    assert prior_words == row_words and prior_state["display_start"] == state["render_page"], ('row copy source changed',frame['step'],prior_frame['step'],prior_words,row_words,prior_state['display_start'],state['render_page'])
                     prior_pixels, current_pixels = pixels(en_run,prior_frame), pixels(en_run,original)
                     checks = []
                     for w in row_words:
@@ -2286,7 +2329,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                         assert before == after, ("service row page copy",frame["step"],w["Key"])
                         checks.append({"key":w["Key"],"rect":[x,y,width,16],"pixels_sha256":sha(after)})
                     copied_row_page = state["render_page"],state["display_start"]
-                    copied_row_pages.append({"step":frame["step"],"source_step":prior_frame["step"],"pages":list(copied_row_page),"rows":checks})
+                    copied_row_pages.append({"step":frame["step"],"source_step":prior_frame["step"],"pages":list(copied_row_page),"rows":checks,**({'original_partial_clears':cleared_rows} if cleared_rows else {})})
             else:
                 last_row_frame, copied_row_page = None, None
             for start, end, (x, y, width, height) in actor_headers:
@@ -2488,6 +2531,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
             result['fire']=dict(source_path=fire_path['source_path'],records=len(hud_records),captions=len(fire_captions),ancestor_sampling=inherited,
                 original_copy_witness=fire_copy_witness)
             result['limits']='DRAFT 原版自動施法支線的分段繁中顯示；火焰、保護及武器名稱不改數值，未驗勝利或完整中文入口。'
+        if exploration_path:
+            result['exploration_cast']=dict(source_path=exploration_path['source_path'],records=len(hud_records),fields=len(exploration_cast['data']['fields']),rows=len(exploration_cast['data']['rows']))
+            result['limits']='DRAFT 正常探索施放加倍術、六人效果與老化回報、禁止施法、No 保留法術及返回；探索底列未知表形保留原文，未驗勝利或正式入口。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

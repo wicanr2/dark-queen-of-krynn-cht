@@ -159,10 +159,16 @@ func (g *liveGame) validateHUDParagraphs() {
 			{Seg: 0x27c7, Off: 0x14d2}: {56, "round.fc2486907daf61f75699"},
 		}
 		row, knownDefeat := defeatRows[p.Caller]
+		explorationEffect := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x164e}) && p.NativeBox == ([4]int{8, 152, 312, 184}) &&
+			(p.SHA256 == "d95ff49dc50236cb9df4a434fe0a654e5bd08a3d6f33b400207ead1768ef8d51" ||
+				p.SHA256 == "ba24b7992d5d9077dba9a98bc15047ddea1c340dd068683687736ca0f0c072eb") &&
+			p.IntegerTemplateKey == "" && !p.HideFooter && p.KeepFooterSignature == "" && len(p.Spans) == 1 &&
+			p.Spans[0].Start == 0 && p.Spans[0].Rect == ([4]int{8, 152, p.Spans[0].Length * 8, 8}) &&
+			p.SHA256 == digest([]byte(g.list.sources[p.Spans[0].Key]))
 		defeat := knownDefeat && p.NativeBox == ([4]int{16, row.y, 304, 184}) && p.IntegerTemplateKey == "" &&
 			len(p.Spans) == 1 && p.Spans[0].Key == row.key && p.Spans[0].Rect == ([4]int{16, row.y, 288, 8}) &&
 			p.SHA256 == digest([]byte(g.list.sources[row.key]))
-		if !(weapon || status || miss || death || tail || defeat) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
+		if !(weapon || status || miss || death || tail || defeat || explorationEffect) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
 			panic("右側段落來源不符")
 		}
 		if p.IntegerTemplateKey != "" {
@@ -241,6 +247,9 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 		paint := paintReturn{caller, r.SS, r.SP + 4}
 		l.paragraphPaints = append(l.paragraphPaints, paint)
 		l.hudActive = true
+		if caller == (oracle.Addr{Seg: 0x088e, Off: 0x164e}) && box == ([4]int{8, 152, 312, 184}) {
+			l.explorationEffects = true
+		}
 		l.hudPending = append(l.hudPending, listHUDPending{paint, o.Steps(), words, p.HideFooter, p.KeepFooterSignature,
 			p.OrdinaryDamage && l.aimDamageKey(p.IntegerTemplateKey)})
 		l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("hud-before-glyph", map[string]any{"caller": caller, "native_box": box, "source_sha256": digest([]byte(source)), "source_pointer": ptr, "spans": p.Spans, "words": words}))
