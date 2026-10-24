@@ -282,11 +282,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    magic_toggle=provenance.get('magic_toggle_extension')
+    magic_path=None
+    if magic_toggle:
+        assert (inputs.parent.parent/magic_toggle['source_path']).resolve()==(observed/'receipt.json').resolve(),'unknown magic toggle path'
+        magic_path=magic_toggle
     spell_route=provenance.get('spell_route_extension')
     spell_path=None
     if spell_route:
-        assert (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve(),'unknown spell route path'
-        spell_path=spell_route
+        if (inputs.parent.parent/spell_route['source_path']).resolve()==(observed/'receipt.json').resolve():spell_path=spell_route
+        else:assert magic_path,'unknown spell route path'
+    scoped_path=magic_path or spell_path
+    scoped_data=magic_toggle if magic_path else spell_route
     journal_refs=provenance.get('journal_reference_extension')
     journal_path=None
     if journal_refs:
@@ -297,19 +304,19 @@ def check(en_run, zh_run, inputs, control, observed, output):
     round_path=None
     if rounds:
         selected=[p for p in rounds['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(selected)==1 or (not selected and (journal_path or spell_path)),'unknown combat round path'
+        assert len(selected)==1 or (not selected and (journal_path or scoped_path)),'unknown combat round path'
         round_path=selected[0] if selected else None
     boundary=provenance.get("ammo_boundary_extension")
     boundary_path=None
     if boundary:
         from ammo_boundary_inputs import row_model as ammo_row_model
         matches=[p for p in boundary['data']['paths'].values() if (inputs.parent.parent/p['source_path']).resolve()==(observed/'receipt.json').resolve()]
-        assert len(matches)==1 or (not matches and (round_path or journal_path or spell_path)),'unknown ammo boundary path'
+        assert len(matches)==1 or (not matches and (round_path or journal_path or scoped_path)),'unknown ammo boundary path'
         boundary_path=matches[0] if matches else None
     else:
         from ammo_ui_inputs import row_model as ammo_row_model
     if journal_refs:
-        assert journal_path or round_path or boundary_path or spell_path,'unknown journal reference path'
+        assert journal_path or round_path or boundary_path or scoped_path,'unknown journal reference path'
     ammo=provenance.get("ammo_extension")
     movement=provenance.get("movement_extension")
     movement_path=None
@@ -327,6 +334,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish,rounds) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if magic_toggle:
+        from magic_toggle_inputs import check_sources as check_magic_toggle_sources
+        source_args=check_magic_toggle_sources(*source_args)
     if spell_route:
         from spell_route_inputs import check_sources as check_spell_route_sources
         source_args=check_spell_route_sources(*source_args)
@@ -374,11 +384,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
         movement=finish=effects=hud=None
     if rounds:
         hud=rounds
-    if journal_path or spell_path:
+    if journal_path or scoped_path:
         # 父批資料已逐層核對；本次原版路徑另由完整來源指定。
         rounds=boundary=ammo=movement=finish=effects=hud=party_cast=cast=bar=None
-        if spell_path:
-            hud=spell_route
+        if scoped_path:
+            hud=scoped_data
         else:
             hud_field_bindings=[]
     short_ecl=provenance.get("short_ecl_extension")
@@ -390,7 +400,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         battle_source=check_battle_sources(*parent_args,trace)
     else:battle_source=check_battle_sources(inputs,config,provenance,en,zh,glyphs,trace) if battle else None
     ancestor_journal_sets={}
-    if journal_path or spell_path:
+    if journal_path or scoped_path:
         # 完整驗過父批資料後，改按本次原版實際輸出檢查，不要求重演酒館新增項。
         if literal_batch:ancestor_journal_sets['literal']=set(literal_batch['new_keys'])
         if short_ecl:ancestor_journal_sets['short']=set(short_ecl['keys'])
@@ -417,8 +427,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         page_proof=round_path['page_validation']
     if journal_path:
         page_proof=journal_path['page_validation']
-    if spell_path:
-        page_proof=spell_path['page_validation']
+    if scoped_path:
+        page_proof=scoped_path['page_validation']
     movement_reference=None
     if movement:
         witness=movement["data"]["quick_witness"]
@@ -543,7 +553,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     if page_proof:
         proof=page_proof
         path=inputs.parent.parent/proof["source_path"]
-        expected_sha=proof["source_sha256"] if (cast or bar or spell_path) else proof["sha256"]
+        expected_sha=proof["source_sha256"] if (cast or bar or scoped_path) else proof["sha256"]
         assert path.resolve().is_relative_to(inputs.parent.parent.resolve()) and sha(path.read_bytes())==expected_sha
         assert path.resolve()==(observed/"receipt.json").resolve() and trace["display_changes"]
     if creation:
@@ -759,10 +769,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_words={}
     hud_records=[]
     if hud:
-        if spell_path:
+        if scoped_path:
             from combat_rounds_inputs import hud_records as derive_hud_records
             hud_records=derive_hud_records(trace,config['HUDParagraphs'],en)
-            assert hud_records==spell_route['data']['records']
+            assert hud_records==scoped_data['data']['records']
         elif rounds or effects or finish or movement:
             if rounds:
                 from combat_rounds_inputs import hud_records as derive_hud_records
@@ -802,7 +812,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         hud_words[e["Step"]]=words_here
     hud_source_clears=[]
     rounds_copy_images=[]
-    if rounds or spell_path:
+    if rounds or scoped_path:
         if observed.name=='observe-r14':
             from combat_rounds_inputs import copy_witness
             witness=copy_witness(observed.parent)
@@ -1312,6 +1322,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
     words, pending_suffix, model, row_positions = {}, None, [], set()
     feedback, feedback_intervals, service_scroll_checks = None, [], []
     battle_warning,battle_warning_intervals=None,[]
+    battle_status,battle_status_intervals=None,[]
+    status_witnesses={w['entry']:w for w in magic_toggle['data']['notices']} if magic_path else {}
+    status_pixels={}
+    for entry,witness in status_witnesses.items():
+        x,y,w,h=witness['rect']
+        values={}
+        for name in ('before','ready','restored'):
+            raw=(inputs.parent.parent/witness[name+'_index']).read_bytes()
+            values[name]=b''.join(raw[row*320+x:row*320+x+w] for row in range(y,y+h))
+        assert sha(values['before'])==witness['before_sha256'] and sha(values['ready'])==witness['ready_sha256']
+        assert values['before']==values['restored']
+        status_pixels[entry]=values
     warning_witness=rounds['data']['notice_witness'] if rounds else None
     warning_pixels={}
     if warning_witness:
@@ -1334,7 +1356,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
         return next((pane for when,pane in reversed(timeline) if when <= step),"")
     expected_feedback = {step for step in feedback_candidates if feedback_pane(step) in ("shop-stock","inventory")}
     expected_battle_warning={warning_witness['entry']} & set(feedback_candidates) if warning_witness else set()
-    assert {e["Step"] for e in b["list_events"] if e["Kind"] == "unknown-feedback-original"} == set(feedback_candidates)-expected_feedback-expected_battle_warning
+    expected_battle_status=set(status_witnesses)&set(feedback_candidates)
+    assert expected_battle_status==set(status_witnesses)
+    assert {e['Step'] for e in b['list_events'] if e['Kind']=='battle-status-entry'}==expected_battle_status
+    assert {e["Step"] for e in b["list_events"] if e["Kind"] == "unknown-feedback-original"} == set(feedback_candidates)-expected_feedback-expected_battle_warning-expected_battle_status
     assert {e['Step'] for e in b['list_events'] if e['Kind']=='battle-warning-entry'}==expected_battle_warning
     assert {e["Step"] for e in b["list_events"] if e["Kind"] == "footer-feedback-capture"} == expected_feedback
     if any(e["Kind"] == "footer-feedback-capture" for e in b["list_events"]):
@@ -1365,7 +1390,41 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 row_positions.discard(pos)
     for e in b["list_events"]:
         kind = e["Kind"]
-        if kind=='battle-warning-entry':
+        if kind=='battle-status-entry':
+            assert magic_path and battle_status is None and not e['Pane']
+            witness=status_witnesses[e['Step']]
+            assert e['detail']==dict(source_sha256=sha(witness['source'].encode()),native_rect=witness['rect'],before_sha256=witness['before_sha256'])
+            for position,word in list(words.items()):
+                if word['Group']=='footer':
+                    del words[position]
+                    row_positions.discard(position)
+            battle_status=dict(entry=e['Step'],entry_index=b['list_events'].index(e),phase='painting',restoring_index=None)
+        elif kind=='battle-status-ready':
+            assert battle_status and battle_status['phase']=='painting'
+            witness=status_witnesses[battle_status['entry']]
+            wrapper=wrappers_by_step[battle_status['entry']]
+            call=calls_by_step[witness['field_entry']]
+            pages={int(k) for k in call['video_pages']}
+            assert len(pages)==1 and e['Step']==wrapper['return_step']==witness['returned']
+            assert e['detail']==dict(entry_step=wrapper['step'],caller=wrapper['caller'],ss=wrapper['return_ss'],sp=wrapper['return_sp'],
+                native_rect=witness['rect'],reference_sha256=witness['ready_sha256'],paint_page=next(iter(pages)))
+            battle_status.update(phase='ready',ready=e['Step'],ready_index=b['list_events'].index(e))
+        elif kind=='battle-status-restore-begin':
+            assert battle_status and battle_status['phase']=='ready'
+            witness=status_witnesses[battle_status['entry']]
+            assert witness['returned']<e['Step']<=witness['restored_by']
+            assert e['detail']['entry_step']==battle_status['entry'] and e['detail']['native_rect']==witness['rect']
+            assert e['detail']['actual_sha256'] not in (witness['before_sha256'],witness['ready_sha256'])
+            battle_status.update(phase='restoring',restoring=e['Step'],restoring_index=b['list_events'].index(e))
+        elif kind=='battle-status-closed':
+            assert battle_status and battle_status['phase'] in ('ready','restoring')
+            witness=status_witnesses[battle_status['entry']]
+            assert witness['returned']<e['Step']<=witness['restored_by']
+            assert e['detail']==dict(entry_step=battle_status['entry'],native_rect=witness['rect'],before_sha256=witness['before_sha256'],actual_sha256=witness['before_sha256'])
+            erase(witness['rect'])
+            battle_status_intervals.append(dict(battle_status,closed=e['Step'],closed_index=b['list_events'].index(e)))
+            battle_status=None
+        elif kind=='battle-warning-entry':
             assert warning_witness and battle_warning is None and not e['Pane']
             assert e['Step']==warning_witness['entry'] and not any(w['Group']=='footer' for w in words.values())
             wrapper=wrappers_by_step[e['Step']]
@@ -1767,7 +1826,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         expected_words = sorted(words.values(), key=lambda w: (w["Y"], w["X"]))
         assert (e["Words"] or []) == expected_words, (kind, e["Step"])
         model.append((e["Step"], expected_words, sorted(row_positions), page))
-    assert feedback is None and notice is None and battle_warning is None and pending_clear_index is None
+    assert feedback is None and notice is None and battle_warning is None and battle_status is None and pending_clear_index is None
     for actual in (a,b):
         assert (actual.get("paragraphs") or []) == page_history
         assert actual.get("final_paragraph") == (model[-1][3] if model else None)
@@ -1783,7 +1842,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         final_signature = menu_signature(final_button)
         final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
     else:
-        assert (rounds or journal_path or spell_path) and not trace['menus'] and typed_buttons
+        assert (rounds or journal_path or scoped_path) and not trace['menus'] and typed_buttons
         final_signature=""
         final_keys=set()
     if footer_hidden_at(trace["checkpoints"][-1]["step"]):
@@ -1795,6 +1854,13 @@ def check(en_run, zh_run, inputs, control, observed, output):
         layouts = {frame["step"]: frame for frame in actual["list_frames"]}
         menu_field_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu"}
         for checkpoint in actual["checkpoints"]:
+            if magic_path:
+                count=layouts[checkpoint['step']]['list_event_count']
+                active=any(v['entry_index']<count<=v['closed_index'] for v in battle_status_intervals)
+                before_buttons=any(checkpoint['step']==w['restored_by'] for w in status_witnesses.values())
+                if active or before_buttons:
+                    assert not any(w.get('Button') for w in layouts[checkpoint['step']]['words'] or []),'buttons visible during original status'
+                    continue
             if movement:
                 captions=[r for r in movement_path["counters"] if r["returned"]<checkpoint["step"]]
                 retired=False
@@ -1823,7 +1889,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 continue
             buttons = [c for c in trace["calls"] if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
             if not buttons:
-                if rounds or journal_path or spell_path:
+                if rounds or journal_path or scoped_path:
                     assert typed_buttons and not any(w.get('Button') for w in layouts[checkpoint['step']]['words'] or [])
                     continue
                 if battle_source:
@@ -1868,6 +1934,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 x,y,width,height=word["X"],word["Y"],word["Width"],8
                 start=calls_by_step[event["Step"]]["return_step"]
                 changed=any(start<fill["step"]<checkpoint["step"] and intersects(word,fill["native_rect"]) for fill in trace["fill_events"])
+                if magic_path:
+                    changed=changed or any(w['field_entry']==event['Step'] and checkpoint['step']>=w['restored_by'] for w in status_witnesses.values())
                 for call in trace["calls"]:
                     if not start<call["step"]<checkpoint["step"]:
                         continue
@@ -1999,6 +2067,21 @@ def check(en_run, zh_run, inputs, control, observed, output):
     assert len(b["frames"]) == len(b["list_frames"])
     for frame, state in zip(b["frames"], b["list_frames"]):
         assert frame["step"] == state["step"] and frame["step"] in originals
+        for interval in battle_status_intervals:
+            count=state['list_event_count']
+            witness=status_witnesses[interval['entry']]
+            if interval['entry_index']<count<=interval['ready_index'] or (interval['restoring_index'] is not None and interval['restoring_index']<count<=interval['closed_index']):
+                assert frame['held'],('battle status transition exposed',frame['step'])
+            if interval['ready_index']<count<=interval['closed_index'] and not frame['held']:
+                assert any(w['Key']==witness['key'] for w in state['words'] or [])
+            if frame['step']==interval['closed']:
+                x,y,w,h=witness['rect']
+                image=Image.frombytes('P',(w,h),status_pixels[interval['entry']]['before'])
+                image.putpalette([component for color in state['palette'] for component in color])
+                expected=image.convert('RGBA').resize((w*2,h*2),Image.Resampling.NEAREST).tobytes()
+                raw=pixels(en_run,originals[frame['step']])
+                actual=b''.join(raw[(row*640+x*2)*4:(row*640+(x+w)*2)*4] for row in range(y*2,(y+h)*2))
+                assert actual==expected,'battle status original restoration pixels'
         for interval in battle_warning_intervals:
             count=state['list_event_count']
             if interval['entry_index']<count<=interval['ready_index'] or (interval['restoring_index'] is not None and interval['restoring_index']<count<=interval['closed_index']):
@@ -2258,7 +2341,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["party_cast"]={"source_rows":len(party_cast["data"]["rows"]),"new_rows":len(party_cast["data"]["added_rows"]),
             "new_keys":len(set(en).difference(catalog(party_base/"en.tsv")))}
         result["limits"]="Joris 正常記憶清單的兩頁、選取與取消；原版判定維持不變，不外推其他角色、完整施法、戰鬥或正式入口。"
-    if hud and not spell_path:
+    if hud and not scoped_path:
         hud_base=inputs.parent.parent/hud["base"]
         result["party_cast"]["scope"]="inherited catalog"
         result["party_cast"]["new_keys"]=len(set(catalog(hud_base/"en.tsv")).difference(catalog(party_base/"en.tsv")))
@@ -2284,7 +2367,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result['rounds']['original_clear_transactions']=len(hud_source_clears)
         result['rounds']['battle_warning_intervals']=battle_warning_intervals
         result['limits']='首戰正常續行至敗北的分段重播；原版傷害、包紮及勝負不變，未驗勝利或正式入口。'
-    if journal_path or spell_path:
+    if journal_path or scoped_path:
         inherited={}
         for name,keys in ancestor_journal_sets.items():
             expected=set()
@@ -2315,6 +2398,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
             result['spell_route']=dict(rows=len(records),added_rows=len(spell_route['data']['added_rows']),
                 source_path=spell_path['source_path'],ancestor_sampling=inherited,visible_aliases=visible_aliases)
             result['limits']='DRAFT 正常首戰三頁記憶法術清單及退出；未驗本條路徑施法成功或戰鬥勝利。'
+        if magic_path:
+            assert len(battle_status_intervals)==len(status_witnesses)==3
+            visible={w['Key'] for f,s in zip(b['frames'],b['list_frames']) if not f['held'] for w in s.get('words') or []}
+            assert {w['key'] for w in status_witnesses.values()}<=visible
+            result['magic_toggle']=dict(fields=len(magic_toggle['data']['fields']),intervals=battle_status_intervals,source_path=magic_path['source_path'],ancestor_sampling=inherited)
+            result['limits']='DRAFT 正常 Alt-M 三次切換與原版按鈕恢復；未驗勝利或完整中文入口。'
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

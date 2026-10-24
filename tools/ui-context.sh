@@ -26,7 +26,7 @@ case "${1:-}" in
       -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" \
       -v "$MODULES:/modules:ro" -v "$PROBE/gocache:/gocache" -v "$PROBE:/out" \
       -w /src --entrypoint bash "$GO_IMAGE" -c \
-      'set -e; test ! -e /out/ui-context-probe || test "$(stat -c %u:%g /out/ui-context-probe)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/context-overlay.json; go build -overlay /tmp/context-overlay.json -o /out/ui-context-probe /tools/ui_context_probe.go /tools/ui_menu_source.go'
+      'set -e; test ! -e /out/ui-context-probe || test "$(stat -c %u:%g /out/ui-context-probe)" = "$(id -u):$(id -g)"; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\",\"/src/oracle/dqk_input_modifier.go\":\"/tools/oracle_input_modifier.go\"}}" >/tmp/context-overlay.json; go build -overlay /tmp/context-overlay.json -o /out/ui-context-probe /tools/ui_context_probe.go /tools/ui_menu_source.go'
     ;;
   run)
     STATE="${2:?需指定 probe 內的快照相對路徑}"

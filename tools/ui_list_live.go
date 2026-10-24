@@ -126,6 +126,7 @@ type listFeedback struct {
 	Started, Ready, Restoring bool
 }
 type listBattleNotice struct {
+	Kind                   string
 	Paint                  paintReturn
 	Entry                  uint64
 	Word                   listWord
@@ -393,7 +394,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	}
 	last := l.request.Start
 	for _, a := range l.request.Actions {
-		if a.At < last || a.End <= a.At || (a.Kind != "named" && a.Kind != "text") {
+		if a.At < last || a.End <= a.At || (a.Kind != "named" && a.Kind != "text" && a.Kind != "alt") {
 			panic("列表動作不符")
 		}
 		last = a.End
@@ -924,6 +925,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			}
 			r, at := o.Regs(), o.Caller()
 			battleWarning := f.Key == "round.50e28de96686ceec7dc0" && l.hudActive && l.pane == ""
+			battleStatus := validMagicToggleField(f, l.sources[f.Key]) && l.pane == ""
+			if battleStatus {
+				menu, valid := readMenuSource(o)
+				battleStatus = valid && menu.Signature == f.MenuSignature
+			}
 			if battleWarning {
 				for _, word := range l.words {
 					if word.Group == "footer" {
@@ -936,7 +942,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				if !ok || digest([]byte(text)) != f.SHA256 {
 					continue
 				}
-				if l.pane != "shop-stock" && l.pane != "inventory" && !battleWarning {
+				if l.pane != "shop-stock" && l.pane != "inventory" && !battleWarning && !battleStatus {
 					l.erase(8, 189, 304, 8)
 					l.footerTransition = false
 					g.listLog("unknown-feedback-original", map[string]any{"caller": at, "source_sha256": f.SHA256, "native_rect": [4]int{8, 189, 304, 8}, "reason": "unrecognized return context"})
@@ -944,12 +950,21 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				}
 			}
 			l.fieldWrapper = &listFieldWrapper{Return: paintReturn{at, r.SS, r.SP + 4}, Caller: at, Source: format, X: col * 8, Y: row * 8}
-			if battleWarning {
-				rect := [4]int{8, 189, 176, 8}
-				l.battleNotice = &listBattleNotice{Paint: l.fieldWrapper.Return, Entry: o.Steps(), Before: listRectPixels(o.Indexed(), rect)}
-				g.listLog("battle-warning-entry", map[string]any{"source_sha256": f.SHA256, "native_rect": rect, "before_sha256": digest(l.battleNotice.Before)})
+			if battleWarning || battleStatus {
+				kind, width := "battle-warning", 176
+				if battleStatus {
+					kind, width = "battle-status", f.Length*8
+					for position, word := range l.words {
+						if word.Group == "footer" {
+							delete(l.words, position)
+						}
+					}
+				}
+				rect := [4]int{8, 189, width, 8}
+				l.battleNotice = &listBattleNotice{Kind: kind, Paint: l.fieldWrapper.Return, Entry: o.Steps(), Before: listRectPixels(o.Indexed(), rect)}
+				g.listLog(kind+"-entry", map[string]any{"source_sha256": f.SHA256, "native_rect": rect, "before_sha256": digest(l.battleNotice.Before)})
 			}
-			if !battleWarning && at == (oracle.Addr{Seg: 0x088e, Off: 0x1560}) && f.UpperFormatSHA256 == digest([]byte("%s")) {
+			if !battleWarning && !battleStatus && at == (oracle.Addr{Seg: 0x088e, Off: 0x1560}) && f.UpperFormatSHA256 == digest([]byte("%s")) {
 				text, ok := listString(o, s[9], s[8])
 				if ok && digest([]byte(text)) == f.SHA256 && l.feedback == nil {
 					rect := [4]int{8, 189, len(text) * 8, 8}
@@ -984,11 +999,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 							if !c.PageKnown || c.InvalidPage || c.PaintPage != o.VideoLayoutState().DisplayStart {
 								delete(l.words, [2]int{c.Word.X, c.Word.Y})
 								l.battleNotice = nil
-								g.listLog("battle-warning-unavailable", map[string]any{"entry_step": c.Entry})
+								g.listLog(c.Kind+"-unavailable", map[string]any{"entry_step": c.Entry})
 							} else {
 								c.Reference, c.Ready = listRectPixels(o.Indexed(), rect), true
 								l.footerTransition = false
-								g.listLog("battle-warning-ready", map[string]any{"entry_step": c.Entry, "caller": at, "ss": r.SS, "sp": r.SP, "native_rect": rect, "reference_sha256": digest(c.Reference), "paint_page": c.PaintPage})
+								g.listLog(c.Kind+"-ready", map[string]any{"entry_step": c.Entry, "caller": at, "ss": r.SS, "sp": r.SP, "native_rect": rect, "reference_sha256": digest(c.Reference), "paint_page": c.PaintPage})
 							}
 						}
 						if at == (oracle.Addr{Seg: 0x2287, Off: 0x316A}) && digest([]byte(p.Source)) == loadCaptionSHA256 {
@@ -1329,7 +1344,7 @@ func (g *liveGame) installListFields() {
 			}
 			w := listWord{X: native(s[3]) + start*8, Y: native(s[2]), Width: width, Key: f.Key,
 				Group: f.Group, Foreground: byte(s[4]) & 15, Background: l.config.Background, Button: f.Pane == "menu", FontSize: f.FontSize}
-			if f.Key == "round.50e28de96686ceec7dc0" && l.battleNotice != nil {
+			if (f.Key == "round.50e28de96686ceec7dc0" || validMagicToggleField(f, l.sources[f.Key])) && l.battleNotice != nil {
 				l.battleNotice.Word = w
 			}
 			if f.BackgroundOverride != nil {
@@ -1392,6 +1407,12 @@ func (g *liveGame) updateList() error {
 	if !l.sent && step == a.At {
 		if a.Kind == "text" {
 			must(g.o.TypeKeys(a.Key))
+		} else if a.Kind == "alt" {
+			sender, ok := any(g.o).(interface{ PressBIOSAltKey(string) error })
+			if !ok {
+				panic("研究工具未載入 Alt 按鍵 overlay")
+			}
+			must(sender.PressBIOSAltKey(a.Key))
 		} else {
 			must(g.o.SendKeys(a.Key))
 		}
@@ -1453,14 +1474,24 @@ func (g *liveGame) syncBattleNotice() {
 			delete(l.words, [2]int{c.Word.X, c.Word.Y})
 		}
 		l.battleNotice = nil
-		g.listLog("battle-warning-closed", map[string]any{"entry_step": c.Entry, "native_rect": rect, "before_sha256": digest(c.Before), "actual_sha256": digest(current)})
+		g.listLog(c.Kind+"-closed", map[string]any{"entry_step": c.Entry, "native_rect": rect, "before_sha256": digest(c.Before), "actual_sha256": digest(current)})
 	} else if !bytes.Equal(current, c.Reference) && !c.Restoring {
 		c.Restoring = true
-		g.listLog("battle-warning-restore-begin", map[string]any{"entry_step": c.Entry, "native_rect": rect, "actual_sha256": digest(current)})
+		g.listLog(c.Kind+"-restore-begin", map[string]any{"entry_step": c.Entry, "native_rect": rect, "actual_sha256": digest(current)})
 	}
 }
 
 // 字串入口負責建立譯文。原版色號區塊失配時只撤除覆層，不從畫面辨字。
+func validMagicToggleField(f listField, source string) bool {
+	known := (f.Key == "ui.3dd44f96ef1d6b028dfe" && f.Length == 8) || (f.Key == "ui.25fd2397b3b79835861d" && f.Length == 9)
+	return known && f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Width == 0 &&
+		f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x88e, Off: 0x1560}) &&
+		f.RawX == 8004 && f.RawY == 189 && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
+		f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
+		f.FormatSHA256 == digest([]byte("%s")) && f.SHA256 == digest([]byte(source)) && f.Key == "ui."+f.SHA256[:20] &&
+		f.MenuSignature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b"
+}
+
 func (g *liveGame) syncSpellCaption() {
 	l := g.list
 	c := l.spellCaption

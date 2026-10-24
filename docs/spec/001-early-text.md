@@ -1277,6 +1277,33 @@ No 後的一格補白與 Yes 的三字母位置分開核對；單位數使箭名
 衍生工具為 [spell_route_inputs.py](../../tools/spell_route_inputs.py)，
 結果由[研究 005](../re/005-translation-catalog.md#2026-10-24alric-記憶法術清單與返回)登錄，仍為 DRAFT。
 
+### 原版 Alt 操作的 DRAFT 重播輸入
+
+操作手冊第 13 頁列 Alt-M 自動施法及 Alt-Q 全隊電腦控制。
+目前具名按鍵表不含這些組合鍵；新研究只沿 dosgolem 已有的 `dos.KeyAlt` 編碼與
+`DOS.PushKey` 佇列入口，新增隔離編譯用的 oracle 方法，原始 dosgolem 目錄保持唯讀。
+重播請求的研究型別 alt 只接受單一 ASCII 字母，不模擬點選、不寫遊戲狀態或改自動戰鬥旗標。
+一般文字與具名按鍵保持既有行為，未知輸入拒絕。
+
+這是 DRAFT 工具輸入，尚不接正式玩家入口。原版是否接受這些 BIOS 字組、切換後的實際文字、
+同狀態觀測／控制及正常後續須另驗；按鍵成功不代表自動戰鬥勝利。
+按鍵 overlay 為 [oracle_input_modifier.go](../../tools/oracle_input_modifier.go)，
+既有 [ui-context.sh](../../tools/ui-context.sh)、[ui-list-live.sh](../../tools/ui-list-live.sh) 與
+[early-live.sh](../../tools/early-live.sh) 的 build 入口會掛到 `/src/oracle/dqk_input_modifier.go`。
+只支援研究重播主動作的單一 Alt 字母；本批實際驗證 M／m、Q，未擴充 MZ 前段重播。
+入口與結果掛回[研究 005](../re/005-translation-catalog.md#2026-10-25原版-alt-按鍵與自動施法提示)。
+
+Alt-M 的三次正常切換另取得 magic on／magic off 完整字串，均由 `088E:1560` 呼叫
+`0B72:027C`，RawY=189、RawX=8004、顏色 8Fh。譯文沿正式 TSV，只新增既有欄位綁定。
+限定本次戰鬥選單表形、呼叫與完整來源；使用既有通知的繪製頁與原版像素復原機制。
+兩種字框分別為 64×8、72×8，原版返回 Aim 前的同區像素與各次列印前一致，
+三次來源均須驗證繪製中保留前畫面、完整訊息可見、原版復原後撤除及按鈕返回。
+未知表形保留原版，不能把自動施法狀態寫回遊戲判定。
+呼叫當下實測為 Count=19、`b891f7b3…`，返回表形才是 Count=10、`a32c634d…`。
+完整 RawHex 與來源位於本批原版 wrapper 收據，不把額外記錄或旗標語意作猜測性命名。
+原版提示前已撤除兩排按鈕，呈現層須一併移除兩排 footer 詞框，不能只移除訊息所在的下排。
+資料入口為 [magic_toggle_inputs.py](../../tools/magic_toggle_inputs.py)，沿既有欄位與通知型別。
+
 ## 待驗後才能 READY
 
 - 首段完整劇情的上層入口已由研究 004 解出；仍需補齊其他格式字串、組句、輸入名稱、

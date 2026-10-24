@@ -112,7 +112,7 @@ func main() {
 		if a.At < last || a.End <= a.At || a.Label == "" || filepath.Base(a.Label) != a.Label || labels[a.Label] {
 			panic("動作必須依步數排序，標籤必須唯一且不是路徑")
 		}
-		if a.Kind != "text" && a.Kind != "named" {
+		if a.Kind != "text" && a.Kind != "named" && a.Kind != "alt" {
 			panic("未知鍵盤輸入種類")
 		}
 		last = a.End
@@ -572,6 +572,11 @@ func main() {
 			wrappers = append(wrappers, map[string]any{"step": o.Steps(), "regs": r, "stack": s,
 				"format": read(s[7], s[6]), "vararg_1_candidate": read(s[9], s[8]),
 				"caller": oracle.Addr{Seg: s[1], Off: s[0]}, "bp_chain_candidates": frames})
+			if os.Getenv("DQK_CONTEXT_WRAPPER_MENUS") == "1" {
+				menu, valid := readMenuSource(o)
+				wrappers[len(wrappers)-1]["menu_valid"] = valid
+				wrappers[len(wrappers)-1]["menu_snapshot"] = menu
+			}
 			target := oracle.Addr{Seg: s[1], Off: s[0]}
 			wrapperPending = append(wrapperPending, pendingCall{len(wrappers) - 1, target, r.SS, r.SP + 4})
 			if !wrapperRegistered[target] {
@@ -695,6 +700,12 @@ func main() {
 		must(o.Run(a.At - o.Steps()))
 		if a.Kind == "text" {
 			must(o.TypeKeys(a.Key))
+		} else if a.Kind == "alt" {
+			sender, ok := any(o).(interface{ PressBIOSAltKey(string) error })
+			if !ok {
+				panic("研究工具未載入 Alt 按鍵 overlay")
+			}
+			must(sender.PressBIOSAltKey(a.Key))
 		} else {
 			must(o.SendKeys(a.Key))
 		}
