@@ -47,6 +47,10 @@
 
 ## 開啟完整圖文版
 
+本機可直接開啟[圖文 README](workplace/probe/readme-gallery-preview-20261025/README.md)，
+或以瀏覽器開啟[完整圖庫頁](workplace/probe/readme-gallery-preview-20261025/README.html)。
+這兩個入口僅在備有本機素材的工作區有效，GitHub 不保存其中的圖像。
+
 圖文版同時提供 Markdown 與 HTML，收錄上述總覽圖、原版／HD 對照及遊戲截圖。
 五份圖庫目前解出 360 格，另有 52 個繪圖區塊尚未解碼。
 原版及衍生圖像依專案規則只留本機，GitHub 上保存介紹與重建工具。
