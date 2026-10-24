@@ -31,7 +31,7 @@ case "${1:-}" in
       -v "$SOURCE:/src:ro" -v "$MODULES:/gomodcache:ro" -v "$ROOT/tools:/tools:ro" \
       -v "$OUT:/out" -e HOME=/tmp -e GOCACHE=/out/gocache -e GOMODCACHE=/gomodcache \
       -e GOPROXY=off -e GOMAXPROCS=2 -w /src dosgolem-go-ebiten:1.24-r1 \
-      bash -c 'set -e; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/early-live /tools/early_text_live.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go'
+      bash -c 'set -e; printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\"}}" >/tmp/list-overlay.json; go build -overlay /tmp/list-overlay.json -o /out/early-live /tools/early_text_live.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go'
     timeout 30s docker run --rm --label project=dark-queen-of-krynn-cht \
       --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
       -v "$FONT:/font:ro" -v "$ROOT/tools:/tools:ro" -v "$OUT:/out" \

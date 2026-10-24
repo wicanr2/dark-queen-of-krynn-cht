@@ -353,7 +353,7 @@ def evidence(root,output):
     ida=read(output/"ida-panel-r1/result.json")
     assert ida["ida_version"]=="9.4" and ida["sha256"]==sha(root/"workplace/input/dos/drkqueen/DQK.EXE")
     f=ida["functions"][0];assert (f["name"],f["start"],f["end"])==("sub_1803F",0x1803f,0x181f9)
-    names=list(dict.fromkeys(list(parent["tools"])+["combat_effects_inputs.py","ui_hud_integer.go","ui_hud_integer_test.go","early-live.sh"]))
+    names=list(dict.fromkeys(list(parent["tools"])+["combat_effects_inputs.py","ui_hud_integer.go","ui_inventory_ammo.go","ui_hud_integer_test.go","early-live.sh"]))
     snapshots=output/"tool-snapshots";snapshots.mkdir()
     for n in names:shutil.copy2(root/"tools"/n,snapshots/n)
     def item(p):return dict(path=str(p.relative_to(root)),bytes=p.stat().st_size,sha256=sha(p))

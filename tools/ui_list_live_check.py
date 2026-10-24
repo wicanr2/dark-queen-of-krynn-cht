@@ -273,9 +273,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    ammo=provenance.get("ammo_extension")
     movement=provenance.get("movement_extension")
     movement_path=None
-    if movement:
+    if movement and not ammo:
         selected=[p for p in movement["data"]["paths"].values()
                   if (inputs.parent.parent/p["source_path"]).resolve()==(observed/"receipt.json").resolve()]
         assert len(selected)==1,"unknown movement path"
@@ -289,6 +290,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_field_bindings=[row["binding"] for extension in (hud,effects,finish) if extension
                         for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if ammo:
+        from ammo_ui_inputs import check_sources as check_ammo_sources
+        source_args=check_ammo_sources(*source_args)
     if movement:
         from movement_ui_inputs import check_sources as check_movement_sources
         source_args=check_movement_sources(*source_args)
@@ -317,6 +321,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
         effects=None
     if movement:
         finish=None
+    if ammo:
+        movement=finish=effects=hud=None
     short_ecl=provenance.get("short_ecl_extension")
     literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
@@ -339,6 +345,8 @@ def check(en_run, zh_run, inputs, control, observed, output):
     page_proof=(finish or {}).get("page_validation") or (effects or {}).get("page_validation") or (hud or {}).get("page_validation") or (party_cast or {}).get("page_validation") or (cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if movement:
         page_proof=movement_path["page_validation"]
+    if ammo:
+        page_proof=ammo["page_validation"]
     movement_reference=None
     if movement:
         witness=movement["data"]["quick_witness"]
@@ -871,6 +879,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
             assert stable[320000000]["SHA256"]!=stable[322000000]["SHA256"],"命名輸入必須在 Return 前可見"
     accepted = [e for e in b["list_events"] if e["Kind"] == "row-before-glyph"]
     bindings = {(row["Pane"], row["SHA256"]): row for row in config["Rows"]}
+    configured_bindings=set(bindings)
     wrappers, pane = {}, ""
     timeline = []
     raw_timeline = []
@@ -951,6 +960,11 @@ def check(en_run, zh_run, inputs, control, observed, output):
             continue
         source = wrapper["vararg_1_candidate"]["text"]
         row = bindings.get((pane, sha(source.encode())))
+        if row is None and pane=="inventory" and any(r["Pane"]=="inventory" and any(s["Key"]=="inventory.423c677c12e0b601c34c" for s in r["Spans"]) for r in config["Rows"]):
+            from ammo_ui_inputs import row_model
+            row=row_model(source,en)
+            if row is not None:
+                bindings[(pane,row["SHA256"])]=row
         within_list = any(p["step"] <= wrapper["step"] <= p["return_instruction_step"] for p in trace["list_events"])
         if wrapper["format"]["text"] == "%s" and within_list and "\t" in source:
             assert row is not None, (pane, source)
@@ -1525,6 +1539,12 @@ def check(en_run, zh_run, inputs, control, observed, output):
                             "Background": config["Background"]}
                     words[(word["X"], word["Y"])] = word
                     row_positions.add((word["X"], word["Y"]))
+        elif kind=="ammo-row-render-return":
+            w=wrappers_by_step[e["detail"]["entry_step"]]
+            from ammo_ui_inputs import row_model
+            assert row_model(w["vararg_1_candidate"]["text"],en) is not None
+            assert e["Step"]==w["return_step"]
+            assert e["detail"]==dict(entry_step=w["step"],source_sha256=sha(w["vararg_1_candidate"]["text"].encode()),caller=w["caller"],ss=w["return_ss"],sp=w["return_sp"])
         elif kind == "field-before-glyph":
             w = field_by_id[e["Step"], e["detail"]["key"]]["detail"]["word"]
             if e["detail"]["deferred"]:
@@ -1882,7 +1902,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                     last_row_frame, copied_row_page = (original,state,row_words), None
                 elif copied_row_page != (state["render_page"],state["display_start"]):
                     # 服務返回可先複製整頁，重用列表不再填色。逐詞框驗原版畫格，不能只略過頁面條件。
-                    allowed = service_row_keys | inventory_row_keys if trade else service_row_keys
+                    allowed = service_row_keys | inventory_row_keys if (trade or ammo) else service_row_keys
                     assert row_words and all(w["Key"] in allowed for w in row_words), ("unproved row page",frame["step"])
                     assert last_row_frame is not None
                     prior_frame, prior_state, prior_words = last_row_frame
@@ -2046,6 +2066,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["limits"]="正常首戰的命中、一般傷害、閃電吐息與死亡回報；保留原版數值及勝負，沒有宣稱勝利、整場戰鬥或正式入口完成。"
     if movement:
         result["movement"]=dict(counter_values=[r["value"] for r in movement_path["counters"]],fields=len(movement["data"]["fields"]),menus=len(movement["data"]["menus"]))
+    if ammo:
+        result["ammo"]=dict(dynamic_row_forms=len(set(bindings)-configured_bindings),
+            source_path=ammo["source_path"],scope="正常備妥、分半、集合與反白；不宣稱本作已取得 +1 箭。")
         result["limits"]="正常方向鍵的移動力底列及復原／完成查驗；數字與移動結果保留原版，不重算移動規則，不宣稱整場戰鬥或正式入口完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))

@@ -85,6 +85,11 @@ type listRow struct {
 	Spans        []listSpan
 	Foregrounds  []byte
 }
+type listAmmoPaint struct {
+	Return    paintReturn
+	Entry     uint64
+	SourceSHA string
+}
 type listWord struct {
 	X, Y, Width            int
 	Key                    string
@@ -152,6 +157,7 @@ type listState struct {
 	memoryListOpen         bool
 	fieldWrapper           *listFieldWrapper
 	movementCaption        *listMovementCaption
+	ammoPaints             []listAmmoPaint
 	clockReturn            *paintReturn
 	clockKeys              map[string]bool
 	paragraphPaints        []paintReturn
@@ -273,6 +279,31 @@ func (l *listState) fieldStart(f listField, source string) (int, bool) {
 	}
 	start := len(source) - 2
 	return start, source[start:] == l.sources[f.Key] && digest([]byte(source[start:])) == f.SHA256
+}
+
+// 已觀測箭名沿既有列綁定及 TSV；只讓原版數量、備妥狀態與正加值改變。
+func (l *listState) rowSpans(binding listRow, text string) ([]listSpan, bool) {
+	if binding.SHA256 == digest([]byte(text)) {
+		return binding.Spans, true
+	}
+	if binding.Pane != "inventory" || len(binding.Spans) != 2 {
+		return nil, false
+	}
+	ready, name := binding.Spans[0], binding.Spans[1]
+	if ready.Start != 1 || (l.sources[ready.Key] != l.sources["answer.yes"] && l.sources[ready.Key] != l.sources["answer.no"]) ||
+		name.Key != "inventory.423c677c12e0b601c34c" || name.Length != len(l.sources[name.Key]) || name.Key != "inventory."+digest([]byte(l.sources[name.Key]))[:20] {
+		return nil, false
+	}
+	parts, ok := matchAmmoRow(text, l.sources[name.Key], l.sources["answer.yes"], l.sources["answer.no"])
+	if !ok {
+		return nil, false
+	}
+	readyKey := "inventory." + digest([]byte(parts.Ready))[:20]
+	if l.sources[readyKey] != parts.Ready {
+		return nil, false
+	}
+	return []listSpan{{Start: parts.ReadyStart, Length: len(parts.Ready), Key: readyKey},
+		{Start: parts.NameStart, Length: name.Length, Key: name.Key}}, true
 }
 func (l *listState) footerCompatible(signature string) bool {
 	if l.config.Menus[signature] == "" {
@@ -834,6 +865,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	})
 	headerRegistered := map[oracle.Addr]bool{}
 	fieldRegistered := map[oracle.Addr]bool{}
+	ammoRegistered := map[oracle.Addr]bool{}
 	o.OnCall(oracle.Addr{Seg: 0xb72, Off: 0x46}, func(_ *oracle.Oracle) {
 		s := [10]uint16{}
 		for i := range s {
@@ -991,7 +1023,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		l.erase(col*8, row*8, len(text)*8, 8)
 		sha := digest([]byte(text))
 		for _, binding := range l.config.Rows {
-			if binding.Pane != l.pane || binding.SHA256 != sha {
+			if binding.Pane != l.pane {
+				continue
+			}
+			spans, matched := l.rowSpans(binding, text)
+			if !matched {
 				continue
 			}
 			allowed := false
@@ -1001,7 +1037,24 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			if !allowed {
 				continue
 			}
-			for _, span := range binding.Spans {
+			if l.pane == "inventory" && len(spans) == 2 && spans[1].Key == "inventory.423c677c12e0b601c34c" {
+				r, at := o.Regs(), o.Caller()
+				l.ammoPaints = append(l.ammoPaints, listAmmoPaint{Return: paintReturn{at, r.SS, r.SP + 4}, Entry: o.Steps(), SourceSHA: sha})
+				if !ammoRegistered[at] {
+					ammoRegistered[at] = true
+					o.OnCall(at, func(_ *oracle.Oracle) {
+						if len(l.ammoPaints) == 0 {
+							return
+						}
+						p, r := l.ammoPaints[len(l.ammoPaints)-1], o.Regs()
+						if p.Return.Addr == at && p.Return.SS == r.SS && p.Return.SP == r.SP {
+							l.ammoPaints = l.ammoPaints[:len(l.ammoPaints)-1]
+							g.listLog("ammo-row-render-return", map[string]any{"entry_step": p.Entry, "source_sha256": p.SourceSHA, "caller": at, "ss": r.SS, "sp": r.SP})
+						}
+					})
+				}
+			}
+			for _, span := range spans {
 				if span.Start+span.Length > len(text) || text[span.Start:span.Start+span.Length] != l.sources[span.Key] {
 					panic("列表詞框來源不符")
 				}
@@ -1011,7 +1064,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				}
 				l.words[[2]int{w.X, w.Y}] = w
 			}
-			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("row-before-glyph", map[string]any{"source_sha256": sha, "spans": binding.Spans,
+			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("row-before-glyph", map[string]any{"source_sha256": sha, "spans": spans,
 				"caller": o.Caller(), "foreground": byte(s[4]), "within_list": len(l.paints) > 0}))
 			return
 		}
@@ -1433,7 +1486,7 @@ func (g *liveGame) listReceipt(result map[string]any) {
 	if l.hudFooterRestore || l.hudFooterReturn != nil {
 		panic("瞄準底列尚未完成撤除或復色")
 	}
-	if len(l.paints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 || len(l.hudPanelPaints) > 0 || l.feedback != nil || l.serviceNotice != nil || l.creationNameReturn != nil || l.creationFooterPending {
+	if len(l.paints) > 0 || len(l.ammoPaints) > 0 || len(l.fills) > 0 || len(l.scrolls) > 0 || l.clearPending || l.awaitPageFlip || len(l.menus) > 0 || len(l.buttons) > 0 || l.footerTransition || l.headerTransition || l.headerReturn != nil || l.rowPagePending || l.trackListPage || len(l.awaitGlyphs) > 0 || l.clockReturn != nil || len(l.paragraphPaints) > 0 || len(l.hudPanelPaints) > 0 || l.feedback != nil || l.serviceNotice != nil || l.creationNameReturn != nil || l.creationFooterPending {
 		b, err := json.MarshalIndent(map[string]any{"failed": true, "events": l.events, "covered": len(l.clearCovered), "targets": l.clearTargets, "words": l.snapshot(), "clear_pending": l.clearPending, "video_sample": l.videoSample}, "", "  ")
 		must(err)
 		must(os.WriteFile(filepath.Join(g.out, "list-failure.json"), b, 0644))

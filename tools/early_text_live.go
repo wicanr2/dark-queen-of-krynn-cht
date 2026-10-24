@@ -666,7 +666,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		held = true
 	}
 	if g.list != nil {
-		held = g.translate && (len(g.list.paints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition || g.list.clockReturn != nil || len(g.list.hudPending) > 0 || len(g.list.hudPanelPaints) > 0 || g.list.creationNameReturn != nil || g.list.creationFooterPending || (g.list.feedback != nil && g.list.feedback.Restoring) || (g.list.serviceNotice != nil && g.list.serviceNotice.Restoring))
+		held = g.translate && (len(g.list.paints) > 0 || len(g.list.ammoPaints) > 0 || len(g.list.fills) > 0 || len(g.list.scrolls) > 0 || g.list.clearPending || g.list.awaitPageFlip || len(g.list.menus) > 0 || len(g.list.buttons) > 0 || g.list.headerTransition || g.list.footerTransition || g.list.clockReturn != nil || len(g.list.hudPending) > 0 || len(g.list.hudPanelPaints) > 0 || g.list.creationNameReturn != nil || g.list.creationFooterPending || (g.list.feedback != nil && g.list.feedback.Restoring) || (g.list.serviceNotice != nil && g.list.serviceNotice.Restoring))
 		if g.translate && g.cold != nil && g.cold.ui != nil && g.cold.ui.held() {
 			held = true
 		}
