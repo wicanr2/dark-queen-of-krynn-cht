@@ -37,6 +37,7 @@ type listHUDParagraph struct {
 	HideFooter                    bool   `json:",omitempty"`
 	IntegerTemplateKey            string `json:",omitempty"`
 	KeepFooterSignature           string `json:",omitempty"`
+	OrdinaryDamage                bool   `json:",omitempty"`
 }
 type listHUDPending struct {
 	Paint               paintReturn
@@ -118,21 +119,32 @@ func (g *liveGame) installHUDPanelUpdates() {
 	})
 }
 
+func (l *listState) aimDamageKey(key string) bool {
+	for _, p := range l.config.HUDParagraphs {
+		if p.IntegerTemplateKey == key && p.KeepFooterSignature != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (g *liveGame) validateHUDParagraphs() {
 	for _, p := range g.list.config.HUDParagraphs {
 		weapon := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x097e}) && p.NativeBox == ([4]int{184, 56, 312, 80})
 		status := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 88, 312, 176})
 		miss := p.Caller == (oracle.Addr{Seg: 0x22f4, Off: 0x048f}) && p.NativeBox == ([4]int{184, 104, 312, 136})
-		if !(weapon || status || miss) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
+		death := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 112, 312, 176})
+		if !(weapon || status || miss || death) || (p.HideFooter && !status) || len(p.SHA256) != 64 || p.Foreground != 7 || p.Background != 0 || p.Clear != 1 || len(p.Spans) == 0 {
 			panic("右側段落來源不符")
 		}
 		if p.IntegerTemplateKey != "" {
-			if !status || p.HideFooter || len(p.Spans) != 1 || p.Spans[0].Key != p.IntegerTemplateKey ||
-				p.SHA256 != digest([]byte(g.list.sources[p.IntegerTemplateKey])) || !hudIntegerTemplate(g.list.sources[p.IntegerTemplateKey]) || !hudIntegerTemplate(g.catalog[p.IntegerTemplateKey]) ||
-				len(p.KeepFooterSignature) != 64 || g.list.config.Menus[p.KeepFooterSignature] != "aim" {
+			ordinary := p.OrdinaryDamage && (status || miss) && p.KeepFooterSignature == "" && (!p.HideFooter || status)
+			aimed := !p.OrdinaryDamage && status && !p.HideFooter && len(p.KeepFooterSignature) == 64 && g.list.config.Menus[p.KeepFooterSignature] == "aim"
+			if !(ordinary || aimed) || len(p.Spans) != 1 || p.Spans[0].Key != p.IntegerTemplateKey ||
+				p.SHA256 != digest([]byte(g.list.sources[p.IntegerTemplateKey])) || !hudIntegerTemplate(g.list.sources[p.IntegerTemplateKey]) || !hudIntegerTemplate(g.catalog[p.IntegerTemplateKey]) {
 				panic("右側數值模板或底列來源不符")
 			}
-		} else if p.KeepFooterSignature != "" {
+		} else if p.KeepFooterSignature != "" || p.OrdinaryDamage {
 			panic("未辨識的右側底列保留契約")
 		}
 		for _, span := range p.Spans {
@@ -159,9 +171,11 @@ func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, cle
 				continue
 			}
 			number = &value
-			menu, ok := readMenuSource(o)
-			if !ok || menu.Signature != p.KeepFooterSignature || !l.footerCompatible(menu.Signature) {
-				continue
+			if !p.OrdinaryDamage {
+				menu, ok := readMenuSource(o)
+				if !ok || menu.Signature != p.KeepFooterSignature || !l.footerCompatible(menu.Signature) {
+					continue
+				}
 			}
 		} else if p.SHA256 != digest([]byte(source)) {
 			continue

@@ -200,6 +200,31 @@
 不另建 `HANDOFF.md`、`REMAKE-PLAN.md` 或同義工作區。建立 `LICENSE` 前讀第 4 節授權入口，
 自有部分使用 RRSAL-1.0；前作與 dosgolem 的程式碼保留其實際授權，不整包改掛本專案授權。
 
+### 歷史重播紀錄的儲存
+
+磁碟清理時可將大型歷史 `receipt.json` 無損封存為同目錄 `receipt.json.gz`。
+原始資料、譯文、程式、字模、圖片、存檔、證據索引及目前工作批次保留。
+封存前後逐檔核對原始內容 SHA-256，不改寫舊 evidence manifest 的歷史雜湊。
+
+| 入口 | 職責 |
+|---|---|
+| [research-storage.sh](tools/research-storage.sh) | 離線 Docker 的 `list`、`verify`、`restore`、`pack` 與本專案 `cache` 入口 |
+| [research_storage.py](tools/research_storage.py) | 串流壓縮、原始內容校驗、按邏輯路徑還原；不改遊戲或正式資料格式 |
+| `workplace/probe/storage-index.json` | 唯一封存索引，保存原邏輯路徑、原始／壓縮雜湊、大小、權限及還原狀態 |
+
+研究文件與舊程式中的原路徑保留為邏輯引用。取用缺少的歷史紀錄前，先執行：
+
+```sh
+bash tools/research-storage.sh list
+bash tools/research-storage.sh restore workplace/probe/研究目錄/重播目錄/receipt.json
+```
+
+也可把 `restore` 的參數改成研究目錄，一次還原該目錄內的封存紀錄。
+還原後原檔名、內容、權限及時間恢復，壓縮副本移除，才可執行既有稽核器或重播檢查。
+`verify` 只證明封存的原始位元組完整，不等於重新執行 GUI 或遊戲驗收。
+`pack` 預設保護 `combat-effects-20261024`、`passage-chain-live-20261024` 與 `combat-finish-20261024` 三個目前批次，
+僅選其他目錄至少 16 MiB 的 `receipt.json`；`cache` 只清本專案 `workplace/probe/gocache` 內容，保留目錄。
+
 ## 10. 共同決策與停止線
 
 - 已確認的繁中優先與建立 GitHub 儲存庫授權不重複詢問。

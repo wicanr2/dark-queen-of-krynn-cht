@@ -10,6 +10,7 @@
 - [工作紀錄](WORKLOG.md)
 - [研究索引](docs/re/README.md)
 - [規格索引](docs/spec/README.md)
+- [歷史重播紀錄的封存與還原](AGENTS.md#歷史重播紀錄的儲存)
 - [GitHub Issues](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues)
 
 自有程式與文件採 [RRSAL-1.0](LICENSE)，屬 source-available。授權不涵蓋原版遊戲、

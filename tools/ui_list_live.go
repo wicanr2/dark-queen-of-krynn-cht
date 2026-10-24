@@ -424,10 +424,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
 				l.sources[f.Key] == "Aim: range = " && f.Length == len(l.sources[f.Key])
 			blueY, bluePosition := map[uint16]int{8004: 8, 8040: 80, 8048: 96}[f.RawY]
-			combatTarget := f.Pane == "callsite" && f.Group == "body" && f.Start == 0 && f.Length == 11 && f.Width == 0 && f.RawX == 8092 && bluePosition &&
+			combatTargetName := (f.Length == 11 && f.SHA256 == "34e6a2c45cd76bd572bc718ec07bba5666ec09acc337edfcc226f81c36949655") ||
+				(f.Length == 12 && f.SHA256 == digest([]byte("GREEN DRAGON")))
+			combatTarget := f.Pane == "callsite" && f.Group == "body" && f.Start == 0 && combatTargetName && f.Width == 0 && f.RawX == 8092 && bluePosition &&
 				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x088e, Off: 0x16fb}) && f.UpperNative != nil && *f.UpperNative == ([2]int{184, blueY}) &&
-				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.Color != nil && *f.Color == 0x82 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23 &&
-				f.SHA256 == "34e6a2c45cd76bd572bc718ec07bba5666ec09acc337edfcc226f81c36949655"
+				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.Color != nil && *f.Color == 0x82 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23
 			spellCaption := f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Length == 15 && f.Width == 0 && f.RawX == 8004 && f.RawY == 8089 &&
 				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0x4630}) && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == "" && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
@@ -530,7 +531,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		fillCaller := oracle.Addr{Off: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 2}), Seg: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 4})}
 		if len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) && ([4]int{x, y, w, h}) == ([4]int{184, 80, 128, 96}) {
 			for _, word := range l.words {
-				if word.Number != nil {
+				if word.Number != nil && l.aimDamageKey(word.Key) {
 					l.footerTransition = true
 					g.listLog("hud-damage-retired", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}})
 					break

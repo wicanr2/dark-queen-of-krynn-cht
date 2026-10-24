@@ -1,5 +1,7 @@
 # 001：提早辨識文字與同幀呈現
 
+> 儲存說明：大型歷史 `receipt.json` 可能已無損封存。依原邏輯路徑取用前，先按[封存與還原入口](../../AGENTS.md#歷史重播紀錄的儲存)還原紀錄，再執行既有檢查；歷史雜湊不改寫。
+
 狀態：DRAFT。建立：2026-10-21；更新：2026-10-24。
 工作：[G3／#4](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)。
 使用者要求在英文繪出之前攔截，避免英文閃現後才覆繪中文。
@@ -864,6 +866,25 @@ IDA 的原位元串解碼分支為 `2143:0091`，型別 `80h`；`81h` 走另一�
 
 ### 相鄰敘事片段的 DRAFT 研究
 
+正常探索的後續工作區為 `workplace/probe/passage-chain-live-20261024/`。
+先沿既有森林行走路線，以一般方向鍵取得直接相鄰片段的正常來源，再建立呈現原型。
+不注入座標、敵人或亂數，不以靜態候選代替實際執行；未取得來源前不加入現行 GUI。
+
+[ui_passage_source.go](../../tools/ui_passage_source.go) 為獨立的 DRAFT 來源辨識元件，
+讀取既有 registry 欄位與 UTF-8 原文 TSV，回傳整句 key、目前片段及候選原文。
+完整區塊、封包、各片段雜湊、游標終點、來源指標、呼叫端與原位元串型別必須全部相符。
+不跨過控制指令，區塊外記憶體不納入區塊身分；沒有改寫遊戲或決定顯示可提交時機。
+[ui_passage_source_test.go](../../tools/ui_passage_source_test.go) 用原版 ECL.GLB、正式片段原文與既有整句 TSV，
+核對 155 處來源、306 個片段鍵，含位址環回共 999 次辨識；十八種失配拒絕，四次真實酒館來源不誤認。
+這些是辨識與解碼測試，不是原版已依序執行全部整句的證據。
+
+新版原版探針須一併編譯 `passage_chain_probe.go` 與 `ui_passage_source.go`。
+選用 `DQK_PASSAGE_BOOK=<既有 chain-inputs-r1/registry.json>`、
+`DQK_PASSAGE_EN=<同目錄 en.tsv>` 才啟用候選記錄，輸出保存兩個輸入 SHA-256。
+未設定時維持舊探針輸出；啟用後仍只記錄每次實際到達片段的候選，不推定後續片段已執行。
+[passage_chain_source.py](../../tools/passage_chain_source.py) 的 `native`、`evidence`、`audit`
+各接專案根與這個新研究目錄，在離線 Docker 內核對新舊探針、來源及封存。
+
 工作區為 `workplace/probe/passage-chain-20261024/`。
 [passage_chain_probe.go](../../tools/passage_chain_probe.go) 在一般按鍵下保存 `333E:AE5C` 與
 `333E:B7F9` 的原始值、原始 script segment、完整段落、首字形及返回位置，先與控制組核對。
@@ -1113,6 +1134,31 @@ python3 tools/combat_effects_inputs.py guards <專案根> <既有研究目錄>
 十九筆記錄表形只觀測一個按鈕印字，其餘綁定仍是資料層來源，不能列成全部可見。
 證據索引及失敗分類見 [研究 005](../re/005-translation-catalog.md#2026-10-24冰雪風暴傷害與目標底列)，
 目前仍是 DRAFT，未接正式入口。
+
+### 首戰接續的 DRAFT 研究
+
+工作區 `workplace/probe/combat-finish-20261024/` 從 `combat-effects-20261024/control-r3/final.state`
+的正常 3,570M 狀態接續。以原版 Quick 等一般按鍵推進，不注入敵人、座標、勝負、亂數或劇情旗標。
+先以既有 `ui-context.sh run` 取得完整回報、控制組、原始圖及終點，再按真實來源補譯文綁定。
+後續敘事整句仍須逐片段正常執行、時序與清除的正向收據；不能把戰鬥等待或靜態候選列為接入完成。
+未知來源維持原文，正式字級、閱讀版面及正式入口沿既有限制，不在本研究自行定案。
+
+本輪正常 Quick 續行已觀測命中 12 點、受到 40／80 點傷害、閃電吐息及死亡回報。
+輸入由 [combat_finish_inputs.py](../../tools/combat_finish_inputs.py) 從正式 TSV 衍生，
+`OrdinaryDamage` 只允許既有狀態框或命中框的單一十進位參數，不沿用瞄準底列保留條件。
+原有魔法傷害的底列等待仍只由其 `KeepFooterSignature` 所對應數值鍵啟動。
+死亡框為原版 `088E:15E1`、`[184,112,312,176]`，與先前傷害框分開保存。
+三種數值逐項往返原文，不寫入原版、不改死亡結果。
+原版傷害字元只佔 y=88、96 兩行，覆蓋框高度為十六像素；死亡前 y=104 起的姓名清除不撤除上方傷害。
+檢查器對本批先驗新增來源，再逐層核對父批資料；當前路徑不得套用父批七次魔法傷害的時序。
+普通傷害、原有魔法傷害及兩者回退均需抽驗，不把父批資料回驗算作本輪重跑舊 GUI。
+
+有效資料 `inputs-r4`、程式 `programs-r3`、原版 `observe-r4`／`control-r4`、GUI `en-r5`／`zh-r5`。
+`gui-r5.sh` 以兩種模式執行相同正常請求；`parent-gui-r2.sh` 用同一新程式重跑父批繁中，沒有重跑父批英文。
+636 組 GPU 畫格、九個原版狀態、五個新增鍵與死亡後傷害保留已驗；七個穩定截點與兩個過渡截點分開列。
+過渡截點須對回原版完整右框清除與後續已辨識狀態返回，並驗證整張畫面仍保留前一畫格。
+原有魔法傷害的 4,078 組／27 狀態以新版重跑相同，既有雙語收據另由新比較器回驗。
+完整結果與剩餘限制見[研究 005](../re/005-translation-catalog.md#2026-10-24首戰命中一般傷害與死亡回報)，正式入口仍為 DRAFT。
 
 ## 待驗後才能 READY
 

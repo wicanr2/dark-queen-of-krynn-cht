@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/wicanr2/dosgolem/oracle"
 )
@@ -42,6 +43,45 @@ func main() {
 	observe := os.Args[4] == "observe"
 	if !observe && os.Args[4] != "control" {
 		panic("未知模式")
+	}
+	var passageBook struct {
+		SourceSHA   string                 `json:"source_sha256"`
+		Occurrences []passageSourceBinding `json:"occurrences"`
+	}
+	passageSources := map[string]string{}
+	passageBookFiles := map[string]string{}
+	if path := os.Getenv("DQK_PASSAGE_BOOK"); path != "" {
+		raw, err := os.ReadFile(path)
+		check(err)
+		check(json.Unmarshal(raw, &passageBook))
+		if passageBook.SourceSHA != "40542071e42d3cd125eabcead11456a99942bf55a7736fdb79f66a3c27c3664d" || len(passageBook.Occurrences) == 0 || len(passageBook.Occurrences) > 4096 {
+			panic("整句來源索引不符")
+		}
+		passageBookFiles["registry_sha256"] = sha(raw)
+		raw, err = os.ReadFile(os.Getenv("DQK_PASSAGE_EN"))
+		check(err)
+		passageBookFiles["en_sha256"] = sha(raw)
+		lines := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
+		if len(lines) < 2 || lines[0] != "key\ttext" {
+			panic("整句來源 TSV 標頭不符")
+		}
+		for _, line := range lines[1:] {
+			cols := strings.Split(line, "\t")
+			if len(cols) != 2 || cols[0] != "passage."+sha([]byte(cols[1]))[:20] || passageSources[cols[0]] != "" {
+				panic("整句來源 TSV 不符")
+			}
+			passageSources[cols[0]] = cols[1]
+		}
+		used := map[string]bool{}
+		for _, binding := range passageBook.Occurrences {
+			if passageSources[binding.Key] == "" {
+				panic("整句來源缺 key")
+			}
+			used[binding.Key] = true
+		}
+		if len(used) != len(passageSources) {
+			panic("整句來源有孤兒 key")
+		}
 	}
 	out := os.Args[3]
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
@@ -78,6 +118,7 @@ func main() {
 	var handler map[string]any
 	handlerFresh := false
 	var paragraphs []map[string]any
+	passageMatchCount := 0
 	pending := -1
 	var pendingSS, pendingSP uint16
 	files := map[string]map[string]any{}
@@ -126,6 +167,20 @@ func main() {
 					files[h] = map[string]any{"file": name, "sha256": h, "runtime_start": oracle.Addr{Seg: base.Seg, Off: 0}, "bytes": len(raw)}
 				}
 				p["script_sha256"] = h
+				if len(passageBook.Occurrences) > 0 {
+					view := passageSourceObservation{DS: r.DS, PointerSeg: ptr.Seg, PointerOff: ptr.Off, CallerSeg: caller.Seg, CallerOff: caller.Off,
+						RawBaseOffset: base.Off, RawCursorAfter: p["raw_b7f9"].(uint16), Kind: p["raw_b216"].(byte), Opcode: p["raw_b1c7"].(byte), Clear: p["clear"].(byte), Script: raw, Source: p["source"].(string)}
+					matches := []passageSourceCandidate{}
+					for _, binding := range passageBook.Occurrences {
+						for part := range binding.Fragments {
+							if candidate, ok := matchPassageSource(binding, passageSources, part, view); ok {
+								matches = append(matches, candidate)
+							}
+						}
+					}
+					p["passage_candidates"] = matches
+					passageMatchCount += len(matches)
+				}
 			} else {
 				p["script_unavailable"] = "超出傳統記憶體的界線，未讀取"
 			}
@@ -189,6 +244,10 @@ func main() {
 	}
 	result := map[string]any{"draft": true, "observe": observe, "exe_sha256": sha(exe), "state_sha256": sha(state), "request_sha256": sha(requestBytes), "probe_sha256": sha(binary), "source_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "go_version": runtime.Version(), "request": req, "paragraphs": paragraphs, "pending_paragraphs": pendingCount, "script_files": files, "checkpoints": checkpoints,
 		"limits": "正常快照及一般按鍵；原始游標與 script bytes 只供追查，不推定相鄰資料必依序執行，不作中文或 GUI 驗收。"}
+	if len(passageBook.Occurrences) > 0 {
+		result["passage_source_files"] = passageBookFiles
+		result["passage_candidate_parts"] = passageMatchCount
+	}
 	b, err := json.MarshalIndent(result, "", "  ")
 	check(err)
 	check(os.WriteFile(filepath.Join(out, "receipt.json"), append(b, '\n'), 0644))

@@ -98,6 +98,54 @@ func TestHUDIntegerRejectsDifferentText(t *testing.T) {
 	}
 }
 
+func TestHUDIntegerOriginalOrdinaryDamage(t *testing.T) {
+	en, zh := hudTestCatalog(t, "DQK_FINISH_EN"), hudTestCatalog(t, "DQK_FINISH_ZH")
+	path := os.Getenv("DQK_FINISH_SOURCE")
+	if path == "" {
+		t.Skip("缺少正常一般傷害來源")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trace struct {
+		Paragraphs []struct{ Source struct{ Text string } }
+	}
+	if err = json.Unmarshal(raw, &trace); err != nil {
+		t.Fatal(err)
+	}
+	var actual []int32
+	for _, p := range trace.Paragraphs {
+		for key, pattern := range en {
+			if !strings.HasPrefix(key, "hud-format.") || strings.Contains(pattern, "from Magic") {
+				continue
+			}
+			value, ok := hudInteger(p.Source.Text, pattern)
+			if !ok {
+				continue
+			}
+			original, ok := hudIntegerText(pattern, value)
+			if !ok || original != p.Source.Text {
+				t.Fatal("一般傷害原文未往返")
+			}
+			translated, ok := hudIntegerText(zh[key], value)
+			if !ok || strings.Contains(translated, "%") {
+				t.Fatal("一般傷害譯文格式不符")
+			}
+			actual = append(actual, value)
+		}
+	}
+	expected := []int32{12, 40, 80}
+	if len(actual) != len(expected) {
+		t.Fatal("正常一般傷害來源數不符", actual)
+	}
+	for i := range expected {
+		if actual[i] != expected[i] {
+			t.Fatal("正常傷害顯示數值改變", actual)
+		}
+	}
+}
+
 func TestHUDIntegerDisplayRoundTrip(t *testing.T) {
 	pattern := "takes %d points of damage from Magic"
 	for _, value := range []int32{0, -1, 1, 16, 32767, 2147483647, -2147483648} {

@@ -273,12 +273,18 @@ def check(en_run, zh_run, inputs, control, observed, output):
     en = catalog(inputs / "en.tsv")
     config = read(inputs / "inputs.json")
     provenance = read(inputs / "provenance.json")
+    finish=provenance.get("finish_extension")
     effects=provenance.get("effects_extension")
     hud=provenance.get("hud_extension")
     party_cast=provenance.get("party_cast_extension")
     cast=provenance.get("cast_extension")
     bar=provenance.get("bar_extension")
+    hud_field_bindings=[row["binding"] for extension in (hud,effects,finish) if extension
+                        for row in extension["data"].get("fields",[])]
     source_args=(inputs,config,provenance,en,zh,glyphs)
+    if finish:
+        from combat_finish_inputs import check_sources as check_finish_sources
+        source_args=check_finish_sources(*source_args)
     if effects:
         from combat_effects_inputs import check_sources as check_effects_sources
         source_args=check_effects_sources(*source_args)
@@ -296,6 +302,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
     if bar:
         from bar_ui_inputs import check_sources
         source_args=check_sources(*source_args)
+    # 父批資料仍逐層核對；本條正常路徑沒有瞄準或魔法傷害的生命週期。
+    if finish:
+        effects=None
     short_ecl=provenance.get("short_ecl_extension")
     literal_batch=provenance.get("literal_catalog_extension")
     battle=provenance.get("battle_extension")
@@ -315,7 +324,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
     creation_added=[r["binding"] for r in creation["added"]] if creation else []
     removed_age=creation.get("removed_age_fields",[]) if creation else []
     retain_creation=lambda fields:[f for f in fields if f not in removed_age]
-    page_proof=(effects or {}).get("page_validation") or (hud or {}).get("page_validation") or (party_cast or {}).get("page_validation") or (cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
+    page_proof=(finish or {}).get("page_validation") or (effects or {}).get("page_validation") or (hud or {}).get("page_validation") or (party_cast or {}).get("page_validation") or (cast or {}).get("page_validation") or (bar or {}).get("page_validation") or (literal_batch or {}).get("page_validation") or (battle or {}).get("page_validation") or (item_context or {}).get("page_validation") or (equipment or {}).get("page_validation") or (creation or {}).get("page_validation")
     if item_context:
         base=inputs.parent.parent/item_context["base"]
         for name,h in item_context["base_files"].items():assert Path(name).name==name and sha((base/name).read_bytes())==h
@@ -640,10 +649,10 @@ def check(en_run, zh_run, inputs, control, observed, output):
     hud_words={}
     hud_records=[]
     if hud:
-        if effects:
+        if effects or finish:
             from combat_effects_inputs import hud_records as derive_hud_records
             hud_records=derive_hud_records(trace,config["HUDParagraphs"],en)
-            assert hud_records==effects["data"]["records"]
+            assert hud_records==(finish or effects)["data"]["records"]
         else:hud_records=hud["data"]["records"]
         assert {e["Step"] for e in hud_entries}=={r["step"] for r in hud_records}
     else:assert not hud_entries and not hud_returns
@@ -983,7 +992,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert wrapper["format"]["text"] == source["text"]
             expected_upper = f.get("UpperNative",[native(c["stack"][3]),native(c["stack"][2])])
             assert [(wrapper["stack"][n]&255)*8 for n in (2,3)] == expected_upper
-            if hud and f.get("UpperNative") in ([184,8],[184,80],[184,96]) and f in [row["binding"] for row in hud["data"]["fields"]+(effects or {}).get("data",{}).get("fields",[])]:
+            if hud and f.get("UpperNative") in ([184,8],[184,80],[184,96]) and f in hud_field_bindings:
                 assert f["UpperCaller"]=={"Seg":0x088e,"Off":0x16fb} and f["UpperNative"]==[184,native(f["RawY"])]
                 assert c["stack"][2:5]==[f["RawY"],8092,0x82] and f["Color"]==0x82
             elif f.get("UpperFormatSHA256") and "UpperNative" in f:
@@ -1002,7 +1011,7 @@ def check(en_run, zh_run, inputs, control, observed, output):
                 assert c["stack"][2:5]==[189,8004,0x8f] and f["Color"]==0x8f and "BackgroundOverride" not in f
         background = f.get("BackgroundOverride",config["Background"])
         if "BackgroundOverride" in f and background==23:
-            if hud and f.get("UpperNative") in ([184,8],[184,80],[184,96]) and f in [row["binding"] for row in hud["data"]["fields"]+(effects or {}).get("data",{}).get("fields",[])]:
+            if hud and f.get("UpperNative") in ([184,8],[184,80],[184,96]) and f in hud_field_bindings:
                 assert f["Pane"]=="callsite" and f["Group"]=="body" and f["UpperNative"]==[184,native(f["RawY"])]
             elif creation and source["text"]=="Character name:":
                 assert f["Pane"]=="menu-text" and f["Group"]=="footer" and f["Caller"]=={"Seg":0x266D,"Off":0x11F}
@@ -1514,10 +1523,16 @@ def check(en_run, zh_run, inputs, control, observed, output):
     for actual in (a,b):
         assert (actual.get("paragraphs") or []) == page_history
         assert actual.get("final_paragraph") == (model[-1][3] if model else None)
-    # 法術書的退出會返回魔法選單。終點若仍有已辨識選單，應保留該選單的完整中文。
+    def footer_hidden_at(step):
+        hidden=[e for e in hud_returns if e["Step"]<step and e["detail"]["footer_hidden"]]
+        return bool(hidden) and not any(c["caller"]=={"Seg":0xCEB,"Off":0x1BE}
+            and hidden[-1]["Step"]<c["step"]<step for c in trace["calls"])
+    # 原版可能已隱去底列而仍保留舊表指標，終點與中途截點使用同一生命週期。
     final_button = next(c for c in reversed(trace["calls"]) if c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE})
     final_signature = menu_signature(final_button)
     final_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu" and f["MenuSignature"] == final_signature}
+    if footer_hidden_at(trace["checkpoints"][-1]["step"]):
+        final_keys=set()
     for actual in (a, b):
         assert (actual["final_words"] or []) == model[-1][1]
         assert {w["Key"] for w in actual["final_words"] or [] if w["Group"] == "footer" and (not typed_buttons or w.get("Button"))} == final_keys
@@ -1525,8 +1540,15 @@ def check(en_run, zh_run, inputs, control, observed, output):
         layouts = {frame["step"]: frame for frame in actual["list_frames"]}
         menu_field_keys = {f["Key"] for f in config["Fields"] if f["Pane"] == "menu"}
         for checkpoint in actual["checkpoints"]:
-            hidden=[e for e in hud_returns if e["Step"]<checkpoint["step"] and e["detail"]["footer_hidden"]]
-            if hidden and not any(c["caller"]=={"Seg":0xCEB,"Off":0x1BE} and hidden[-1]["Step"]<c["step"]<checkpoint["step"] for c in trace["calls"]):
+            if finish and next(f for f in b["frames"] if f["step"]==checkpoint["step"])["held"]:
+                # 原版右框已清除，尚待已證實的狀態回報完成；內部詞框此時不是可見畫面。
+                step=checkpoint["step"]
+                returned=[r["return_step"] for r in hud_records if r["binding"].get("HideFooter") and r["return_step"]<step]
+                previous=max(returned,default=trace["request"]["start_steps"])
+                following=next(r["return_step"] for r in hud_records if r["binding"].get("HideFooter") and r["return_step"]>step)
+                assert any(previous<f["step"]<step<following and f["native_rect"]==[184,8,128,168] for f in trace["fill_events"])
+                continue
+            if footer_hidden_at(checkpoint["step"]):
                 assert not any(w["Group"]=="footer" for w in layouts[checkpoint["step"]]["words"] or [])
                 continue
             buttons = [c for c in trace["calls"] if c["step"] < checkpoint["step"] and c["caller"] == {"Seg": 0xCEB, "Off": 0x1BE}]
@@ -1934,6 +1956,9 @@ def check(en_run, zh_run, inputs, control, observed, output):
         result["effects"]=dict(bindings=len(effects["data"]["bindings"]),aliases=len(effects["data"]["aliases"]),fields=len(effects["data"]["fields"]),menus=len(effects["data"]["menus"]),numeric_reports=sum(r.get("number") is not None for r in hud_records),panel_updates=len(hud_updates))
         result["effects"]["copy_witness"]=effects_copy_witness
         result["limits"]="正常冰風暴目標選取、七次魔法傷害文字與返回戰鬥選單；只保留原版輸出數值，不推導傷害公式，不宣稱勝利或正式入口完成。"
+    if finish:
+        result["finish"]=dict(bindings=len(finish["data"]["bindings"]), numeric_reports=sum(r.get("number") is not None for r in hud_records), aliases=len(finish["data"]["aliases"]))
+        result["limits"]="正常首戰的命中、一般傷害、閃電吐息與死亡回報；保留原版數值及勝負，沒有宣稱勝利、整場戰鬥或正式入口完成。"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in ("real_gpu_readback_frames", "held_frames", "original_checkpoints_equal", "clear_transactions")}, ensure_ascii=False))
 

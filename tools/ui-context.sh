@@ -64,6 +64,7 @@ case "${1:-}" in
     timeout "$RUN_TIMEOUT" docker run --rm --init --network none --user "$(id -u):$(id -g)" \
       --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
       "${boot_args[@]}" \
+      -e GOMEMLIMIT=512MiB \
       -e "DQK_CONTEXT_VIDEO=${DQK_CONTEXT_VIDEO:-0}" \
       -e "DQK_CONTEXT_ALL_MENUS=${DQK_CONTEXT_ALL_MENUS:-0}" \
       -v "$PROBE:/probe:ro" -v "$PARENT:/out" -v "$ORIG:/orig:ro" \

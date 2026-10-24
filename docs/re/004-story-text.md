@@ -1,5 +1,7 @@
 # 004：劇情段落在逐字繪製前的入口
 
+> 儲存說明：大型歷史 `receipt.json` 可能已無損封存。依原邏輯路徑取用前，先按[封存與還原入口](../../AGENTS.md#歷史重播紀錄的儲存)還原紀錄，再執行既有檢查；歷史雜湊不改寫。
+
 日期：2026-10-21。工作：[#4](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4)。
 輸入 `DQK.EXE` 1.1，SHA-256
 `3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58`，版本來源見 [001](001-input-baseline.md)。

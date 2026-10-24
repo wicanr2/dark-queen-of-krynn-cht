@@ -1,5 +1,7 @@
 # 001：遊戲與中文來源基線
 
+> 儲存說明：大型歷史 `receipt.json` 可能已無損封存。依原邏輯路徑取用前，先按[封存與還原入口](../../AGENTS.md#歷史重播紀錄的儲存)還原紀錄，再執行既有檢查；歷史雜湊不改寫。
+
 日期：2026-10-21。工作：[G1／#2](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2)。
 輸入唯讀掛載，以 `dkk-inventory:bookworm-r1` 的 `lsar`、`unar` 與 Python 3 盤點。
 工具為 [inventory.py](../../tools/inventory.py)，完整成員與逐檔 SHA-256 留在
