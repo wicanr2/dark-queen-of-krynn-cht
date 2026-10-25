@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"strconv"
 	"strings"
@@ -59,9 +60,23 @@ func automaticDamageMenu(signature string) bool {
 }
 
 type listHUDPanelPending struct {
-	Paint     paintReturn
-	Entry     uint64
-	Signature string
+	Paint       paintReturn
+	Entry       uint64
+	Signature   string
+	SpellFooter bool
+}
+
+// 原版自動施法只重畫右框時，已完成的法術底列必須仍由同一原版像素支持。
+func (g *liveGame) stableSpellFooter(signature string) bool {
+	l, c := g.list, g.list.spellCaption
+	if !automaticDamageMenu(signature) || c == nil || c.Reference == nil {
+		return false
+	}
+	word, ok := l.words[[2]int{c.Word.X, c.Word.Y}]
+	if !ok || word != c.Word {
+		return false
+	}
+	return bytes.Equal(c.Reference, listRectPixels(g.o.Indexed(), [4]int{word.X, word.Y, word.Width, word.height()}))
 }
 
 // 只在已知瞄準底列完整且原版右框確實重畫時等待 sub_1803F 返回。
@@ -85,12 +100,13 @@ func (g *liveGame) installHUDPanelUpdates() {
 		r := o.Regs()
 		raw := o.Byte(oracle.Addr{Seg: r.DS, Off: 0xc6b7})
 		menu, ok := readMenuSource(o)
-		if r.DS != 0x333e || raw == 0 || !ok || !signatures[menu.Signature] || !l.footerCompatible(menu.Signature) {
+		at := o.Caller()
+		spellFooter := ok && at == (oracle.Addr{Seg: 0x059f, Off: 0x23bb}) && g.stableSpellFooter(menu.Signature)
+		if r.DS != 0x333e || raw == 0 || !ok || (!spellFooter && (!signatures[menu.Signature] || !l.footerCompatible(menu.Signature))) {
 			return
 		}
-		at := o.Caller()
 		paint := paintReturn{at, r.SS, r.SP + 4}
-		l.hudPanelPaints = append(l.hudPanelPaints, listHUDPanelPending{paint, o.Steps(), menu.Signature})
+		l.hudPanelPaints = append(l.hudPanelPaints, listHUDPanelPending{paint, o.Steps(), menu.Signature, spellFooter})
 		g.listLog("hud-update-entry", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP, "menu_signature": menu.Signature, "raw_c6b7": raw})
 		if !registered[at] {
 			registered[at] = true
@@ -104,6 +120,18 @@ func (g *liveGame) installHUDPanelUpdates() {
 					return
 				}
 				menu, ok := readMenuSource(o)
+				if p.SpellFooter {
+					kept := ok && menu.Signature == p.Signature && g.stableSpellFooter(menu.Signature)
+					l.hudPanelPaints = l.hudPanelPaints[:len(l.hudPanelPaints)-1]
+					if !kept && l.spellCaption != nil {
+						word := l.spellCaption.Word
+						l.erase(word.X, word.Y, word.Width, word.height())
+						l.spellCaption = nil
+					}
+					l.footerTransition = false
+					g.listLog("spell-footer-panel-return", map[string]any{"entry_step": p.Entry, "caller": at, "kept": kept, "menu_signature": p.Signature})
+					return
+				}
 				if !ok || menu.Signature != p.Signature || !l.footerCompatible(menu.Signature) {
 					panic("右框重畫改變瞄準底列")
 				}

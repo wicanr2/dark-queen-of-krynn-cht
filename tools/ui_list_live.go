@@ -1594,7 +1594,8 @@ func validMagicToggleField(f listField, source string) bool {
 
 // 已有魔法飛彈與本批完整來源鍵共用同一個原版施法底列生命週期。
 func battleSpellCaptionField(f listField) bool {
-	return len(f.SHA256) == 64 && (f.Key == "round.1a0e55074a01fc9262bb" || f.Key == "fire-spell."+f.SHA256[:20]) &&
+	return len(f.SHA256) == 64 && (f.Key == "round.1a0e55074a01fc9262bb" || f.Key == "fire-spell."+f.SHA256[:20] ||
+		(f.Key == "hud.ec5608fbca6974ee4604" && f.SHA256 == "ec5608fbca6974ee4604c38946916a68781c2eac792a0384deec8c151eb62d34")) &&
 		f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Width == 0 &&
 		f.Caller == (oracle.Addr{Seg: 0x0b72, Off: 0x027c}) && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0x4630}) &&
 		f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) && f.RawX == 8004 && f.RawY == 8089 &&

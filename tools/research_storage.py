@@ -27,6 +27,7 @@ KEEP.add('battle-continuation-20261025')
 KEEP.add('combat-names-20261025')
 KEEP.add('spell-catalog-20261025')
 KEEP.add('effect-catalog-20261025')
+KEEP.add('combat-casting-20261025')
 
 
 def digest(path, compressed=False):
