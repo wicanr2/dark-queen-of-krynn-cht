@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"image"
@@ -15,6 +16,7 @@ import (
 	"runtime/pprof"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -94,6 +96,7 @@ type liveGame struct {
 	list          *listState
 	reader        *journalReader
 	cold          *coldLoad
+	player        *playerSession
 }
 
 // 研究限定的冷讀重播。角色管理沿用 20px，讀回後才切換既有 16px 列表原型。
@@ -298,6 +301,9 @@ func (g *liveGame) installShortText() {
 	})
 }
 func (g *liveGame) limit() uint64 {
+	if g.player != nil {
+		return ^uint64(0)
+	}
 	if g.cold != nil && !g.cold.ready {
 		return g.cold.Handoff + 1
 	}
@@ -418,6 +424,9 @@ func (g *liveGame) installLifecycle() {
 func (g *liveGame) Update() error {
 	if g.finished {
 		return ebiten.Termination
+	}
+	if g.player != nil {
+		return g.updatePlayer()
 	}
 	if g.tickReader() {
 		return nil
@@ -707,6 +716,13 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		g.uploads++
 	}
 	screen.DrawImage(g.texture, nil)
+	if g.player != nil {
+		g.drawPlayerToolbar(screen)
+		if g.reader != nil {
+			g.reader.WaitDraw = false
+		}
+		return
+	}
 	// 擷取 GPU 實際讀回的已提交畫格，逐點確認與原子合成的輸入相同。
 	readback := make([]byte, len(px))
 	screen.ReadPixels(readback)
@@ -797,6 +813,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 }
 func main() {
+	playerPath := flag.String("player", "", "中文整合開發入口的資料目錄；接受一般鍵盤，不執行重播")
+	playerOriginal := flag.String("original", "/orig", "唯讀原版資料目錄")
+	playerSaves := flag.String("saves", "/session", "可寫存檔與前端偏好目錄")
 	state := flag.String("state", "", "正常冷啟動的 #239M 快照")
 	out := flag.String("out", "", "隔離研究輸出")
 	catalogPath := flag.String("catalog", "", "私有原型 TSV")
@@ -826,6 +845,10 @@ func main() {
 	manualCatalog := flag.String("manual-catalog", "", "DRAFT：已校讀說明手冊 TSV")
 	manualIndex := flag.String("manual-index", "", "DRAFT：獨立手冊分冊與文章索引")
 	flag.Parse()
+	if *playerPath != "" {
+		runPlayer(*playerPath, *playerOriginal, *playerSaves)
+		return
+	}
 	if *coldFine != "" && (*coldPath == "" || !*fine) {
 		panic("冷讀細驗區間需要冷讀及 fine 模式")
 	}
@@ -1226,4 +1249,377 @@ func main() {
 	must(os.WriteFile(filepath.Join(*out, "receipt.json"), append(b, '\n'), 0644))
 	must(o.WritePNG(filepath.Join(*out, "guest.png")))
 	fmt.Printf("frames=%d events=%d steps=%d RAM=%s\n", len(g.frames), len(g.events), o.Steps(), digest(ram))
+}
+
+// playerSession 整合已存在的呈現掛勾；不載入研究快照、動作或答案。
+// 目前仍為開發入口，正式字級、閱讀版面及 HD 由規格 003 追蹤。
+type playerSession struct {
+	Directory, Notice string
+	NoticeUntil       time.Time
+	Scale             int
+	Toolbar           bool
+	ToolbarGlyphs     glyphSet
+	Text              map[string]string
+	BarTexture        *ebiten.Image
+	Mouse             [2]int
+	MouseButtons      [2]bool
+}
+
+type playerButton struct {
+	Key, Action string
+	X, Width    int
+	Enabled     bool
+}
+
+func loadPlayerJSON(path string, value any) {
+	raw, err := os.ReadFile(path)
+	must(err)
+	must(json.Unmarshal(raw, value))
+}
+
+func runPlayer(profile, original, saves string) {
+	var manifest struct {
+		Version int
+		Files   map[string]string
+	}
+	loadPlayerJSON(filepath.Join(profile, "player-profile.json"), &manifest)
+	if manifest.Version != 1 || len(manifest.Files) < 20 {
+		panic("中文整合資料未完成")
+	}
+	for name, want := range manifest.Files {
+		clean := filepath.Clean(name)
+		if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			panic("整合資料路徑越界")
+		}
+		raw, err := os.ReadFile(filepath.Join(profile, clean))
+		must(err)
+		if digest(raw) != want {
+			panic("整合資料雜湊失配：" + name)
+		}
+	}
+	raw, err := os.ReadFile(filepath.Join(original, "DQK.EXE"))
+	must(err)
+	if digest(raw) != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" {
+		panic("原版版本不符，需要本作 DQK.EXE 1.1")
+	}
+	must(os.MkdirAll(saves, 0755))
+	must(os.MkdirAll(filepath.Join(saves, "saves"), 0755))
+	must(os.MkdirAll(filepath.Join(saves, "screenshots"), 0755))
+	o, err := oracle.Load(filepath.Join(original, "DQK.EXE"), original)
+	must(err)
+	defer o.Close()
+	o.SetCmdLine("SB220 SI7 RB330")
+	o.SetScratch(filepath.Join(saves, "saves"))
+	p := &playerSession{Directory: saves, Scale: 2, Mouse: [2]int{-1, -1}}
+	p.Text = readLiveCatalog(filepath.Join(profile, "toolbar.zh-TW.tsv"))
+	loadPlayerJSON(filepath.Join(profile, "toolbar-glyphs-16.json"), &p.ToolbarGlyphs)
+	if p.ToolbarGlyphs.Size != 16 || p.ToolbarGlyphs.Height != 20 {
+		panic("工具列字模格式不符")
+	}
+	for _, text := range p.Text {
+		for _, ch := range text {
+			if len(p.ToolbarGlyphs.Glyphs[string(ch)]) != 320 {
+				panic("工具列缺字")
+			}
+		}
+	}
+	var preferences struct{ Scale int }
+	if raw, err := os.ReadFile(filepath.Join(saves, "preferences.json")); err == nil {
+		if json.Unmarshal(raw, &preferences) == nil && (preferences.Scale == 2 || preferences.Scale == 3) {
+			p.Scale = preferences.Scale
+		}
+	}
+	g := &liveGame{o: o, out: saves, translate: true, player: p, active: map[[2]int]liveEvent{},
+		lastPixels: make([]byte, 640*400*4), list: &listState{}, cold: &coldLoad{Handoff: ^uint64(0)}}
+	g.catalog = readLiveCatalog(filepath.Join(profile, "zh-TW.tsv"))
+	loadPlayerJSON(filepath.Join(profile, "glyphs-16.json"), &g.glyphs)
+	if g.glyphs.Size != 16 || g.glyphs.Height != 20 {
+		panic("遊戲呈現字模格式不符")
+	}
+	// 冷啟動與遊戲內呈現共用一台原版機器。Cold 只承載既有開頭提示掛勾。
+	g.installColdPrompts(filepath.Join(profile, "startup"))
+	g.installList(filepath.Join(profile, "inputs.json"), "", filepath.Join(profile, "en.tsv"))
+	g.installReader(filepath.Join(profile, "reader.zh-TW.tsv"), filepath.Join(profile, "illustrations.json"))
+	g.installManual(filepath.Join(profile, "manual.zh-TW.tsv"), filepath.Join(profile, "manual-index.json"))
+	g.reader.Live = true
+	g.texture = ebiten.NewImage(640, 400)
+	p.BarTexture = ebiten.NewImage(640, 24)
+	ebiten.SetWindowSize(320*p.Scale, 200*p.Scale)
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	ebiten.SetWindowSizeLimits(640, 400, -1, -1)
+	ebiten.SetWindowClosingHandled(true)
+	ebiten.SetWindowTitle("黑暗之后：繁體中文整合開發版")
+	ebiten.SetTPS(60)
+	must(ebiten.RunGame(g))
+	preferences.Scale = p.Scale
+	raw, err = json.MarshalIndent(preferences, "", "  ")
+	must(err)
+	tmp := filepath.Join(saves, "preferences.tmp")
+	must(os.WriteFile(tmp, append(raw, '\n'), 0644))
+	must(os.Rename(tmp, filepath.Join(saves, "preferences.json")))
+}
+
+func (g *liveGame) playerButtons() []playerButton {
+	p, x := g.player, 4
+	mode := "toolbar.chinese"
+	if !g.translate {
+		mode = "toolbar.original"
+	}
+	reader := g.translate && g.reader != nil && g.reader.Ready
+	buttons := []playerButton{
+		{Key: "toolbar.scale2", Action: "scale2", Enabled: true},
+		{Key: "toolbar.scale3", Action: "scale3", Enabled: true},
+		{Key: mode, Action: "language", Enabled: true},
+		{Key: "toolbar.nohd", Action: "hd", Enabled: false},
+		{Key: "toolbar.journal", Action: "journal", Enabled: reader},
+		{Key: "toolbar.manual", Action: "manual", Enabled: reader && g.reader.Manual != nil},
+		{Key: "toolbar.guide", Action: "guide", Enabled: false},
+		{Key: "toolbar.screenshot", Action: "screenshot", Enabled: true},
+		{Key: "toolbar.fullscreen", Action: "fullscreen", Enabled: true},
+	}
+	for i := range buttons {
+		b := &buttons[i]
+		b.X, b.Width = x, len([]rune(p.Text[b.Key]))*16+16
+		x += b.Width
+	}
+	if x > 640 {
+		panic("工具列文字超出安全範圍")
+	}
+	return buttons
+}
+
+func (g *liveGame) playerAction(action string) {
+	p := g.player
+	switch action {
+	case "scale2", "scale3":
+		p.Scale = 2
+		if action == "scale3" {
+			p.Scale = 3
+		}
+		ebiten.SetWindowSize(320*p.Scale, 200*p.Scale)
+	case "language":
+		if g.reader != nil && g.reader.Mode != "" {
+			// 閱讀面板先循原有關閉流程退出，避免隱藏面板繼續吃掉按鍵。
+			for i := 0; i < 3 && g.reader.Mode != ""; i++ {
+				g.readerKey("Esc", "keyboard", 0)
+			}
+			if g.reader.Mode != "" {
+				return
+			}
+		}
+		g.translate = !g.translate
+	case "journal", "manual":
+		if g.reader != nil && g.translate {
+			key := "F5"
+			if action == "manual" {
+				key = "F6"
+			}
+			g.readerKey(key, "keyboard", 0)
+			g.reader.WaitDraw = true
+		}
+	case "hd", "guide":
+		key := "toolbar.hd_pending"
+		if action == "guide" {
+			key = "toolbar.guide_pending"
+		}
+		p.Notice, p.NoticeUntil = p.Text[key], time.Now().Add(3*time.Second)
+	case "screenshot":
+		name := "DQK-" + time.Now().Format("20060102-150405.000000000") + ".png"
+		f, err := os.OpenFile(filepath.Join(p.Directory, "screenshots", name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		must(err)
+		im := &image.RGBA{Pix: g.lastPixels, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
+		must(png.Encode(f, im))
+		must(f.Close())
+	case "fullscreen":
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
+}
+
+func (g *liveGame) tickPlayerToolbar() bool {
+	p := g.player
+	x, y := ebiten.CursorPosition()
+	if x >= 0 && x < 640 && y >= 0 && y < 6 {
+		p.Toolbar = true
+	} else if y < 0 || y >= 24 || x < 0 || x >= 640 {
+		p.Toolbar = false
+	}
+	for _, shortcut := range []struct {
+		Key    ebiten.Key
+		Action string
+	}{{ebiten.KeyF2, "scale"}, {ebiten.KeyF10, "screenshot"}, {ebiten.KeyF11, "fullscreen"}, {ebiten.KeyF12, "language"}} {
+		if inpututil.IsKeyJustPressed(shortcut.Key) {
+			action := shortcut.Action
+			if action == "scale" {
+				action = "scale3"
+				if p.Scale == 3 {
+					action = "scale2"
+				}
+			}
+			g.playerAction(action)
+			return true
+		}
+	}
+	if p.Toolbar && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		for _, b := range g.playerButtons() {
+			if x >= b.X && x < b.X+b.Width {
+				// 停用項目只顯示原因；不執行尚未完成的功能。
+				if b.Enabled || b.Action == "hd" || b.Action == "guide" {
+					g.playerAction(b.Action)
+				}
+				return true
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func (g *liveGame) updatePlayer() error {
+	if ebiten.IsWindowBeingClosed() {
+		return ebiten.Termination
+	}
+	consumed := g.tickPlayerToolbar()
+	g.playerMouse()
+	if consumed {
+		return nil
+	}
+	if g.translate && g.tickReader() {
+		return nil
+	}
+	alt := ebiten.IsKeyPressed(ebiten.KeyAltLeft) || ebiten.IsKeyPressed(ebiten.KeyAltRight)
+	if alt {
+		for _, key := range []struct {
+			Key  ebiten.Key
+			Name string
+		}{{ebiten.KeyM, "M"}, {ebiten.KeyQ, "Q"}} {
+			if inpututil.IsKeyJustPressed(key.Key) {
+				must(g.o.PressBIOSAltKey(key.Name))
+			}
+		}
+	} else {
+		for _, ch := range ebiten.AppendInputChars(nil) {
+			if ch >= 32 && ch <= 126 {
+				must(g.o.TypeKeys(string(ch)))
+			}
+		}
+	}
+	for _, key := range []struct {
+		Key  ebiten.Key
+		Name string
+	}{
+		{ebiten.KeyEnter, "Return"}, {ebiten.KeyNumpadEnter, "Return"}, {ebiten.KeyEscape, "Esc"},
+		{ebiten.KeyBackspace, "Backspace"}, {ebiten.KeyTab, "Tab"},
+		{ebiten.KeyArrowUp, "Up"}, {ebiten.KeyArrowDown, "Down"}, {ebiten.KeyArrowLeft, "Left"}, {ebiten.KeyArrowRight, "Right"},
+		{ebiten.KeyPageUp, "PgUp"}, {ebiten.KeyPageDown, "PgDn"}, {ebiten.KeyHome, "Home"}, {ebiten.KeyEnd, "End"},
+	} {
+		if inpututil.IsKeyJustPressed(key.Key) {
+			must(g.o.SendKeys(key.Name))
+		}
+	}
+	g.passageProgress()
+	if err := g.o.Run(500000); err != nil {
+		var exit *oracle.ExitError
+		if errors.As(err, &exit) && exit.Code == 0 {
+			return ebiten.Termination
+		}
+		return err
+	}
+	g.syncMovementCaption()
+	g.syncSpellCaption()
+	g.syncBattleNotice()
+	g.o.TrimPresentationHistory()
+	// 研究的事件索引只在尚待首字形時使用。一般遊玩保留小段診斷，不累積每幀 PNG。
+	if len(g.list.awaitGlyphs) == 0 && len(g.list.events) > 2048 {
+		g.list.events = nil
+	}
+	if u := g.cold.ui; len(u.Await) == 0 && len(u.Events) > 2048 {
+		u.Events = nil
+	}
+	if len(g.pages) > 256 {
+		g.pages = append([]storyPage(nil), g.pages[len(g.pages)-128:]...)
+	}
+	if len(g.reader.Events) > 256 {
+		g.reader.Events = nil
+	}
+	if len(g.reader.UIEvents) > 256 {
+		g.reader.UIEvents = nil
+	}
+	if g.reader.Manual != nil && len(g.reader.Manual.Events) > 256 {
+		g.reader.Manual.Events = nil
+	}
+	return nil
+}
+
+func (g *liveGame) playerMouse() {
+	p := g.player
+	x, y := ebiten.CursorPosition()
+	accept := x >= 0 && x < 640 && y >= 0 && y < 400 && !p.Toolbar &&
+		!(g.translate && g.reader != nil && g.reader.Mode != "")
+	if accept && p.Mouse != ([2]int{x / 2, y / 2}) {
+		p.Mouse = [2]int{x / 2, y / 2}
+		must(g.o.MoveMouse(p.Mouse[0], p.Mouse[1]))
+	}
+	for i, button := range []ebiten.MouseButton{ebiten.MouseButtonLeft, ebiten.MouseButtonRight} {
+		if p.MouseButtons[i] && (!ebiten.IsMouseButtonPressed(button) || !accept) {
+			g.o.ReleaseButton(i)
+			p.MouseButtons[i] = false
+		}
+		if accept && inpututil.IsMouseButtonJustPressed(button) {
+			g.o.PressButton(i)
+			p.MouseButtons[i] = true
+		}
+	}
+}
+
+func playerText(px []byte, stride, x, y int, text string, glyphs glyphSet, fg [3]byte) {
+	for i, ch := range []rune(text) {
+		alpha := glyphs.Glyphs[string(ch)]
+		if len(alpha) != 320 {
+			panic("工具列缺字")
+		}
+		for yy := 0; yy < 16; yy++ {
+			for xx := 0; xx < 16; xx++ {
+				d := ((y+yy)*stride + x + i*16 + xx) * 4
+				a := uint32(alpha[yy*16+xx])
+				for c := 0; c < 3; c++ {
+					px[d+c] = byte((uint32(fg[c])*a + uint32(px[d+c])*(255-a) + 127) / 255)
+				}
+			}
+		}
+	}
+}
+
+func (g *liveGame) drawPlayerToolbar(screen *ebiten.Image) {
+	p := g.player
+	if p.Toolbar {
+		px := make([]byte, 640*24*4)
+		for i := 0; i < len(px); i += 4 {
+			px[i], px[i+1], px[i+2], px[i+3] = 15, 18, 25, 255
+		}
+		x, _ := ebiten.CursorPosition()
+		for _, b := range g.playerButtons() {
+			fg := [3]byte{232, 232, 232}
+			if !b.Enabled {
+				fg = [3]byte{115, 118, 125}
+			} else if x >= b.X && x < b.X+b.Width {
+				fg = [3]byte{255, 217, 100}
+			} else if (b.Action == "scale2" && p.Scale == 2) || (b.Action == "scale3" && p.Scale == 3) || b.Action == "language" {
+				fg = [3]byte{102, 230, 235}
+			}
+			playerText(px, 640, b.X+8, 4, p.Text[b.Key], p.ToolbarGlyphs, fg)
+		}
+		p.BarTexture.WritePixels(px)
+		screen.DrawImage(p.BarTexture, nil)
+	}
+	if p.Notice != "" && time.Now().Before(p.NoticeUntil) {
+		px := make([]byte, 640*24*4)
+		for i := 0; i < len(px); i += 4 {
+			px[i+3] = 255
+		}
+		playerText(px, 640, 8, 4, p.Notice, p.ToolbarGlyphs, [3]byte{220, 220, 220})
+		p.BarTexture.WritePixels(px)
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(0, 376)
+		screen.DrawImage(p.BarTexture, op)
+	}
 }

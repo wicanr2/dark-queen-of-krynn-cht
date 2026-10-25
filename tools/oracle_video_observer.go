@@ -30,3 +30,14 @@ func (o *Oracle) VideoLayoutState() VideoWriteEvent {
 	return VideoWriteEvent{Mode: o.m.VideoMode(), MapMask: o.m.MapMask(), Unchained: o.m.Unchained(),
 		DisplayStart: o.m.DisplayStart(), Pitch: o.m.VGA.Pitch(320), LineCompare: o.m.VGA.LineCompare()}
 }
+
+// TrimPresentationHistory 只限制主機診斷歷程，不寫入 guest、VGA 或計時器狀態。
+// 互動入口不產生研究收據；保留最近 65536 筆埠操作，避免長時間遊玩無界累積。
+func (o *Oracle) TrimPresentationHistory() {
+	const keep = 65536
+	if len(o.m.PortLog) > keep*2 {
+		log := make([]machine.PortWrite, keep)
+		copy(log, o.m.PortLog[len(o.m.PortLog)-keep:])
+		o.m.PortLog = log
+	}
+}

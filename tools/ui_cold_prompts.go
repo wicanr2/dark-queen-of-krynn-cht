@@ -174,7 +174,7 @@ func (g *liveGame) installColdPrompts(path string) {
 	must(e)
 	must(json.Unmarshal(raw, &u.Glyphs))
 	count := len(u.Config.Bindings)
-	if u.Glyphs.Size != 16 || u.Glyphs.Height != 20 || (count != 6 && count != 15) || len(u.Catalog) != count || len(u.Sources) != count {
+	if u.Glyphs.Size != 16 || u.Glyphs.Height != 20 || (count != 6 && count != 15 && count != 17) || len(u.Catalog) != count || len(u.Sources) != count {
 		panic("冷讀提示輸入不符")
 	}
 	last := uint64(220000000)
@@ -428,7 +428,7 @@ func (g *liveGame) installColdPrompts(path string) {
 }
 
 func startupBody(group string) bool {
-	return group == "role-name" || group == "party-name" || group == "quiz"
+	return group == "role-name" || group == "party-name" || group == "quiz" || group == "opening-title"
 }
 
 func validStartupCaption(b coldPromptBinding, source string) bool {
@@ -443,6 +443,8 @@ func validStartupCaption(b coldPromptBinding, source string) bool {
 		button        bool
 	}
 	specs := map[string]spec{
+		"startup.title":        {"The Dark Queen of Krynn", "opening-title", 8032, 8020, oracle.Addr{Seg: 0x20f9, Off: 0xcf}, 0x87, false},
+		"startup.version":      {"Version 1.1        July 29,1992", "opening-title", 8016, 8024, oracle.Addr{Seg: 0x20f9, Off: 0xeb}, 0x87, false},
 		"startup.play":         {"Play", "opening", 8, 189, oracle.Addr{}, 0, true},
 		"startup.demo":         {"Demo", "opening", 48, 189, oracle.Addr{}, 0, true},
 		"startup.quit":         {"Quit", "opening", 88, 189, oracle.Addr{}, 0, true},

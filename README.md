@@ -217,6 +217,19 @@ bash tools/readme-gallery.sh readme-gallery-my-preview
 
 開發、研究與原型驗證使用 Docker。現有入口的用途與限制見規格，請勿把單一場景原型當作完整遊戲啟動器。
 
+中文整合開發入口已將既有中文資料、開頭提示、手札與說明，以及頂端工具列串在一起。
+資料與合法原版齊備時，可在既有 Docker 工具鏈中建立並開啟：
+
+```sh
+bash tools/player.sh prepare player-integration-local
+bash tools/player.sh build player-integration-local
+bash tools/player.sh run player-integration-local
+```
+
+這仍是開發入口，正式版面與 HD 尚未完成；依使用者要求沒有新增遊戲抽驗。
+工具列提供縮放、繁中／原版、手札、說明、截圖與全螢幕動作，HD 與攻略接妥前明列停用原因。
+目前需要有 X11 存取權的桌面環境，存檔及截圖位置見[入口與工具列規格](docs/spec/003-player-toolbar.md)。
+
 - [協作規則](AGENTS.md)
 - [目前狀態](CONTEXT.md)
 - [工作紀錄](WORKLOG.md)

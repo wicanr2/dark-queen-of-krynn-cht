@@ -405,9 +405,14 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			l.creationPageTracking = true
 		}
 	}
-	b, e = os.ReadFile(requestPath)
-	must(e)
-	must(json.Unmarshal(b, &l.request))
+	if g.player != nil && requestPath == "" {
+		// 一般遊玩不載入研究動作或預設答案，也不偽造測試快照。
+		l.request.Start = o.Steps()
+	} else {
+		b, e = os.ReadFile(requestPath)
+		must(e)
+		must(json.Unmarshal(b, &l.request))
+	}
 	validHeaders := len(l.config.Headers) == 2
 	if len(l.config.Headers) == 3 {
 		h := l.config.Headers[2]
@@ -416,7 +421,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		validHeaders = h.Pane == "grimoire" && h.Segment == 0x333e && h.Offset == 0xa7c4 &&
 			h.Key == "header.41b8dd827bde29bd2677" && h.SHA256 == "41b8dd827bde29bd2677001414cc57fb5111abb92366cc5e7179c24c8304d341"
 	}
-	if !validHeaders || len(l.config.Rows) == 0 || len(l.config.Fields) == 0 || len(l.request.Actions) == 0 || o.Steps() != l.request.Start {
+	if !validHeaders || len(l.config.Rows) == 0 || len(l.config.Fields) == 0 || (g.player == nil && len(l.request.Actions) == 0) || o.Steps() != l.request.Start {
 		panic("列表輸入不符")
 	}
 	for _, key := range []string{"answer.yes", "answer.no", "format.string"} {

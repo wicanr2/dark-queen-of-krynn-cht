@@ -1,0 +1,14 @@
+key	text
+toolbar.scale2	2倍
+toolbar.scale3	3倍
+toolbar.chinese	繁中
+toolbar.original	原版
+toolbar.hd	HD
+toolbar.nohd	HD待補
+toolbar.journal	手札
+toolbar.manual	說明
+toolbar.guide	攻略
+toolbar.screenshot	截圖
+toolbar.fullscreen	全螢幕
+toolbar.guide_pending	攻略正文與重繪地圖接入後啟用
+toolbar.hd_pending	HD素材接入後啟用
