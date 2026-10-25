@@ -20,6 +20,7 @@ KEEP.add('weapon-hud-20261025')
 KEEP.add('status-menu-20261025')
 KEEP.add('manual-reader-20261025')
 KEEP.add('manual-reader-rows-20261025')
+KEEP.add('shared-menu-20261025')
 
 
 def digest(path, compressed=False):
