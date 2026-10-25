@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import platform
 import re
 import shutil
@@ -26,15 +27,25 @@ def section(document, title):
 
 
 def prose_html(markdown):
-    """轉換本頁介紹使用的段落、小節、連結及表格。"""
+    """轉換本頁使用的標題、段落、圖片、表格與命令。"""
     def inline(text):
         escaped = html.escape(text.replace('\n', ' '), quote=True)
-        return re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', escaped)
+        escaped = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', r'<img src="\2" alt="\1" loading="lazy">', escaped)
+        escaped = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', escaped)
+        escaped = re.sub(r'`([^`]+)`', r'<code>\1</code>', escaped)
+        return re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', escaped)
 
     blocks = []
     for block in markdown.split('\n\n'):
-        if block.startswith('### '):
-            blocks.append('<h3>' + inline(block[4:]) + '</h3>')
+        heading = re.fullmatch(r'(#{1,3}) (.+)', block)
+        if heading:
+            level, title = len(heading[1]), heading[2]
+            anchor = re.sub(r'[^\w\-\u3400-\u9fff ]', '', title).replace(' ', '-')
+            blocks.append(f'<h{level} id="{anchor}">' + inline(title) + f'</h{level}>')
+        elif block.startswith('```'):
+            lines = block.splitlines()
+            assert lines[-1] == '```'
+            blocks.append('<pre><code>' + html.escape('\n'.join(lines[1:-1])) + '</code></pre>')
         elif block.startswith('|'):
             rows = [line.strip().strip('|').split('|') for line in block.splitlines()]
             header = '<tr>' + ''.join('<th>' + inline(c.strip()) + '</th>' for c in rows[0]) + '</tr>'
@@ -48,7 +59,7 @@ def prose_html(markdown):
 
 
 def build(root, output):
-    assert output.is_dir() and output.stat().st_uid == 1000
+    assert output.is_dir() and output.stat().st_uid == os.getuid()
     assert not (output / 'preview-index.json').exists(), '請使用新的輸出目錄，保留舊版證據'
     index = read(output / 'tlb-index.json')
     records = {r['key']: r for r in index['records'] if 'image' in r}
@@ -123,14 +134,46 @@ def build(root, output):
     pictures['guide'] = copy(root / 'workplace/caergoth-redraw/map.png', 'guide-caergoth.png',
         kind='攻略地圖重繪原型，非遊戲內地圖',
         receipt_sha256=digest(root / 'workplace/caergoth-redraw/receipt.json'))
-    art_source = root / 'workplace/probe/readme-gallery-20261024'
-    for name, original, generated in [
-        ('hd-blue-dragon-r2.png', 'CPIC..6', 'exec-aa1e0904-d57a-4d47-a6c5-0807dd36cfc5.png'),
-        ('hd-portrait-r1.png', 'PICA.7.1', 'exec-d35fea1a-c87c-4557-bc51-0d8df2956322.png')]:
-        pictures[name] = copy(art_source / name, name, kind='imagegen 試繪，尚未接入遊戲，正式風格未定',
-            source_key=original, original_png_sha256=records[original]['image_sha256'],
-            generator='內建 imagegen；工具未提供模型版號',
-            generated_source=generated)
+    theme_root = root / 'workplace/probe/player-current/hd'
+    theme = read(theme_root / 'hd.json')
+    assert theme['Ready'] and theme['Scale'] == 3
+    assets = sorted(theme['Assets'], key=lambda r: (r['Key'].split('.')[0],
+                     [int(v) for v in r['Key'].split('.')[1:] if v]))
+    for item in assets:
+        for source_field, hash_field in [('Original', 'OriginalSHA256'), ('Image', 'SHA256')]:
+            assert digest(theme_root / item[source_field]) == item[hash_field]
+        copy(theme_root / item['Image'], 'hd-' + item['Key'] + '.png',
+             kind='現行已編譯HD素材；不是遊戲截圖', source_key=item['Key'],
+             review_round=item['review_round'])
+    portrait, = [r for r in assets if r['Key'] == 'PICA.7.1']
+    copy(theme_root / portrait['Image'], 'hd-portrait-current.png', kind='現行已編譯HD頭像素材')
+    combat = [r for r in assets if r['Key'].startswith('CPIC.')]
+    width, height, columns = 320, 180, 4
+    comparison = Image.new('RGB', (width * columns, height * ((len(combat)+columns-1)//columns)), '#23232c')
+    painter = ImageDraw.Draw(comparison)
+    for i, item in enumerate(combat):
+        x, y = i % columns * width, i // columns * height
+        painter.text((x+8, y+5), item['Key'] + ' / Original | HD', fill='white')
+        for column, field in enumerate(['Original', 'Image']):
+            with Image.open(theme_root / item[field]) as source:
+                picture = source.convert('RGBA')
+                # 比較格只排版，原版使用整數倍最近鄰，不把放大當成HD。
+                factor = max(1, min(144//picture.width, 144//picture.height))
+                if field == 'Original':
+                    picture = picture.resize((picture.width*factor, picture.height*factor), Image.Resampling.NEAREST)
+                else:
+                    picture.thumbnail((144, 144), Image.Resampling.LANCZOS)
+                comparison.paste(picture, (x+column*160+(160-picture.width)//2, y+26+(144-picture.height)//2), picture)
+    comparison.save(output / 'combat-hd-comparison.png')
+    files.append(dict(file='combat-hd-comparison.png', sha256=digest(output/'combat-hd-comparison.png'),
+                      kind='現行素材對照排版，左原版右HD；不是遊戲截圖', keys=[r['Key'] for r in combat]))
+    sample_root = root / 'workplace/probe/player-sample-20261026-r5'
+    sample = read(sample_root / 'checks.json')
+    assert sample['passed'] and sample['state_injection'] is False
+    for source, target in [('05-chinese.png', 'player-chinese.png'), ('06-manual.png', 'player-manual.png')]:
+        assert digest(sample_root/source) == sample['screenshots'][source]
+        copy(sample_root/source, target, kind='現行程式正常冷啟動介面抽驗；非同狀態成對截圖',
+             build_sha256=sample['build_sha256'], receipt_sha256=digest(sample_root/'checks.json'))
 
     # 人物候選只選第一圖格，完整圖庫另列，保留未知身分。
     candidates = {'PICA': {6, 7, 11, 18, 19, 20, 21, 22},
@@ -153,83 +196,33 @@ def build(root, output):
         draw.text((x + 8, y + cell - 20), record['key'], fill='white')
     atlas.save(output / 'portraits-original.png')
 
-    def esc(text):
-        return html.escape(str(text), quote=True)
-
-    def figure(file, caption, pixel=False):
-        return ('<figure><a href="' + esc(file) + '"><img ' + ('class="pixel" ' if pixel else '')
-                + 'src="' + esc(file) + '" alt="' + esc(caption) + '"></a><figcaption>'
-                + esc(caption) + '</figcaption></figure>')
-
     readme = (root / 'README.md').read_text()
-    # 本機圖庫在根目錄下三層，章節內的專案文件連結一併改為相對位置。
-    story, mechanics = [re.sub(r'\]\((docs/[^)]+)\)', r'](../../../\1)', section(readme, title))
-                        for title in ('故事背景', '遊戲機制')]
-    content = '<header><p class="eyebrow">克萊恩三部曲 · 第三部</p><h1>黑暗之后</h1>'
-    content += '<p>The Dark Queen of Krynn · HD＋繁體中文化</p><p>追查凱爾高斯的災難，跨海前往泰勒達斯，阻止黑暗之后再次進入物質世界。</p>'
-    content += '<p class="note">繁中顯示仍為研究原型。兩張 HD 圖為試繪，尚未接入遊戲。原版圖像只在本機展示。</p></header>'
-    content += '<nav><a href="#story">故事背景</a><a href="#mechanics">遊戲機制</a><a href="#hd">原版＋HD</a><a href="#monsters">怪物圖庫</a><a href="#portraits">人物頭像</a><a href="#screens">遊戲畫面</a><a href="#maps">地圖</a></nav><main>'
-    content += '<section id="story"><h2>故事背景</h2>' + prose_html(story) + '</section>'
-    content += '<section id="mechanics"><h2>遊戲機制</h2>' + prose_html(mechanics) + '</section>'
-    content += '<section id="hd"><h2>原版＋HD 試繪</h2><p>藍龍的原版圖格已與首戰畫面核對。頭像身分尚未確認，保留來源編號。全量 HD 排在中文化之後。</p><div class="pairs">'
-    for key, name, title in [('CPIC..6', 'hd-blue-dragon-r2.png', '藍龍 · CPIC ID 82'),
-                              ('PICA.7.1', 'hd-portrait-r1.png', '人物頭像 · PICA 7.1')]:
-        content += '<article><h3>' + title + '</h3><div class="pair">'
-        content += figure(records[key]['image'], '原版 · ' + key, True)
-        content += figure(name, 'HD 試繪 · 未接入') + '</div></article>'
-    content += '</div></section><section id="monsters"><h2>怪物與戰鬥角色原版總覽</h2><p>CPIC 共 190 格，包含動作與重複編號；圖格數不等於怪物種類數。尚未逐項對回怪物名稱。</p>'
-    content += figure('CPIC-original.png', 'CPIC 原版全圖格總覽 · 點圖開啟原尺寸', True)
-    content += '<details><summary>隊員戰鬥造型 · CBODY 98 格</summary>' + figure('CBODY-original.png', 'CBODY 原版戰鬥造型', True) + '</details></section>'
-    content += '<section id="portraits"><h2>人物頭像原版總覽</h2><p>先列 31 張人物候選圖。名稱與身分待核對；三個 PIC 圖庫已解出的 72 格另含場景與怪物，還有 52 個其他繪圖方法的區塊尚未解碼。</p>'
-    content += figure('portraits-original.png', '31 張人物候選頭像 · 點圖開啟原尺寸', True) + '<div class="portraits">'
-    for r in portraits:
-        content += figure(r['image'], r['key'] + ' · 身分待核', True)
-    content += '</div><details><summary>查看 PICA／PICB／PICC 已解出的圖格</summary>'
-    for name in ('PICA', 'PICB', 'PICC'):
-        content += figure(name + '-original.png', name + ' 原版圖庫 · 含人物、怪物及場景', True)
-    content += '</details></section><section id="screens"><h2>遊戲實際畫面</h2><p>左為原版，右為繁中顯示原型。兩側使用相同原版狀態與輸入。這些畫面未套用 HD 圖像。</p>'
-    for name, title in [('ammo', '單支箭矢與裝備清單'), ('battle', '首戰 · 毒氣與傷害回報'), ('defeat', '首戰敗北 · 三行結語')]:
-        content += '<h3>' + title + '</h3><div class="pair">'
-        content += figure(name + '-en.png', '原版', True) + figure(name + '-zh.png', '繁中顯示原型', True) + '</div>'
-    content += '</section><section id="maps"><h2>探索與遊戲內地圖</h2><p>以下兩張直接取自原版正常探索流程，尚未套用繁中或 HD。</p><div class="pair">'
-    content += figure('forest.png', '森林探索 · 原版', True) + figure('area-map.png', '遊戲內區域圖 · 原版', True)
-    content += '</div><h3>凱爾高斯攻略地圖重繪</h3><p>這是另行繪製的攻略地圖原型，含繁中標註。與上方原版區域圖分開展示，尚未作為遊戲內地圖接入。</p>'
-    content += figure('guide-caergoth.png', '凱爾高斯 · 攻略重繪原型') + '</section>'
-    content += '<footer><p>故事與機制的來源見各章末。圖像來源、雜湊與截圖狀態見 <a href="preview-index.json">展示索引</a>；全部原版圖格見 <a href="tlb-index.json">圖庫索引</a>。</p><p>玩家須自備合法原版。本頁與原版圖像只留本機，並非可公開的遊戲封包。</p></footer></main>'
-    css = '''*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#12151c;color:#ede9dc;font:17px/1.8 system-ui,sans-serif}header,main,nav{max-width:1200px;margin:auto;padding:32px}header{padding-top:64px}header p{max-width:850px}.eyebrow{color:#cbb47e;letter-spacing:.15em}h1{font-size:64px;line-height:1.1;letter-spacing:.12em;margin:20px 0}h2{font-size:30px;color:#dec58d}h3{font-size:21px}.note,figcaption,footer{color:#b9b6ae}nav{display:flex;gap:24px;flex-wrap:wrap;border-block:1px solid #44413a;padding-block:16px}a{color:#d9bf87}section{padding:24px 0 42px;border-bottom:1px solid #44413a;scroll-margin-top:20px}.pair,.pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.pair{align-items:start}figure{min-width:0;margin:12px 0}figure img{display:block;width:100%;height:auto;background:#23232c;border:1px solid #49483f}.pixel{image-rendering:pixelated}.pairs .pair{align-items:center}.pairs img{aspect-ratio:1;object-fit:contain}.pairs article{padding:20px;background:#1b202b;border:1px solid #49483f}.portraits{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:18px}.portraits figcaption{font-size:12px}figcaption{font-size:14px;padding-top:6px}summary{cursor:pointer;padding:16px 0;color:#d9bf87}footer{font-size:14px;padding-top:30px}@media(max-width:720px){header,main,nav{padding:20px}h1{font-size:44px}.pairs,.pair{grid-template-columns:1fr}.portraits{grid-template-columns:repeat(3,minmax(0,1fr))}}'''
-    css += '.table-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #49483f;padding:10px 14px;text-align:left;vertical-align:top}th{background:#1b202b}#story p,#mechanics p{max-width:960px}'
-    page = '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>黑暗之后 · 圖文介紹</title><style>' + css + '</style>' + content + '</html>\n'
+    story, mechanics = [section(readme, title) for title in ('故事背景', '遊戲機制')]
+    # 兩種閱讀格式都從根README建立，避免另維護一份過時的功能與風格說明。
+    def local_link(match):
+        label, destination = match.groups()
+        prefix = 'workplace/probe/readme-gallery-current/'
+        if destination.startswith(prefix):
+            destination = destination[len(prefix):]
+        elif not re.match(r'^(?:https?://|#)', destination):
+            destination = '../../../' + destination
+        return label + '(' + destination + ')'
+    markdown = re.sub(r'(!?\[[^\]]*\])\(([^)]+)\)', local_link, readme)
+    markdown += '\n## 已編譯 HD 素材逐項查閱\n\n下列為素材圖，不是遊戲執行截圖。\n\n'
+    markdown += '| 來源鍵 | HD 素材 | 接受輪次 |\n|---|---|---|\n'
+    for item in assets:
+        markdown += f"| {item['Key']} | ![{item['Key']}](hd-{item['Key']}.png) | {item['review_round']} |\n"
+    markdown += '\n來源及雜湊見 [展示索引](preview-index.json) 與 [圖庫索引](tlb-index.json)。\n'
+    css = """*{box-sizing:border-box}body{margin:0;background:#12151c;color:#ede9dc;font:17px/1.8 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:32px}h1{font-size:42px;color:#dec58d}h2{margin-top:48px;color:#dec58d}h3{color:#d9c69f}a{color:#d9bf87}p{max-width:1000px}img{display:block;max-width:100%;height:auto;margin:12px auto;background:#23232c}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #49483f;padding:10px;vertical-align:top;text-align:left}th{background:#1b202b}td img{max-height:600px;object-fit:contain}pre{overflow-x:auto;background:#1b202b;padding:16px}.table-scroll{overflow-x:auto}code{overflow-wrap:anywhere}@media(max-width:720px){main{padding:16px}h1{font-size:30px}table{font-size:14px}th,td{padding:6px}}"""
+    page = '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>黑暗之后 · 圖文介紹</title><style>' + css + '</style><main>' + prose_html(markdown) + '</main></html>\n'
     (output / 'README.html').write_text(page)
-    markdown = '# 《黑暗之后》HD＋繁體中文化\n\n'
-    markdown += '本機圖文版。繁中顯示仍為研究原型；HD 僅兩張試繪，尚未接入遊戲。\n\n'
-    markdown += '## 故事背景\n\n' + story + '\n\n'
-    markdown += '## 遊戲機制\n\n' + mechanics + '\n\n'
-    markdown += '## 怪物與戰鬥角色總覽\n\n190 個 CPIC 圖格包含動作與重複編號，身分尚未全量核對。\n\n'
-    markdown += '![原版怪物與戰鬥角色圖格總覽](CPIC-original.png)\n\n'
-    markdown += '98 個隊員戰鬥造型另列。\n\n![原版隊員戰鬥造型](CBODY-original.png)\n\n'
-    markdown += '## 人物頭像總覽\n\n31 張人物候選圖，保留來源編號，身分待核。\n\n'
-    markdown += '![原版人物頭像總覽](portraits-original.png)\n\n'
-    markdown += '## 原版與 HD 試繪對照\n\n全量 HD 尚未製作；以下試繪未接入遊戲，正式風格未定案。\n\n'
-    markdown += '| 圖像 | 原版 | HD 試繪 |\n|---|---|---|\n'
-    markdown += '| 藍龍 CPIC..6 | ![藍龍原版](CPIC..6.png) | ![藍龍 HD 試繪](hd-blue-dragon-r2.png) |\n'
-    markdown += '| 頭像 PICA.7.1，身分待核 | ![頭像原版](PICA.7.1.png) | ![頭像 HD 試繪](hd-portrait-r1.png) |\n\n'
-    markdown += '## 遊戲截圖\n\n兩側取自相同原版狀態與輸入，未套用 HD。\n\n'
-    markdown += '| 畫面 | 原版 | 繁中顯示原型 |\n|---|---|---|\n'
-    for name, title in [('ammo', '單支箭矢與裝備清單'), ('battle', '首戰毒氣與傷害回報'), ('defeat', '首戰敗北結語')]:
-        markdown += f'| {title} | ![原版 {title}]({name}-en.png) | ![繁中 {title}]({name}-zh.png) |\n'
-    markdown += '\n## 遊戲內地圖\n\n原版正常探索畫面與區域圖，尚未套用繁中或 HD。\n\n'
-    markdown += '![原版森林探索](forest.png)\n\n![原版遊戲內區域圖](area-map.png)\n\n'
-    markdown += '### 攻略地圖重繪\n\n凱爾高斯繁中攻略重繪原型，尚未接入遊戲。\n\n'
-    markdown += '![凱爾高斯攻略重繪原型](guide-caergoth.png)\n\n'
-    markdown += '## 完整已解圖庫\n\n三份圖庫另含怪物與場景，不全是人物頭像。\n\n'
-    for name in ('PICA', 'PICB', 'PICC'):
-        markdown += f'![{name} 原版已解圖庫]({name}-original.png)\n\n'
-    markdown += '原版及衍生圖像只留本機。玩家須自備合法原版。來源與雜湊見 [展示索引](preview-index.json) 及 [圖庫索引](tlb-index.json)。\n'
     (output / 'README.md').write_text(markdown)
-    result = dict(draft=True, rights='本機限定；原版及衍生圖像不加入 Git',
+    result = dict(draft=False, rights='本機限定；原版及衍生圖像不加入 Git',
         readme_sha256=digest(root / 'README.md'), tlb_index_sha256=digest(output / 'tlb-index.json'),
         original_frames=len(records), unsupported_blocks=len(unsupported), portrait_candidates=[r['key'] for r in portraits],
-        hd_samples=2, hd_in_game=False, screenshots=files,
+        hd_samples=len(assets), hd_in_game="僅已匹配來源可接入；本頁HD為素材展示", screenshots=files,
+        hd_manifest_sha256=digest(theme_root / "hd.json"),
+        player_sample_sha256=digest(sample_root / "checks.json"),
         versions=dict(python=platform.python_version(), pillow=PIL.__version__),
         tools={n: digest(root / 'tools' / n) for n in ('tlb_gallery.py', 'readme_preview.py', 'readme-gallery.sh')},
         sprite_witness=dict(key='CPIC..6', xy=[32, 104], opaque_pixels=matched,

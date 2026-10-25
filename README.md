@@ -1,16 +1,23 @@
 # 《黑暗之后》HD＋繁體中文化
 
-《The Dark Queen of Krynn》是克萊恩三部曲的第三部，接續《克萊恩英豪》與《幽靈騎士》。
-本專案使用 dosgolem 執行原版，在呈現層加入繁體中文與 HD 圖像。
-武器、怪物與跨代人物譯名沿用《幽靈騎士》，原版規則與存檔保持原樣。
+追查凱爾高斯的毀滅，跨海前往泰勒達斯，阻止塔克西絲重返克萊恩。
 
-玩家須自備合法原版。原版遊戲、美術、手冊與掃描留在本機，不隨儲存庫提供。
+《The Dark Queen of Krynn》是 SSI 克萊恩三部曲的終章，接續《克萊恩英豪》與《幽靈騎士》。
+本專案以 dosgolem 執行 DOS 原版，在呈現層加入繁體中文、內建閱讀面板與 HD 美術。
+武器、怪物及跨代人物譯名與《幽靈騎士》對齊；遊戲規則、條件判定與存檔語意沿用原版。
 
-**[閱讀完整圖文版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/README.md)** ·
-[用瀏覽器開啟圖庫](workplace/probe/readme-gallery-story-mechanics-20261025-r2/README.html)
+玩家須自備合法原版。遊戲檔案、原版及衍生美術、手冊與掃描只留本機，不隨儲存庫提供。
+目前為開發中的整合版，完整繪圖接管、剩餘中文、全量 HD 及攻略地圖仍在製作。
 
-圖文版包含總覽圖、原版與 HD 試繪對照、實際遊戲截圖及地圖。
-下方圖片連結須在備有素材的本機工作區開啟；GitHub 保存介紹與重建工具。
+[本機完整圖文版](workplace/probe/readme-gallery-current/README.html) ·
+[如何啟動](#如何啟動) · [目前狀態](#目前狀態) · [文件入口](#文件與授權)
+
+下方圖片只在備有素材的本機工作區顯示。GitHub 保存文字介紹與重建工具。
+
+![現行繁中角色管理選單，正常冷啟動後進入](workplace/probe/readme-gallery-current/player-chinese.png)
+
+上圖取自現行整合程式的正常冷啟動與角色管理操作，十二個按鈕使用 20 像素圓體。
+這張介面截圖不代表已走遍所有冒險場景。
 
 ## 故事背景
 
@@ -49,7 +56,7 @@
 ## 遊戲機制
 
 本作採用進階龍與地下城規則，核心循環是組隊、探索與取得線索、戰鬥、整備，再繼續旅行。
-以下介紹原版設計；中文原型目前已驗證的範圍另見「目前狀態」。
+以下介紹原版設計；本專案接入及驗證範圍見「目前狀態」。
 
 ### 隊伍、職業與成長
 
@@ -78,7 +85,7 @@
 有些遭遇需要交涉、解謎或救援，線索可能跨越多個地點。
 
 原版會要求玩家查閱指定編號的旅行手札，補充信件、對話與圖像線索。
-本專案已有對應手札及繁中說明閱讀原型；另規劃手動開啟的攻略頁。
+本專案已內建繁中手札與說明面板，可在遊戲中閱讀，再返回原畫面；另製作手動查閱的攻略頁。
 攻略正文重新排版，地圖重新繪製並標註繁中，掃描只用於校對。
 
 ### 方格戰場與回合決策
@@ -125,127 +132,171 @@
 來源與校讀限制見[手冊基線](docs/re/001-input-baseline.md)。
 跨作角色匯入是原版功能，本專案尚未完成跨作匯入驗收。
 
-## 怪物總覽
+## 中文介面與工具列
 
-本機圖文版收錄 CPIC 戰鬥圖庫的 190 個已解圖格，另列 98 個隊員戰鬥造型。
-圖格包含動作與重複編號，不能當作怪物種類數；尚未確認的名稱保留來源編號。
-藍龍已有一組原版與 HD 試繪對照，其原版圖格已與首戰畫面核對。
-下列 HD 圖保留早期素材對照，並非 HD 遊戲截圖；現行接入與製作範圍見[目前狀態](#目前狀態)。
+中文在原版文字繪製前辨識完整來源，再由呈現層排版。角色管理採 20 像素圓體，
+其餘文字採 16 像素；姓名、物品數量、魔法加值及原版快捷鍵保留。
+箭矢與弩箭另處理單支、整堆、分半與集合，避免數量或加值讓名稱漏譯。
 
-| 展示 | 原版 | HD |
+工具列在滑鼠移到視窗頂端時展開，提供縮放、繁中／原版、HD、手札、說明、攻略、截圖及全螢幕。
+攻略正文與地圖未完成，因此該項目前停用。
+
+![已定稿的頂端懸停工具列，自有介面圖](docs/spec/003-toolbar-approved.png)
+
+| 操作 | 功能 |
+|---|---|
+| F2 | 在 2 倍與 3 倍視窗間切換，也可自行調整視窗大小 |
+| F12 | 切換繁中與原版顯示 |
+| 工具列「HD」 | 獨立開關 HD，縮放不會更改 HD 偏好 |
+| F5 | 查閱已讀手札 |
+| F6 | 開啟兩冊繁中說明 |
+| F10 | 儲存目前呈現畫面的截圖 |
+| F11 | 切換全螢幕 |
+| Esc | 關閉閱讀面板；遊戲內仍依原版所在介面處理 |
+
+手札與說明使用原有閱讀框，包含可縮放、平移的重繪圖文及手冊附表。
+關閉閱讀面板後回到遊戲。關閉程式視窗會結束程序，請先使用遊戲內的儲存功能。
+操作契約及平台限制見[工具列規格](docs/spec/003-player-toolbar.md)。
+
+## 原版與 HD 圖庫
+
+HD 保留原版配色、構圖及前景範圍。人物沿細緻油畫方向，怪物沿細緻奇幻方向製作。
+HD 開關與視窗大小獨立，2 倍、3 倍及自由縮放都可使用。
+下圖是已編譯素材的對照圖，不是遊戲執行截圖。
+
+![已編譯戰鬥圖格的原版與 HD 總覽，每格左為原版、右為 HD](workplace/probe/readme-gallery-current/combat-hd-comparison.png)
+
+戰鬥圖格包含一般與攻擊姿態，不能把每格當作一種怪物。
+已有素材會在來源及遮擋條件匹配時使用；未完成或未匹配的圖像維持原版。
+本機圖文版列出現行主題全部項目、來源鍵及生成輪次，完整範圍見[HD 規格](docs/spec/004-hd-layer.md)。
+
+### 怪物與隊員戰鬥造型
+
+原版 CPIC 圖庫已解出 190 格，包含怪物、動作及重複編號。CBODY 另有 98 格隊員戰鬥造型。
+尚未確認的身分保留來源編號，不依外觀補名。
+
+![原版怪物與戰鬥圖格總覽，190 格不等於190種怪物](workplace/probe/readme-gallery-current/CPIC-original.png)
+
+![原版隊員戰鬥造型總覽](workplace/probe/readme-gallery-current/CBODY-original.png)
+
+### 人物頭像
+
+31 張人物候選頭像保留各自的來源編號，身分仍待逐項核對。
+完整 PICA、PICB、PICC 圖庫另包含怪物及場景，可在本機圖文版放大查閱。
+
+![31 張原版人物候選頭像總覽](workplace/probe/readme-gallery-current/portraits-original.png)
+
+| 已編譯頭像 | 原版 | HD |
 |---|---|---|
-| 怪物與戰鬥角色圖格 | ![190 格總覽](workplace/probe/readme-gallery-story-mechanics-20261025-r2/CPIC-original.png) | 全量尚未製作 |
-| 隊員戰鬥造型 | ![98 格總覽](workplace/probe/readme-gallery-story-mechanics-20261025-r2/CBODY-original.png) | 全量尚未製作 |
-| 藍龍試繪 | ![原版圖格](workplace/probe/readme-gallery-story-mechanics-20261025-r2/CPIC..6.png) | ![HD 試繪](workplace/probe/readme-gallery-story-mechanics-20261025-r2/hd-blue-dragon-r2.png)，未接入遊戲 |
-
-## 人物頭像總覽
-
-31 張人物候選頭像排成一張總覽圖，並保留各張原圖供放大查看。
-人物身分尚待逐項核對；一張頭像已有原版與 HD 試繪對照，本批接續既有試繪方向。
-完整 PICA、PICB、PICC 已解圖庫另列，包含人物、怪物與場景。
-
-| 展示 | 原版 | HD |
-|---|---|---|
-| 人物候選頭像 | ![31 張總覽](workplace/probe/readme-gallery-story-mechanics-20261025-r2/portraits-original.png) | 全量尚未製作 |
-| PICA.7.1，身分待核 | ![原版頭像](workplace/probe/readme-gallery-story-mechanics-20261025-r2/PICA.7.1.png) | ![HD 試繪](workplace/probe/readme-gallery-story-mechanics-20261025-r2/hd-portrait-r1.png)，未接入遊戲 |
+| PICA.7.1，身分待核 | ![原版頭像](workplace/probe/readme-gallery-current/PICA.7.1.png) | ![現行HD頭像素材](workplace/probe/readme-gallery-current/hd-portrait-current.png) |
 
 ## 遊戲截圖
 
-展示箭矢裝備清單、首戰毒氣與傷害回報、敗北結語的原版與繁中畫面。
-每組取自相同原版狀態與輸入，保留裝備數量、加值及戰鬥結果。
-這些是實際遊戲畫格，尚未套用 HD；兩張 HD 試繪另行展示。
+先看現行整合程式的角色管理及說明閱讀。畫面由正常冷啟動後的實際操作擷取，
+兩張之間是不同介面狀態，不作同狀態對照。
 
-| 畫面 | 原版 | 繁中顯示原型 |
-|---|---|---|
-| 單支箭矢與裝備清單 | ![查看原版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/ammo-en.png) | ![查看繁中](workplace/probe/readme-gallery-story-mechanics-20261025-r2/ammo-zh.png) |
-| 首戰毒氣與傷害回報 | ![查看原版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/battle-en.png) | ![查看繁中](workplace/probe/readme-gallery-story-mechanics-20261025-r2/battle-zh.png) |
-| 首戰敗北結語 | ![查看原版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/defeat-en.png) | ![查看繁中](workplace/probe/readme-gallery-story-mechanics-20261025-r2/defeat-zh.png) |
-
-## 遊戲內地圖
-
-展示正常探索流程中的森林畫面與原版區域圖。繁中攻略另有凱爾高斯地圖重繪原型，
-與遊戲內區域圖分開列出。攻略地圖使用重新繪製的線條及繁中標註，尚未接入遊戲。
-來源與核對範圍見[攻略地圖研究](docs/re/002-walkthrough-source.md)。
-
-| 地圖 | 展示與用途 |
+| 角色管理 | 內建繁中說明 |
 |---|---|
-| [森林探索](workplace/probe/readme-gallery-story-mechanics-20261025-r2/forest.png) | 原版第一人稱探索畫面 |
-| [遊戲內區域圖](workplace/probe/readme-gallery-story-mechanics-20261025-r2/area-map.png) | 原版正常探索流程中的區域圖，未套用繁中或 HD |
-| [凱爾高斯攻略重繪](workplace/probe/readme-gallery-story-mechanics-20261025-r2/guide-caergoth.png) | 繁中攻略地圖原型，尚未接入遊戲 |
+| ![現行繁中角色管理](workplace/probe/readme-gallery-current/player-chinese.png) | ![現行繁中說明面板](workplace/probe/readme-gallery-current/player-manual.png) |
 
-![原版正常探索中的森林](workplace/probe/readme-gallery-story-mechanics-20261025-r2/forest.png)
+下列三組來自既有原版／繁中對照收據，每組使用相同原版狀態與輸入。
+數量、魔法加值與戰鬥結果保持；這些歷史畫格沒有套用 HD，也不是現行版本的全程驗收。
 
-![原版遊戲內區域圖](workplace/probe/readme-gallery-story-mechanics-20261025-r2/area-map.png)
+| 畫面 | 原版 | 繁中 |
+|---|---|---|
+| 單支箭矢與裝備清單 | ![原版箭矢](workplace/probe/readme-gallery-current/ammo-en.png) | ![繁中箭矢](workplace/probe/readme-gallery-current/ammo-zh.png) |
+| 首戰毒氣與傷害回報 | ![原版戰鬥](workplace/probe/readme-gallery-current/battle-en.png) | ![繁中戰鬥](workplace/probe/readme-gallery-current/battle-zh.png) |
+| 首戰敗北結語 | ![原版結語](workplace/probe/readme-gallery-current/defeat-en.png) | ![繁中結語](workplace/probe/readme-gallery-current/defeat-zh.png) |
 
-![凱爾高斯攻略重繪原型，尚未接入遊戲](workplace/probe/readme-gallery-story-mechanics-20261025-r2/guide-caergoth.png)
+來源與證據入口見[圖文研究](docs/re/006-readme-gallery.md)及本機圖庫的 `preview-index.json`。
 
-## 重建本機圖文版
+## 遊戲內地圖與攻略重繪
 
-圖文版同時提供 Markdown 與 HTML，含上述圖片及可放大查閱的獨立頭像。
-五份圖庫目前解出 360 格，另有 52 個繪圖區塊尚未解碼。
+森林探索與區域圖取自原版正常探索流程，未套用繁中或 HD。
+凱爾高斯攻略圖則以向量線條重新繪製、加上繁中標註，目前仍是獨立閱讀原型。
+遊戲內區域圖與攻略地圖用途不同，分開展示。
 
-在本專案既有 Docker 工具鏈、合法原版及本機研究素材齊備後，執行：
+| 第一人稱探索 | 原版區域圖 |
+|---|---|
+| ![原版森林探索](workplace/probe/readme-gallery-current/forest.png) | ![原版遊戲內區域圖](workplace/probe/readme-gallery-current/area-map.png) |
+
+![凱爾高斯繁中攻略地圖重繪原型，尚未接入遊戲](workplace/probe/readme-gallery-current/guide-caergoth.png)
+
+攻略正文將重新排版，地圖逐張重繪；PDF 與掃描只用於校對。
+完整攻略、其餘地圖及世界地圖尚未完成，見[攻略來源與重繪](docs/re/002-walkthrough-source.md)。
+
+## 目前狀態
+
+| 範圍 | 已接入與驗證界線 |
+|---|---|
+| 繁體中文 | 已接入已辨識的選單、裝備、敘事、戰鬥回報與名稱；武器、怪物及跨代人物對齊前作。剩餘動態組句、未知插值及其他來源仍待補齊 |
+| 繪圖接管 | 已直接替換部分 Mode X 字形、填色與圖片內層像素迴圈，並維持機器效果及虛擬時間；中文／HD 覆蓋區省略原版 RGB 轉換。其他格式、裁切、動畫與讀回尚未完整接管 |
+| HD | 已接入可切換的本機主題；全量角色、場景、地形及動畫美術仍在製作 |
+| 閱讀 | 手札、兩冊說明及附表已有內容與入口；世界地圖待重繪。攻略入口待正文及重繪地圖完成後啟用 |
+| 驗證 | 限定繪圖函式與圖形後端已有對照；最近正常抽驗涵蓋冷啟動、角色管理、縮放、語言切換、說明開關及返回。探索、戰鬥、箭矢與存讀檔沿各自既有收據，沒有全程通關聲明 |
+
+玩家視窗只提交完整畫面。已接管的像素迴圈交由自有繪圖層處理，
+未接管或條件不足的命令回退原版。原始索引資料供遊戲相容用途，中文不寫回遊戲判定資料。
+完整接管的範圍與尚缺證據見[繪圖規格](docs/spec/005-render-owner.md)。
+
+唯一詳細現況、有效程式與驗證收據集中在 [CONTEXT.md](CONTEXT.md)，
+工作追蹤在 [GitHub Issues](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues)。
+
+## 如何啟動
+
+目前入口使用 Linux、Docker 與可存取的 X11 桌面。所有建置及遊戲程序均在容器中執行。
+此儲存庫尚未提供獨立發行包，也未提供從零匯入原版的通用安裝器。
+
+若本機合法原版、既有資料批與已建置的整合程式齊備，在專案根目錄執行：
+
+```sh
+bash tools/player.sh run
+```
+
+需要重新準備與建置時，沿用本專案既有工具鏈與資料來源：
+
+```sh
+bash tools/player.sh prepare
+bash tools/player.sh build
+bash tools/player.sh run
+```
+
+預設工作目錄為 `workplace/probe/player-current/`。原版來源唯讀，遊戲存檔、截圖及偏好分別放在：
+
+| 資料 | 位置 |
+|---|---|
+| 遊戲存檔 | `workplace/probe/player-current/session/saves/` |
+| 截圖 | `workplace/probe/player-current/session/screenshots/` |
+| 視窗與 HD 偏好 | `workplace/probe/player-current/session/preferences.json` |
+
+入口與資料依賴見 [player.sh](tools/player.sh)及[整合規格](docs/spec/003-player-toolbar.md)。
+全螢幕及各平台實機支援仍須各自驗證。
+
+### 重建本機圖文版
+
+合法原版及本機研究素材齊備時，執行：
 
 ```sh
 bash tools/readme-gallery.sh readme-gallery-my-preview
 ```
 
-開啟 `workplace/probe/readme-gallery-my-preview/README.md`，或用瀏覽器開啟同目錄的 `README.html`。
-輸出目錄須為新名稱，保留既有預覽及來源索引。入口為 [readme-gallery.sh](tools/readme-gallery.sh)，
-頁面由 [readme_preview.py](tools/readme_preview.py) 產生。這是研究圖文入口，尚非遊戲啟動器。
-本機素材與驗證範圍見 [CONTEXT.md](CONTEXT.md)。
+輸出為 `workplace/probe/readme-gallery-my-preview/README.html` 及同目錄 `README.md`。
+每次使用新名稱，保留舊展示與來源記錄。
+本頁圖片對應已生成的 `readme-gallery-current/`；圖庫中的 `preview-index.json` 記錄來源、雜湊及展示界線。
+重建只整理圖片與文件，不啟動遊戲，也不生成新的 HD 美術。
 
-圖庫盤點工具為 [tlb_gallery.py](tools/tlb_gallery.py)。HLIB／TILE 格式參照
-[Gold Box Explorer](https://github.com/bsimser/Gold-Box-Explorer)，保留其
-[MIT 授權聲明](tools/LICENSE-Gold-Box-Explorer.txt)。
-解碼方法、圖格見證及展示限制見[圖文研究紀錄](docs/re/006-readme-gallery.md)。
+## 文件與授權
 
-## 目前狀態
-
-繁中資料、已辨識的敘事／選單／戰鬥回報、手札與說明已接上統一入口。
-角色管理採 20 像素圓體，其餘文字採 16 像素，原框閱讀與頂端工具列已定稿。
-文字在原版繪製前辨識，既有代表路徑已抽驗過渡、清除及返回；依使用者要求不再追加遊戲抽驗。
-敘事片段只在原版實際解碼並交給文字視窗後接入，保留原版清框、接續與停頓，完整段落及手札優先。
-未辨識來源保留原版，沒有逐場景通關或全分支無漏字的驗收聲明。
-限定 Mode X 路徑已接來源命令與紋理／矩形批次，被 HD 取代的區域不產生原版 RGB。
-已通過限定函式的機器效果、虛擬時間對照與代表介面抽驗，玩家入口可啟動。其他繪圖格式、完整中文化與全量 HD 仍在進行。
-隱藏頁的中文及 HD 命令分頁保存，隨原版翻頁一起提交；印字、清框、換頁與調色盤交易未完成時保留完整前緩衝。
-繪圖命令接管仍在進行，已接範圍與限制見[繪圖接管規格](docs/spec/005-render-owner.md)。
-
-| 範圍 | 現況 |
+| 文件 | 用途 |
 |---|---|
-| 選單與裝備 | 載入、建角、存讀檔、城內服務、人物資料與裝備已有抽驗；箭矢／弩箭保留數量及加值 |
-| 敘事與戰鬥 | 部分城內、港口、出航敘事，以及施法、怪物名稱、效果、傷害、垂死與勝利回報已有繁中抽驗 |
-| 手札與說明 | 正文、圖文元件及手冊附表已有校讀，採定稿的原框閱讀；世界地圖仍待重繪 |
-| 地圖與 HD | 攻略地圖僅有重繪原型，世界地圖仍待重繪；HD 已有來源盤點、部分本機素材與可選呈現層，全量素材製作中，尚無新整合遊戲畫面驗收 |
+| [CONTEXT.md](CONTEXT.md) | 目前狀態、工具鏈、有效證據及限制 |
+| [規格索引](docs/spec/README.md) | 中文、閱讀、工具列、HD 與繪圖接管契約 |
+| [研究索引](docs/re/README.md) | 原始資料、圖像、文字及繪圖來源的證據 |
+| [WORKLOG.md](WORKLOG.md) | 工作歷程與驗證紀錄 |
+| [AGENTS.md](AGENTS.md) | 協作規則、資料保護及歷史收據還原方式 |
 
-詳細範圍、未驗項目與目前有效程式集中在 [CONTEXT.md](CONTEXT.md)。
-
-## 操作與文件入口
-
-開發、研究與原型驗證使用 Docker。現有入口的用途與限制見規格，請勿把單一場景原型當作完整遊戲啟動器。
-
-中文整合入口已將既有中文資料、開頭提示、手札與說明，以及頂端工具列串在一起。
-資料與合法原版齊備時，可在既有 Docker 工具鏈中建立並開啟：
-
-```sh
-bash tools/player.sh prepare player-integration-local
-bash tools/player.sh build player-integration-local
-bash tools/player.sh run player-integration-local
-```
-
-介面已定稿，HD 與視窗大小各自獨立；2 倍、3 倍及自由縮放都保留 HD 設定。
-工具列提供縮放、繁中／原版、HD、手札、說明、截圖與全螢幕動作，攻略接妥前明列停用原因。
-HD 只替換已有素材且來源完整匹配的圖像，其餘保留原版；依使用者要求沒有新增遊戲抽驗。
-目前需要有 X11 存取權的桌面環境，存檔及截圖位置見[入口與工具列規格](docs/spec/003-player-toolbar.md)。
-
-- [協作規則](AGENTS.md)
-- [目前狀態](CONTEXT.md)
-- [工作紀錄](WORKLOG.md)
-- [研究索引](docs/re/README.md)
-- [規格索引](docs/spec/README.md)
-- [歷史重播紀錄的封存與還原](AGENTS.md#歷史重播紀錄的儲存)
-- [GitHub Issues](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues)
-
-自有程式與文件採 [RRSAL-1.0](LICENSE)，屬 source-available。授權不涵蓋原版遊戲、
-手冊、美術、音樂及第三方元件。原始遊戲與掃描只留本機，使用者須自備合法原版。
+自有程式與文件採 [RRSAL-1.0](LICENSE)，屬 source-available。
+原版遊戲、美術、音樂、手冊及第三方元件不在本專案授權範圍。
+圖庫解析參考 [Gold Box Explorer](https://github.com/bsimser/Gold-Box-Explorer)，
+相關程式保留 [MIT 聲明](tools/LICENSE-Gold-Box-Explorer.txt)。
+本專案與原遊戲權利人沒有隸屬或官方合作關係。
