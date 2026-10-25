@@ -6,26 +6,124 @@
 
 玩家須自備合法原版。原版遊戲、美術、手冊與掃描留在本機，不隨儲存庫提供。
 
-**[閱讀完整圖文版](workplace/probe/readme-gallery-preview-20261025/README.md)** ·
-[用瀏覽器開啟圖庫](workplace/probe/readme-gallery-preview-20261025/README.html)
+**[閱讀完整圖文版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/README.md)** ·
+[用瀏覽器開啟圖庫](workplace/probe/readme-gallery-story-mechanics-20261025-r2/README.html)
 
 圖文版包含總覽圖、原版與 HD 試繪對照、實際遊戲截圖及地圖。
 下方圖片連結須在備有素材的本機工作區開啟；GitHub 保存介紹與重建工具。
 
 ## 故事背景
 
-在前兩次冒險之後，英雄們的事蹟傳到了帕蘭薩斯。羅拉娜將軍來信，感謝隊伍挫敗
-索斯王與姬蒂拉的陰謀，並邀請英雄前往城中。但效忠黑暗之后的勢力仍未消失，
-這封看似慶功的邀請，也帶著另一項重要任務。
+### 戰後的安塞隆
 
-這段介紹依《冒險手冊》「故事開始」的一封將軍來信整理，譯名以前作現行詞表為準。
-來源與頁序見[手冊基線](docs/re/001-input-baseline.md#中文來源)。
+《黑暗之后》是 SSI 克萊恩三部曲的終章，舞台位於《龍槍》的克萊恩世界。
+前兩作《克萊恩英豪》與《幽靈騎士》的英雄，已在安塞隆對抗龍人與死亡騎士。
+長槍之役留下的創傷尚未平復，效忠黑暗之后塔克西絲的勢力仍在各地活動。
 
-## 遊戲方式
+隊伍的事蹟傳到帕蘭薩斯，羅拉娜將軍寄來一封信。她感謝英雄挫敗索斯王與姬蒂拉的陰謀，
+讓世界擺脫他們的黑暗影響。她原想以隆重的慶典迎接英雄，如今卻有更緊迫的事，
+要求隊伍儘速前來。將軍的部隊仍在搜尋大陸各處，尋找黑暗之后的追隨者。
 
-玩家帶領冒險隊伍探索城鎮與地下區域，與人物交談、管理裝備、準備法術，並在格狀戰場上
-進行回合制戰鬥。旅行手札補充線索與故事；本專案也將加入繁中說明與手動查閱的攻略頁。
-攻略正文重新排版，地圖重新繪製，不以掃描頁或 PDF 代替遊戲內閱讀頁。
+### 凱爾高斯的災難
+
+在帕蘭薩斯與羅拉娜會面後，隊伍前往凱爾高斯。這座城市已遭到摧毀，
+許多居民死亡或失蹤。廢墟中留下巨龍與龍人的蹤跡，倖存者的遭遇讓英雄看見戰火再次逼近。
+調查從城中的殘垣與港口開始，敵人的去向逐漸指向海上。
+
+隊伍在港口遇見戴諾船長。他的妹妹克萊西亞也在襲擊後失蹤；為了追查龍人並尋找妹妹，
+他願意載英雄出海。隊伍搭乘銀鯊號展開追擊，沿途的船骸、洞穴與人質，
+把這場地方災難連向更大的陰謀。
+
+### 海另一端的戰爭
+
+冒險將離開熟悉的安塞隆，前往克萊恩另一塊大陸泰勒達斯。
+黑暗之后正在當地培植新的軍隊，隊伍必須尋找盟友，阻止這股力量壯大。
+旅程從海底延伸到陌生的城鎮、森林與敵方據點，最後通往火焰塔。
+英雄面對的任務，是阻止塔克西絲再次進入物質世界，將戰火帶回克萊恩。
+
+故事依《冒險手冊》「故事開始」及原版攻略書的導言、帕蘭薩斯、凱爾高斯與龍人洞穴章節整理；
+跨海舞台與火焰塔亦見[遊戲官方介紹](https://store.steampowered.com/app/1904622/The_Dark_Queen_of_Krynn/)。
+[攻略書原文](https://dlsaga.com/wp-content/uploads/2022/11/ks_darkqueen_cluebook_pdf.pdf)為 SSI 原版出版品，
+譯名沿用本專案與前作術語，手冊來源及頁序見[手冊基線](docs/re/001-input-baseline.md#中文來源)。
+
+## 遊戲機制
+
+本作採用進階龍與地下城規則，核心循環是組隊、探索與取得線索、戰鬥、整備，再繼續旅行。
+以下介紹原版設計；中文原型目前已驗證的範圍另見「目前狀態」。
+
+### 隊伍、職業與成長
+
+玩家最多建立六名隊員，也可沿用《幽靈騎士》的角色繼續冒險。
+種族、職業、陣營及六項能力值，決定角色能使用的裝備、法術與特殊能力。
+七個可選種族包含人類、半精靈、坎德人、兩支矮人與兩支精靈；
+非人類的複合職業可同時獲得多種能力，經驗則分給各職業，成長較慢。
+
+| 職業 | 隊伍中的主要工作 |
+|---|---|
+| 戰士 | 穿戴重甲、承擔前線並使用多種武器 |
+| 索蘭尼克騎士 | 近戰與領導，分皇冠、聖劍、玫瑰騎士團 |
+| 聖騎士 | 近戰、治療與對抗邪惡，高等級可施法 |
+| 遊俠 | 對抗巨人類，高等級可使用部分法術 |
+| 牧師 | 治療、保護、超渡不死生物，能力亦受信仰神祇影響 |
+| 魔法師 | 攻擊、控制與防護，從魔法書準備法術 |
+| 賊 | 開鎖、解除陷阱與戰鬥背刺 |
+
+戰鬥與任務會帶來經驗。達到門檻後，還要到訓練所接受訓練才能升級。
+隊伍需要兼顧前線、治療、魔法與探索技能；角色名單順序也會影響開戰時的站位。
+
+### 探索、對話與手札
+
+城鎮與地下區域以第一人稱視角探索，區域圖協助辨認道路、房間與走過的位置。
+玩家在酒館蒐集消息、與人物交談、調查環境，並透過選項決定接下來的行動。
+有些遭遇需要交涉、解謎或救援，線索可能跨越多個地點。
+
+原版會要求玩家查閱指定編號的旅行手札，補充信件、對話與圖像線索。
+本專案已有對應手札及繁中說明閱讀原型；另規劃手動開啟的攻略頁。
+攻略正文重新排版，地圖重新繪製並標註繁中，掃描只用於校對。
+
+### 方格戰場與回合決策
+
+進入戰鬥後，畫面切換至俯視戰術地圖。隊員依先攻順序行動，每回合重新決定順序，
+可移動、近戰、遠射、施法、使用物品或守衛。負重與護甲影響移動，
+牆壁、樹木、門口及隊友位置會影響接敵與部署。
+
+射手被敵人貼身時不能正常遠射；賊可配合隊友牽制，繞到敵人背後背刺。
+施法者在準備法術時受到攻擊，可能失去該法術。撤離相鄰敵人時也可能遭到追加攻擊。
+因此，保護施法者、封鎖通道與集中攻擊，和武器傷害同樣重要。
+
+| 畫面數值 | 閱讀方式 |
+|---|---|
+| 生命力（HP） | 可承受的傷害；倒下後須注意昏迷、垂死與包紮 |
+| 防護力（AC） | 數值愈低，通常愈難被擊中 |
+| 攻擊命中率（THAC0） | 擊中 AC 為 0 的目標所需擲值，數值愈低通常愈好 |
+| 閃避率（Saving Throw） | 抵抗法術、毒物等效果的檢定，成功可減輕或避開效果 |
+
+部分怪物具有特殊抗性，普通武器或某類法術可能無效。
+戰後還要處理傷員、戰利品與法術消耗；全隊敗北時，必須讀取先前存檔。
+
+### 法術記憶、休息與月相
+
+法術需要先記憶，施放後再透過休息補回。魔法師只能準備魔法書中的法術，
+可在訓練時學習，或從合適的卷軸抄錄；牧師則從所能使用的法術中選擇。
+卷軸與魔法杖可直接作為物品使用，但有職業、辨讀或次數限制。
+選擇幾次治療、幾次範圍攻擊，以及何時返回安全地點休息，是旅行中的資源管理。
+
+克萊恩的三個月亮也影響魔法。白、紅、黑月分別對應不同法袍的魔法師，
+月相會改變可用法術及施法能力；牧師信仰的神祇則提供不同的能力與額外法術。
+同樣一支隊伍，在不同準備與時間條件下，可能適合不同的戰術。
+
+### 裝備、箭矢與城內服務
+
+背包中的裝備必須備妥才會發揮作用。武器、防具與魔法物品受職業限制，
+魔法加值可能改善命中、傷害或防護；帶有詛咒的物品則可能需要解除詛咒才能卸下。
+箭矢與弩箭另有數量、單支與整堆名稱，以及魔法加值，分半與集合都會改變清單顯示。
+
+商店提供買賣與鑑定，神殿提供療傷服務，旅店方便整備與休息，訓練所負責升級。
+出發前應檢查彈藥、負重、傷勢與記憶法術，並保留可回退的存檔。
+
+機制依《冒險手冊》「人物與隊伍」「戰鬥」「魔法」「魔法寶物」及操作手冊整理，
+來源與校讀限制見[手冊基線](docs/re/001-input-baseline.md)。
+跨作角色匯入是原版功能，本專案尚未完成跨作匯入驗收。
 
 ## 怪物總覽
 
@@ -35,9 +133,9 @@
 
 | 展示 | 原版 | HD |
 |---|---|---|
-| 怪物與戰鬥角色圖格 | [190 格總覽](workplace/probe/readme-gallery-preview-20261025/CPIC-original.png) | 全量尚未製作 |
-| 隊員戰鬥造型 | [98 格總覽](workplace/probe/readme-gallery-preview-20261025/CBODY-original.png) | 全量尚未製作 |
-| 藍龍試繪 | [原版圖格](workplace/probe/readme-gallery-preview-20261025/CPIC..6.png) | [HD 試繪](workplace/probe/readme-gallery-preview-20261025/hd-blue-dragon-r2.png)，未接入遊戲 |
+| 怪物與戰鬥角色圖格 | ![190 格總覽](workplace/probe/readme-gallery-story-mechanics-20261025-r2/CPIC-original.png) | 全量尚未製作 |
+| 隊員戰鬥造型 | ![98 格總覽](workplace/probe/readme-gallery-story-mechanics-20261025-r2/CBODY-original.png) | 全量尚未製作 |
+| 藍龍試繪 | ![原版圖格](workplace/probe/readme-gallery-story-mechanics-20261025-r2/CPIC..6.png) | ![HD 試繪](workplace/probe/readme-gallery-story-mechanics-20261025-r2/hd-blue-dragon-r2.png)，未接入遊戲 |
 
 ## 人物頭像總覽
 
@@ -47,8 +145,8 @@
 
 | 展示 | 原版 | HD |
 |---|---|---|
-| 人物候選頭像 | [31 張總覽](workplace/probe/readme-gallery-preview-20261025/portraits-original.png) | 全量尚未製作 |
-| PICA.7.1，身分待核 | [原版頭像](workplace/probe/readme-gallery-preview-20261025/PICA.7.1.png) | [HD 試繪](workplace/probe/readme-gallery-preview-20261025/hd-portrait-r1.png)，未接入遊戲 |
+| 人物候選頭像 | ![31 張總覽](workplace/probe/readme-gallery-story-mechanics-20261025-r2/portraits-original.png) | 全量尚未製作 |
+| PICA.7.1，身分待核 | ![原版頭像](workplace/probe/readme-gallery-story-mechanics-20261025-r2/PICA.7.1.png) | ![HD 試繪](workplace/probe/readme-gallery-story-mechanics-20261025-r2/hd-portrait-r1.png)，未接入遊戲 |
 
 ## 遊戲截圖
 
@@ -58,9 +156,9 @@
 
 | 畫面 | 原版 | 繁中顯示原型 |
 |---|---|---|
-| 單支箭矢與裝備清單 | [查看原版](workplace/probe/readme-gallery-preview-20261025/ammo-en.png) | [查看繁中](workplace/probe/readme-gallery-preview-20261025/ammo-zh.png) |
-| 首戰毒氣與傷害回報 | [查看原版](workplace/probe/readme-gallery-preview-20261025/battle-en.png) | [查看繁中](workplace/probe/readme-gallery-preview-20261025/battle-zh.png) |
-| 首戰敗北結語 | [查看原版](workplace/probe/readme-gallery-preview-20261025/defeat-en.png) | [查看繁中](workplace/probe/readme-gallery-preview-20261025/defeat-zh.png) |
+| 單支箭矢與裝備清單 | ![查看原版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/ammo-en.png) | ![查看繁中](workplace/probe/readme-gallery-story-mechanics-20261025-r2/ammo-zh.png) |
+| 首戰毒氣與傷害回報 | ![查看原版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/battle-en.png) | ![查看繁中](workplace/probe/readme-gallery-story-mechanics-20261025-r2/battle-zh.png) |
+| 首戰敗北結語 | ![查看原版](workplace/probe/readme-gallery-story-mechanics-20261025-r2/defeat-en.png) | ![查看繁中](workplace/probe/readme-gallery-story-mechanics-20261025-r2/defeat-zh.png) |
 
 ## 遊戲內地圖
 
@@ -70,9 +168,15 @@
 
 | 地圖 | 展示與用途 |
 |---|---|
-| [森林探索](workplace/probe/readme-gallery-preview-20261025/forest.png) | 原版第一人稱探索畫面 |
-| [遊戲內區域圖](workplace/probe/readme-gallery-preview-20261025/area-map.png) | 原版正常探索流程中的區域圖，未套用繁中或 HD |
-| [凱爾高斯攻略重繪](workplace/probe/readme-gallery-preview-20261025/guide-caergoth.png) | 繁中攻略地圖原型，尚未接入遊戲 |
+| [森林探索](workplace/probe/readme-gallery-story-mechanics-20261025-r2/forest.png) | 原版第一人稱探索畫面 |
+| [遊戲內區域圖](workplace/probe/readme-gallery-story-mechanics-20261025-r2/area-map.png) | 原版正常探索流程中的區域圖，未套用繁中或 HD |
+| [凱爾高斯攻略重繪](workplace/probe/readme-gallery-story-mechanics-20261025-r2/guide-caergoth.png) | 繁中攻略地圖原型，尚未接入遊戲 |
+
+![原版正常探索中的森林](workplace/probe/readme-gallery-story-mechanics-20261025-r2/forest.png)
+
+![原版遊戲內區域圖](workplace/probe/readme-gallery-story-mechanics-20261025-r2/area-map.png)
+
+![凱爾高斯攻略重繪原型，尚未接入遊戲](workplace/probe/readme-gallery-story-mechanics-20261025-r2/guide-caergoth.png)
 
 ## 重建本機圖文版
 
@@ -97,18 +201,17 @@ bash tools/readme-gallery.sh readme-gallery-my-preview
 
 ## 目前狀態
 
-已建立正常載入、建角、城內服務、裝備、法術清單、手札引用、首戰部分回報、勝利結算
-與港口及出航敘事的繁中顯示原型。
-也已抽驗保留隊員姓名的敘事接續，以及人物資料頁的財物按鈕和返回戰鬥。
-探索特殊物品、空清單提示、瞄準變體與港口選項的共用選單亦已接入並抽驗。
-戰鬥短名稱已由正式詞表批次接入，保留隊員姓名、數字與加值的顯示邊界。
-法術清單、施法提示與施法中狀態也已接入，清單次數沿原版顯示。
-效果標籤也已批次接入，並抽驗一般效果頁、加倍術後的反白與返回。
-休息中的記憶回報、垂死補句與繼續戰鬥提問已有中文抽驗，姓名及數字沿原版顯示。
-文字在原版繪製前辨識，並以連續畫格檢查過渡；這些仍是研究原型，尚無正式完整中文入口。
-手札正文、圖文元件，以及操作手冊、冒險手冊與附表的說明閱讀原型已有校讀及抽驗。
-世界地圖仍待重繪，正式閱讀版面、其餘敘事與玩家入口仍待完成。
-詳細範圍與目前有效程式集中在 [CONTEXT.md](CONTEXT.md)，全量 HD 尚未開始。
+目前為繁中顯示與閱讀原型，尚無正式完整中文入口。文字在原版繪製前辨識，
+已用代表性正常路徑與連續畫格抽驗過渡、清除及返回；未逐場景驗完整個冒險。
+
+| 範圍 | 現況 |
+|---|---|
+| 選單與裝備 | 載入、建角、存讀檔、城內服務、人物資料與裝備已有抽驗；箭矢／弩箭保留數量及加值 |
+| 敘事與戰鬥 | 部分城內、港口、出航敘事，以及施法、怪物名稱、效果、傷害、垂死與勝利回報已有繁中抽驗 |
+| 手札與說明 | 正文、圖文元件及手冊附表已有校讀與閱讀原型；正式版面及操作仍待完成 |
+| 地圖與 HD | 攻略地圖僅有重繪原型，世界地圖仍待重繪；HD 只有兩張未接入試繪，全量製作排在中文化之後 |
+
+詳細範圍、未驗項目與目前有效程式集中在 [CONTEXT.md](CONTEXT.md)。
 
 ## 操作與文件入口
 

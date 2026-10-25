@@ -4,6 +4,7 @@ import hashlib
 import html
 import json
 import platform
+import re
 import shutil
 from pathlib import Path
 
@@ -17,6 +18,33 @@ def digest(path):
 
 def read(path):
     return json.loads(path.read_text())
+
+
+def section(document, title):
+    """完整讀取 README 二級章節，保留小節、表格與來源。"""
+    return document.split('## ' + title + '\n\n', 1)[1].split('\n## ', 1)[0].strip()
+
+
+def prose_html(markdown):
+    """轉換本頁介紹使用的段落、小節、連結及表格。"""
+    def inline(text):
+        escaped = html.escape(text.replace('\n', ' '), quote=True)
+        return re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', escaped)
+
+    blocks = []
+    for block in markdown.split('\n\n'):
+        if block.startswith('### '):
+            blocks.append('<h3>' + inline(block[4:]) + '</h3>')
+        elif block.startswith('|'):
+            rows = [line.strip().strip('|').split('|') for line in block.splitlines()]
+            header = '<tr>' + ''.join('<th>' + inline(c.strip()) + '</th>' for c in rows[0]) + '</tr>'
+            body = ''.join('<tr>' + ''.join('<td>' + inline(c.strip()) + '</td>' for c in row)
+                           + '</tr>' for row in rows[2:])
+            blocks.append('<div class="table-scroll"><table><thead>' + header
+                          + '</thead><tbody>' + body + '</tbody></table></div>')
+        else:
+            blocks.append('<p>' + inline(block) + '</p>')
+    return ''.join(blocks)
 
 
 def build(root, output):
@@ -134,11 +162,15 @@ def build(root, output):
                 + esc(caption) + '</figcaption></figure>')
 
     readme = (root / 'README.md').read_text()
-    story = readme.split('## 故事背景\n\n', 1)[1].split('\n\n', 1)[0].replace('\n', '')
+    # 本機圖庫在根目錄下三層，章節內的專案文件連結一併改為相對位置。
+    story, mechanics = [re.sub(r'\]\((docs/[^)]+)\)', r'](../../../\1)', section(readme, title))
+                        for title in ('故事背景', '遊戲機制')]
     content = '<header><p class="eyebrow">克萊恩三部曲 · 第三部</p><h1>黑暗之后</h1>'
-    content += '<p>The Dark Queen of Krynn · HD＋繁體中文化</p><p>' + esc(story) + '</p>'
+    content += '<p>The Dark Queen of Krynn · HD＋繁體中文化</p><p>追查凱爾高斯的災難，跨海前往泰勒達斯，阻止黑暗之后再次進入物質世界。</p>'
     content += '<p class="note">繁中顯示仍為研究原型。兩張 HD 圖為試繪，尚未接入遊戲。原版圖像只在本機展示。</p></header>'
-    content += '<nav><a href="#hd">原版＋HD</a><a href="#monsters">怪物圖庫</a><a href="#portraits">人物頭像</a><a href="#screens">遊戲畫面</a><a href="#maps">地圖</a></nav><main>'
+    content += '<nav><a href="#story">故事背景</a><a href="#mechanics">遊戲機制</a><a href="#hd">原版＋HD</a><a href="#monsters">怪物圖庫</a><a href="#portraits">人物頭像</a><a href="#screens">遊戲畫面</a><a href="#maps">地圖</a></nav><main>'
+    content += '<section id="story"><h2>故事背景</h2>' + prose_html(story) + '</section>'
+    content += '<section id="mechanics"><h2>遊戲機制</h2>' + prose_html(mechanics) + '</section>'
     content += '<section id="hd"><h2>原版＋HD 試繪</h2><p>藍龍的原版圖格已與首戰畫面核對。頭像身分尚未確認，保留來源編號。全量 HD 排在中文化之後。</p><div class="pairs">'
     for key, name, title in [('CPIC..6', 'hd-blue-dragon-r2.png', '藍龍 · CPIC ID 82'),
                               ('PICA.7.1', 'hd-portrait-r1.png', '人物頭像 · PICA 7.1')]:
@@ -163,14 +195,15 @@ def build(root, output):
     content += figure('forest.png', '森林探索 · 原版', True) + figure('area-map.png', '遊戲內區域圖 · 原版', True)
     content += '</div><h3>凱爾高斯攻略地圖重繪</h3><p>這是另行繪製的攻略地圖原型，含繁中標註。與上方原版區域圖分開展示，尚未作為遊戲內地圖接入。</p>'
     content += figure('guide-caergoth.png', '凱爾高斯 · 攻略重繪原型') + '</section>'
-    content += '<footer><p>故事依《冒險手冊》「故事開始」的將軍來信整理。圖像來源、雜湊與截圖狀態見 <a href="preview-index.json">展示索引</a>；全部原版圖格見 <a href="tlb-index.json">圖庫索引</a>。</p><p>玩家須自備合法原版。本頁與原版圖像只留本機，並非可公開的遊戲封包。</p></footer></main>'
+    content += '<footer><p>故事與機制的來源見各章末。圖像來源、雜湊與截圖狀態見 <a href="preview-index.json">展示索引</a>；全部原版圖格見 <a href="tlb-index.json">圖庫索引</a>。</p><p>玩家須自備合法原版。本頁與原版圖像只留本機，並非可公開的遊戲封包。</p></footer></main>'
     css = '''*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#12151c;color:#ede9dc;font:17px/1.8 system-ui,sans-serif}header,main,nav{max-width:1200px;margin:auto;padding:32px}header{padding-top:64px}header p{max-width:850px}.eyebrow{color:#cbb47e;letter-spacing:.15em}h1{font-size:64px;line-height:1.1;letter-spacing:.12em;margin:20px 0}h2{font-size:30px;color:#dec58d}h3{font-size:21px}.note,figcaption,footer{color:#b9b6ae}nav{display:flex;gap:24px;flex-wrap:wrap;border-block:1px solid #44413a;padding-block:16px}a{color:#d9bf87}section{padding:24px 0 42px;border-bottom:1px solid #44413a;scroll-margin-top:20px}.pair,.pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.pair{align-items:start}figure{min-width:0;margin:12px 0}figure img{display:block;width:100%;height:auto;background:#23232c;border:1px solid #49483f}.pixel{image-rendering:pixelated}.pairs .pair{align-items:center}.pairs img{aspect-ratio:1;object-fit:contain}.pairs article{padding:20px;background:#1b202b;border:1px solid #49483f}.portraits{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:18px}.portraits figcaption{font-size:12px}figcaption{font-size:14px;padding-top:6px}summary{cursor:pointer;padding:16px 0;color:#d9bf87}footer{font-size:14px;padding-top:30px}@media(max-width:720px){header,main,nav{padding:20px}h1{font-size:44px}.pairs,.pair{grid-template-columns:1fr}.portraits{grid-template-columns:repeat(3,minmax(0,1fr))}}'''
+    css += '.table-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #49483f;padding:10px 14px;text-align:left;vertical-align:top}th{background:#1b202b}#story p,#mechanics p{max-width:960px}'
     page = '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>黑暗之后 · 圖文介紹</title><style>' + css + '</style>' + content + '</html>\n'
     (output / 'README.html').write_text(page)
     markdown = '# 《黑暗之后》HD＋繁體中文化\n\n'
     markdown += '本機圖文版。繁中顯示仍為研究原型；HD 僅兩張試繪，尚未接入遊戲。\n\n'
     markdown += '## 故事背景\n\n' + story + '\n\n'
-    markdown += '故事依《冒險手冊》「故事開始」的將軍來信整理，譯名沿用《幽靈騎士》。\n\n'
+    markdown += '## 遊戲機制\n\n' + mechanics + '\n\n'
     markdown += '## 怪物與戰鬥角色總覽\n\n190 個 CPIC 圖格包含動作與重複編號，身分尚未全量核對。\n\n'
     markdown += '![原版怪物與戰鬥角色圖格總覽](CPIC-original.png)\n\n'
     markdown += '98 個隊員戰鬥造型另列。\n\n![原版隊員戰鬥造型](CBODY-original.png)\n\n'
@@ -202,6 +235,8 @@ def build(root, output):
         sprite_witness=dict(key='CPIC..6', xy=[32, 104], opaque_pixels=matched,
             receipt_sha256=digest(native / 'receipt.json'), indexed_sha256=checkpoint['indexed_sha256']),
         html_sha256=digest(output / 'README.html'), markdown_sha256=digest(output / 'README.md'),
+        sections={title: hashlib.sha256(text.encode()).hexdigest()
+                  for title, text in [('故事背景', story), ('遊戲機制', mechanics)]},
         portrait_atlas=dict(file='portraits-original.png', sha256=digest(output / 'portraits-original.png'),
                             size=list(atlas.size), keys=[r['key'] for r in portraits]))
     (output / 'preview-index.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
