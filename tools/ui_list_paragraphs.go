@@ -396,6 +396,9 @@ func (g *liveGame) installListParagraphs() {
 			}
 		}
 		message := p.Key == "message."+suffix && p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x3320}) && p.Foreground == 7 && p.Clear == 1
+		choicePrompt := p.Key == "ui.ab9e574dc207b6412ef1" && p.Key == "ui."+suffix &&
+			p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x2022}) && p.Foreground == 7 && p.Clear == 0 &&
+			p.JournalEntry == 0 && p.PredecessorKey == ""
 		service := p.Key == "service-message."+suffix && p.Caller.Seg == 0x291a &&
 			(p.Caller.Off == 0x0eee || p.Caller.Off == 0x0fd0 || p.Caller.Off == 0x0c7f) &&
 			p.NativeBox == ([4]int{8, 168, 312, 184}) && p.Foreground == 11 && p.Background == 0 && p.Clear == 1 && l.config.Background == 23
@@ -410,7 +413,7 @@ func (g *liveGame) installListParagraphs() {
 		if p.JournalEntry != 0 && (p.JournalEntry < 1 || p.JournalEntry > 99 || (!formattedJournal && !literalJournal)) {
 			panic("手札編號與完整原文不符")
 		}
-		if source == "" || !(literal || message || service) || p.SHA256 != digest([]byte(source)) ||
+		if source == "" || !(literal || message || service || choicePrompt) || p.SHA256 != digest([]byte(source)) ||
 			g.catalog[p.Key] == "" || (!service && p.NativeBox != ([4]int{8, 136, 312, 184})) || p.Foreground > 15 || p.Background != 0 || p.Clear > 1 {
 			panic("段落來源或安全框不符")
 		}
