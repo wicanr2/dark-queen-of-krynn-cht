@@ -107,7 +107,7 @@ def add(root, output, key, generated, round_number):
                 master=raw_name, master_sha256=sha(output / raw_name),
                 generator='內建imagegen；工具未提供模型版本', review_round=round_number,
                 source_file=source_file['path'], source_file_sha256=source_file['sha256'], source_offset=record['offset'],
-                source_block_sha256=record['sha256'], native_size=[record['width'], record['height']],
+                source_block_sha256=record['sha256'], source_block_bytes=record['bytes'], native_size=[record['width'], record['height']],
                 source_method=record['method'], source_header_xy=[record['x'], record['y']],
                 palette_sha256=hashlib.sha256(json.dumps(record['palette'], separators=(',', ':')).encode()).hexdigest(),
                 native_foreground_preserved=True, new_gameplay_verification=False)
@@ -135,8 +135,13 @@ def accept(root, output):
         record, = [r for r in inventory['records'] if r['key'] == item['Key'] and 'image' in r]
         source_file, = [r for r in inventory['input_files'] if Path(r['path']).stem == record['source']]
         assert item['OriginalSHA256'] == record['image_sha256']
+        native_file = root / 'workplace/input/dos/drkqueen' / source_file['path']
+        assert sha(native_file) == source_file['sha256']
+        block = native_file.read_bytes()[record['offset']:record['offset']+record['bytes']]
+        assert len(block) == record['bytes'] and hashlib.sha256(block).hexdigest() == record['sha256']
         item.update(source_file=source_file['path'], source_file_sha256=source_file['sha256'],
                     source_method=record['method'], source_header_xy=[record['x'], record['y']],
+                    source_block_sha256=record['sha256'], source_block_bytes=record['bytes'], source_header_hex=block[:8].hex(),
                     palette_sha256=hashlib.sha256(json.dumps(record['palette'], separators=(',', ':')).encode()).hexdigest())
     manifest['Ready'] = True
     manifest['approved_style_sha256'] = sha(style)

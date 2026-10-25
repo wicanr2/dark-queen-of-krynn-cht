@@ -23,6 +23,59 @@ def save_catalog(path, data):
     path.write_text('key\ttext\n' + ''.join(k + '\t' + v + '\n' for k, v in data.items()))
 
 
+def display(root, output, font):
+    """只衍生完整 UI／名稱來源，不把片段或語意鍵倒入完整句子路徑。"""
+    assert output.is_dir() and output.stat().st_uid == 1000 and font.is_file()
+    for name in DISPLAY_FILES:
+        if (output / name).exists():
+            assert (output / name).stat().st_uid == 1000
+    formal_path = root / 'workplace/translation/zh-TW.tsv'
+    source_path = root / 'workplace/translation/en.tsv'
+    formal, sources = catalog(formal_path), catalog(source_path)
+    candidates = {}
+    for key, text in sorted(formal.items()):
+        source = sources.get(key, '')
+        if key.split('.')[0] not in ['ui', 'name'] or not 2 <= len(source) <= 80:
+            continue
+        if '%' in source or any(not 32 <= ord(ch) <= 126 for ch in source):
+            continue
+        if text == source or not text or len(text) > len(source) or any(ch in text for ch in '\t\r\n') or '\\n' in text:
+            continue
+        candidates.setdefault(source, []).append((key, text))
+    ambiguous = {source for source, rows in candidates.items() if len({text for _, text in rows}) != 1}
+    rows = [(items[0][0], source, items[0][1]) for source, items in sorted(candidates.items()) if source not in ambiguous]
+    save_catalog(output / 'display-source.en.tsv', {key: source for key, source, _ in rows})
+    save_catalog(output / 'display.zh-TW.tsv', {key: text for key, _, text in rows})
+    base = json.loads((output / 'glyphs-16.json').read_text())
+    original_glyphs = dict(base['glyphs'])
+    missing = sorted(set(''.join(text for _, _, text in rows)) - set(original_glyphs))
+    save_catalog(output / 'display-font-additions.tsv', {'font.display': ''.join(missing)})
+    if missing:
+        extra_path = output / 'display-added-glyphs-16.json'
+        assert not extra_path.exists()
+        subprocess.run([sys.executable, str(root / 'tools/menu_glyphs.py'), str(font),
+                        str(output / 'display-font-additions.tsv'), str(extra_path), '16'], check=True)
+        extra = json.loads(extra_path.read_text())
+        assert extra['size'] == 16 and extra['height'] == 20
+        base['glyphs'].update(extra['glyphs'])
+        extra_path.unlink()
+    assert all(base['glyphs'][ch] == value for ch, value in original_glyphs.items())
+    for value in base['glyphs'].values():
+        pixels = base64.b64decode(value, validate=True) if isinstance(value, str) else value
+        assert len(pixels) == 320 and not any(pixels[256:]), '短標籤字墨超過原生八列'
+    (output / 'display-glyphs-16.json').write_text(json.dumps(base, ensure_ascii=False, separators=(',', ':'))+'\n')
+    provenance = {'formal_sha256': sha(formal_path), 'source_sha256': sha(source_path), 'font_sha256': sha(font),
+                  'base_glyphs_sha256': sha(output / 'glyphs-16.json'), 'rows': len(rows),
+                  'ambiguous_sources_skipped': len(ambiguous), 'new_glyphs': len(missing),
+                  'scope': '完整短字串來源；尚未逐項走訪，不包含ECL片段', 'new_gameplay_sampling': False}
+    (output / 'display-provenance.json').write_text(json.dumps(provenance, ensure_ascii=False, indent=2)+'\n')
+    print(json.dumps({'display_sources': len(rows), 'new_glyphs': len(missing), 'new_gameplay_sampling': False}))
+
+
+DISPLAY_FILES = ['display-source.en.tsv', 'display.zh-TW.tsv', 'display-glyphs-16.json',
+                 'display-font-additions.tsv', 'display-provenance.json']
+
+
 def prepare(root, output):
     current = root / 'workplace/probe/shared-feedback-20261025/inputs-r3'
     startup = root / 'workplace/probe/startup-captions-20261023-r3/ui-inputs'
@@ -36,6 +89,7 @@ def prepare(root, output):
             assert path.is_file() and path.stat().st_uid == 1000, path
             shutil.copyfile(path, target / path.name)
     shutil.copyfile(root / 'text/toolbar.zh-TW.tsv', output / 'toolbar.zh-TW.tsv')
+    shutil.copyfile(root / 'docs/spec/005-render-hooks.json', output / 'render-hooks.json')
     # 最後兩個已觀測語境沿既有冷啟動收據，不啟動新的遊戲抽驗。
     # 兩者的 wrapper→formatter、原始座標、色號及首字形已在正常冷讀收據中保存。
     formal = catalog(root / 'workplace/translation/zh-TW.tsv')
@@ -125,27 +179,30 @@ def finish(root, output, replace=False):
 def refresh(root, output, font):
     assert output.is_dir() and output.stat().st_uid == 1000
     assert (output / 'player-profile.json').is_file() and font.is_file()
-    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json']
+    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json', 'render-hooks.json'] + DISPLAY_FILES
     for name in owned:
-        assert (output / name).stat().st_uid == 1000
+        if (output / name).exists():
+            assert (output / name).stat().st_uid == 1000
     unchanged = {str(p.relative_to(output)): sha(p) for p in output.rglob('*')
                  if p.is_file() and str(p.relative_to(output)) not in owned}
     shutil.copyfile(root / 'text/toolbar.zh-TW.tsv', output / 'toolbar.zh-TW.tsv')
+    shutil.copyfile(root / 'docs/spec/005-render-hooks.json', output / 'render-hooks.json')
     subprocess.run([sys.executable, str(root / 'tools/menu_glyphs.py'), str(font),
                     str(output / 'toolbar.zh-TW.tsv'), str(output / 'toolbar-glyphs-16.json'), '16'], check=True)
+    display(root, output, font)
     finish(root, output, replace=True)
     assert all(sha(output / name) == digest for name, digest in unchanged.items())
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['prepare', 'finish', 'refresh'])
+    parser.add_argument('mode', choices=['prepare', 'finish', 'refresh', 'display'])
     parser.add_argument('root', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--font', type=Path)
     args = parser.parse_args()
-    if args.mode == 'refresh':
+    if args.mode in ['refresh', 'display']:
         assert args.font is not None
-        refresh(args.root, args.output, args.font)
+        globals()[args.mode](args.root, args.output, args.font)
     else:
         globals()[args.mode](args.root, args.output)

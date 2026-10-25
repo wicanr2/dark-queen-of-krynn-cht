@@ -554,7 +554,13 @@ func (g *liveGame) Layout(_, _ int) (int, int) {
 	return 640, 400
 }
 func (g *liveGame) Draw(screen *ebiten.Image) {
-	w, h, rgb := g.o.ScreenRGB()
+	var w, h int
+	var rgb []byte
+	if g.player != nil {
+		w, h, rgb = g.player.Renderer.Source()
+	} else {
+		w, h, rgb = g.o.ScreenRGB()
+	}
 	if w != 320 || h != 200 {
 		panic("未知畫面尺寸")
 	}
@@ -686,6 +692,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		u := g.cold.ui
 		g.composeWords(px, u.snapshot(), u.Catalog, u.Glyphs)
 	}
+	if g.translate && g.player != nil {
+		g.player.Renderer.ComposeText(px, g, rgb)
+	}
 	held := g.lifecycle && (g.transition || g.renderDepth > 0 || len(g.paints) > 0)
 	if g.cold != nil && !g.cold.ready && g.cold.ui != nil && g.cold.ui.held() {
 		held = true
@@ -705,6 +714,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			held = true
 		}
 	}
+	if g.player != nil && g.player.Renderer.Busy() {
+		held = true
+	}
 	if held {
 		if len(g.lastPixels) == 0 {
 			panic("尚無完整畫格可保留")
@@ -720,16 +732,8 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		g.textureHash = composedHash
 		g.uploads++
 	}
-	var baseOptions *ebiten.DrawImageOptions
 	if g.player != nil {
-		baseOptions = &ebiten.DrawImageOptions{}
-		baseOptions.GeoM.Scale(1.5, 1.5)
-	}
-	screen.DrawImage(g.texture, baseOptions)
-	if g.player != nil {
-		if p := g.player; p.HD != nil && p.HDEnabled && g.translate {
-			p.HD.Draw(screen, rgb, g.playerProtectedRectangles(), held)
-		}
+		g.player.Renderer.Present(screen, g, rgb, held)
 		if g.player.Screenshot {
 			g.savePlayerScreenshot(screen)
 		}
@@ -739,6 +743,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		}
 		return
 	}
+	screen.DrawImage(g.texture, nil)
 	// 擷取 GPU 實際讀回的已提交畫格，逐點確認與原子合成的輸入相同。
 	readback := make([]byte, len(px))
 	screen.ReadPixels(readback)
@@ -1282,12 +1287,31 @@ type playerSession struct {
 	HD                playerHDRenderer
 	HDEnabled         bool
 	Screenshot        bool
+	Renderer          playerFrameRenderer
+}
+
+type playerFrameRenderer interface {
+	Source() (int, int, []byte)
+	Busy() bool
+	Present(*ebiten.Image, *liveGame, []byte, bool)
+	ComposeText([]byte, *liveGame, []byte)
+}
+
+// 舊研究來源清單仍可編譯，正式玩家入口必須連入完整畫格提交模組。
+var playerRenderLoader func(*oracle.Oracle, string, playerHDRenderer) playerFrameRenderer
+
+type sourceTileCommand struct {
+	Header [8]byte
+	Source oracle.Addr
+	X, Y   int
 }
 
 type playerHDRenderer interface {
 	Available() bool
 	Invalidate()
 	Draw(*ebiten.Image, []byte, [][4]int, bool)
+	CaptureTile(*oracle.Oracle, sourceTileCommand)
+	PrepareFrame([]byte)
 }
 
 // 可選 HD 模組只由一般玩家建置連入。舊研究建置不需要可選素材或新檔案。
@@ -1380,6 +1404,10 @@ func runPlayer(profile, original, saves string) {
 	g.installList(filepath.Join(profile, "inputs.json"), "", filepath.Join(profile, "en.tsv"))
 	g.installReader(filepath.Join(profile, "reader.zh-TW.tsv"), filepath.Join(profile, "illustrations.json"))
 	g.installManual(filepath.Join(profile, "manual.zh-TW.tsv"), filepath.Join(profile, "manual-index.json"))
+	if playerRenderLoader == nil {
+		panic("缺少玩家繪圖提交模組")
+	}
+	p.Renderer = playerRenderLoader(o, profile, p.HD)
 	g.reader.Live = true
 	g.texture = ebiten.NewImage(640, 400)
 	p.BarTexture = ebiten.NewImage(640, 24)

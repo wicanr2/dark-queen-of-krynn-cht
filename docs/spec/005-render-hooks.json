@@ -1,0 +1,255 @@
+{
+  "Version": 1,
+  "ExecutableSHA256": "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58",
+  "IDAVersion": "9.4",
+  "AddressSpace": "IDA linear and original file offset; runtime resident mapping separately recorded",
+  "Hooks": [
+    {
+      "name": "sub_10DFF",
+      "kind": "masked-copy",
+      "ida_linear": 69119,
+      "file_offset": 12799,
+      "segment": 487,
+      "offset": 143,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_10E72",
+      "kind": "block-copy",
+      "ida_linear": 69234,
+      "file_offset": 12914,
+      "segment": 487,
+      "offset": 258,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_110B8",
+      "kind": "solid-fill",
+      "ida_linear": 69816,
+      "file_offset": 13496,
+      "segment": 487,
+      "offset": 840,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_110EB",
+      "kind": "solid-fill",
+      "ida_linear": 69867,
+      "file_offset": 13547,
+      "segment": 487,
+      "offset": 891,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_11120",
+      "kind": "masked-fill",
+      "ida_linear": 69920,
+      "file_offset": 13600,
+      "segment": 487,
+      "offset": 944,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_1115E",
+      "kind": "pattern-fill",
+      "ida_linear": 69982,
+      "file_offset": 13662,
+      "segment": 487,
+      "offset": 1006,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_11478",
+      "kind": "block-copy",
+      "ida_linear": 70776,
+      "file_offset": 14456,
+      "segment": 487,
+      "offset": 1800,
+      "prefix": "558bec56571ec576",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_114C4",
+      "kind": "masked-copy",
+      "ida_linear": 70852,
+      "file_offset": 14532,
+      "segment": 487,
+      "offset": 1876,
+      "prefix": "558bec56571ec576",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_1153B",
+      "kind": "block-copy",
+      "ida_linear": 70971,
+      "file_offset": 14651,
+      "segment": 487,
+      "offset": 1995,
+      "prefix": "558bec56571ec576",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_11632",
+      "kind": "surface-clear",
+      "ida_linear": 71218,
+      "file_offset": 14898,
+      "segment": 487,
+      "offset": 2242,
+      "prefix": "558bec56578cdb8b",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_11688",
+      "kind": "surface-clear",
+      "ida_linear": 71304,
+      "file_offset": 14984,
+      "segment": 487,
+      "offset": 2328,
+      "prefix": "558bec56578cdb8b",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_116C6",
+      "kind": "surface-copy",
+      "ida_linear": 71366,
+      "file_offset": 15046,
+      "segment": 487,
+      "offset": 2390,
+      "prefix": "558bec56578cdb8e",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_1192C",
+      "kind": "masked-copy",
+      "ida_linear": 71980,
+      "file_offset": 15660,
+      "segment": 487,
+      "offset": 3004,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_119EF",
+      "kind": "surface-read",
+      "ida_linear": 72175,
+      "file_offset": 15855,
+      "segment": 487,
+      "offset": 3199,
+      "prefix": "558bec56571e8b36",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_11AA1",
+      "kind": "pattern-fill",
+      "ida_linear": 72353,
+      "file_offset": 16033,
+      "segment": 487,
+      "offset": 3377,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_12EE1",
+      "kind": "glyph",
+      "ida_linear": 77537,
+      "file_offset": 21217,
+      "segment": 487,
+      "offset": 8561,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_22BE8",
+      "kind": "rectangle",
+      "ida_linear": 142312,
+      "file_offset": 85992,
+      "segment": 5063,
+      "offset": 120,
+      "prefix": "558bec83ec2e5657",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_23806",
+      "kind": "glyph-dispatch",
+      "ida_linear": 145414,
+      "file_offset": 89094,
+      "segment": 5063,
+      "offset": 3222,
+      "prefix": "558bec83ec4e5657",
+      "evidence_level": "靜態已證實：函式邊界、bytes與retf；命令類別為強推論，新掛勾未實機走訪"
+    },
+    {
+      "name": "sub_213C0",
+      "kind": "formatted-print",
+      "ida_linear": 136128,
+      "file_offset": 79808,
+      "segment": 4626,
+      "offset": 928,
+      "prefix": "558becff760a0ee8",
+      "evidence_level": "已證實：既有格式化印字入口與retf；沿規格001來源，不新增遊戲抽驗"
+    },
+    {
+      "name": "sub_2717A",
+      "kind": "image-planes",
+      "ida_linear": 160122,
+      "file_offset": 103802,
+      "segment": 5678,
+      "offset": 8090,
+      "prefix": "558bec83ec145657",
+      "evidence_level": "靜態已證實：影像header、裁切、分色面呼叫及retf；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_2744C",
+      "kind": "image-header",
+      "ida_linear": 160844,
+      "file_offset": 104524,
+      "segment": 5678,
+      "offset": 8812,
+      "prefix": "558bec83ec125657",
+      "evidence_level": "靜態已證實：影像header、裁切、分色面呼叫及retf；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_27580",
+      "kind": "image-resource",
+      "ida_linear": 161152,
+      "file_offset": 104832,
+      "segment": 5678,
+      "offset": 9120,
+      "prefix": "558becff760cff76",
+      "evidence_level": "靜態已證實：影像header、裁切、分色面呼叫及retf；未新增遊戲抽驗"
+    }
+  ],
+  "Coverage": "已列primitive；不是全部TLB與動畫來源",
+  "NewGameplaySampling": false,
+  "ImageSource": {
+    "name": "sub_2744C+0x32",
+    "ida_linear": 160894,
+    "file_offset": 104574,
+    "segment": 5678,
+    "offset": 8862,
+    "prefix": "83c40a8956fe8946",
+    "header_ss_bp_offset": -18,
+    "source_registers": [
+      "DX",
+      "AX"
+    ],
+    "destination_y_ss_bp_offset": 6,
+    "destination_x_ss_bp_offset": 8,
+    "evidence_level": "已證實：sub_26A25返回後、首個影像分派前；以原始header與payload雜湊辨識"
+  },
+  "TextGlyph": {
+    "name": "sub_23806+0x20",
+    "ida_linear": 145446,
+    "file_offset": 89126,
+    "segment": 5063,
+    "offset": 3254,
+    "prefix": "837e06007d0bb800",
+    "evidence_level": "已證實：座標正規化已返回，字元尚未改寫，未進入任何繪圖分支"
+  }
+}

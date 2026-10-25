@@ -27,6 +27,7 @@ test "$(stat -c %u:%g /output)" = "$(id -u):$(id -g)"
 mkdir "/output/$1"
 python3 /project/tools/player_inputs.py prepare /project "/output/$1/inputs"
 python3 /project/tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "/output/$1/inputs/toolbar.zh-TW.tsv" "/output/$1/inputs/toolbar-glyphs-16.json" 16
+python3 /project/tools/player_inputs.py display /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py finish /project "/output/$1/inputs"
 mkdir "/output/$1/session"
 find "/output/$1" -user root -o -type d -name "*.md"
@@ -58,7 +59,7 @@ find "/output/$1" -user root -o -type d -name "*.md"
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
 printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\",\"/src/oracle/dqk_input_modifier.go\":\"/tools/oracle_input_modifier.go\"}}" >/tmp/player-overlay.json
-go build -overlay /tmp/player-overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
+go build -overlay /tmp/player-overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_text_owner.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
 sha256sum /out/dqk-player >/out/binary.sha256
 find /out -user root -o -type d -name "*.md"
 '
