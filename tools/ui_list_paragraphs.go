@@ -139,6 +139,9 @@ func (l *listState) aimDamageKey(key string) bool {
 }
 
 func (g *liveGame) validateHUDParagraphs() {
+	if !hudWeaponVocabulary(g.list.config.HUDWeaponNames, g.list.sources, g.catalog) {
+		panic("武器名稱詞表不符")
+	}
 	for _, p := range g.list.config.HUDParagraphs {
 		weapon := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x097e}) && p.NativeBox == ([4]int{184, 56, 312, 80})
 		status := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 88, 312, 176})
@@ -199,7 +202,16 @@ func (g *liveGame) validateHUDParagraphs() {
 
 func (g *liveGame) beginHUDParagraph(caller oracle.Addr, box [4]int, fg, bg, clear byte, ptr oracle.Addr, source string) bool {
 	l, o := g.list, g.o
-	for _, p := range l.config.HUDParagraphs {
+	bindings := l.config.HUDParagraphs
+	if caller == (oracle.Addr{Seg: 0x088e, Off: 0x097e}) && box == ([4]int{184, 56, 312, 80}) && fg == 7 && bg == 0 && clear == 1 {
+		if part, ok := hudWeaponName(l.config.HUDWeaponNames, l.sources, source); ok {
+			bindings = append(append([]listHUDParagraph{}, bindings...), listHUDParagraph{
+				SHA256: digest([]byte(source)), Caller: caller, NativeBox: box, Foreground: fg, Background: bg, Clear: clear,
+				Spans: []listHUDSpan{{Start: 0, Length: len(part.Name), Key: part.Key, Rect: [4]int{184, 56, len(part.Name) * 8, 8}}},
+			})
+		}
+	}
+	for _, p := range bindings {
 		if p.Caller != caller || p.NativeBox != box || p.Foreground != fg || p.Background != bg || p.Clear != clear {
 			continue
 		}

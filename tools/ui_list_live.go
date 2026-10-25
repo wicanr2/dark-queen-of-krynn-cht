@@ -41,6 +41,7 @@ type listConfig struct {
 	OriginalPrefixes []originalPrefixBinding `json:",omitempty"`
 	PassageGroups    []passageSourceBinding  `json:",omitempty"`
 	HUDParagraphs    []listHUDParagraph      `json:",omitempty"`
+	HUDWeaponNames   []string                `json:",omitempty"`
 	Menus            map[string]string
 	PaneLists        []listPaneSource
 	RowCallers       []oracle.Addr
@@ -138,6 +139,8 @@ type listBattleNotice struct {
 	Ready, Restoring       bool
 }
 type listState struct {
+	statusViewOpen         bool
+	statusFromBattle       bool
 	passage                *livePassage
 	battleNotice           *listBattleNotice
 	inputsPath             string
@@ -624,6 +627,16 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 		}
 		x, y, w, h := v[1], v[0], v[3]-v[1], v[2]-v[0]
 		fillCaller := oracle.Addr{Off: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 2}), Seg: o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 4})}
+		if l.statusViewOpen && len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) &&
+			([4]int{x, y, w, h}) == ([4]int{184, 8, 128, 168}) {
+			removed := l.snapshot()
+			l.words = map[[2]int]listWord{}
+			l.statusViewOpen = false
+			l.statusFromBattle = false
+			g.page = nil
+			l.footerTransition = true
+			g.listLog("status-view-closed", map[string]any{"caller": fillCaller, "native_rect": [4]int{x, y, w, h}, "removed": removed})
+		}
 		if len(l.paints) == 0 && fillCaller == (oracle.Addr{Seg: 0xb72, Off: 0x1b}) && ([4]int{x, y, w, h}) == ([4]int{184, 80, 128, 96}) {
 			for _, word := range l.words {
 				if word.Number != nil && l.aimDamageKey(word.Key) {
@@ -729,6 +742,8 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			l.headerReturn = nil
 			l.pane = ""
 			l.memoryListOpen = false
+			l.statusViewOpen = false
+			l.statusFromBattle = l.hudActive
 			l.hudActive = false
 			l.descriptorContext = false
 			l.trackListPage, l.rowPagePending = false, false
@@ -1422,6 +1437,10 @@ func (g *liveGame) installListFields() {
 			}
 			if battleSpellCaptionField(f) {
 				l.spellCaption = &listMovementCaption{Entry: o.Steps(), Paint: l.fieldWrapper.Return, Word: w}
+			}
+			if l.statusFromBattle && f.Key == "field.755c8b2a9fb114460e09" && w.X == 160 && w.Y == 8 && w.Foreground == 11 {
+				l.statusViewOpen = true
+				g.listLog("status-view-header", map[string]any{"key": f.Key, "source_sha256": digest([]byte(source)), "native_xy": [2]int{w.X, w.Y}})
 			}
 			l.awaitGlyphs = append(l.awaitGlyphs, g.listLog("field-before-glyph", map[string]any{"key": f.Key, "source_sha256": digest([]byte(source)), "source_start": start,
 				"format_sha256": f.FormatSHA256, "raw_xy": [2]uint16{s[3], s[2]}, "caller": o.Caller(), "word": w, "deferred": f.Pane == "suffix", "menu_signature": f.MenuSignature}))
