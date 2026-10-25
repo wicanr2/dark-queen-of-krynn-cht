@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math/bits"
 	"os"
 	"path/filepath"
 
@@ -12,8 +13,13 @@ import (
 )
 
 type ownedDriver struct {
-	X, Y, W, H, Base int
-	Kind             string
+	X, Y, W, H, Base      int
+	Kind                  string
+	LastSteps, LastCycles uint64
+	Asset                 *sceneAsset
+	Page                  uint32
+	Fallback              bool
+	Transfers             int
 }
 
 var renderOwners = map[*oracle.Oracle]*playerRenderOwner{}
@@ -153,6 +159,13 @@ func (p *playerRenderOwner) installOwnedDrivers(steps []renderPrimitive) {
 			if write {
 				for _, v := range p.Pending {
 					if v.Owned != nil {
+						if v.Owned.Kind == "glyph-compat" {
+							continue
+						}
+						if v.Owned.Kind == "image" {
+							p.fallbackImage(v.Owned)
+							continue
+						}
 						p.Counters["unexpected_owned_native_writes"]++
 						panic("已接管繪圖仍寫入原版像素，停止重複繪製")
 					}
@@ -191,33 +204,14 @@ func (p *playerRenderOwner) step(ea uint32) {
 	switch ea {
 	case 0x26bbc, 0x26dc2:
 		p.image(ea == 0x26dc2)
-	case 0x26be8, 0x26d36:
-		if v := p.pending(0x26bb4, true); v != nil && v.Owned != nil {
-			o.SetRegs(oracle.CallRegs{SI: 3, SetSI: true})
-			p.jump(0x26d3a)
-		}
-	case 0x26d41:
-		if v := p.pending(0x26bb4, true); v != nil && v.Owned != nil {
-			p.jump(0x26d64)
-		}
-	case 0x26f70:
-		if v := p.pending(0x26db9, true); v != nil && v.Owned != nil {
-			d := v.Owned
-			o.WriteU16(oracle.Addr{Seg: r.SS, Off: r.BP + 6}, uint16(d.Y+d.H-1))
-			p.jump(0x26f8b)
-		}
-	case 0x26f9c:
-		if v := p.pending(0x26db9, true); v != nil && v.Owned != nil {
-			p.jump(0x27010)
-		}
-	case 0x2701a:
-		if v := p.pending(0x26db9, true); v != nil && v.Owned != nil {
-			p.jump(0x27174)
-		}
+	case 0x10fd6, 0x11017, 0x12ebf:
+		p.imageTransfer(ea)
 	case 0x12ef8:
 		p.glyph()
 	case 0x12fa1:
-		if v := p.pending(0x12ee1, true); v != nil && v.Owned != nil {
+		if v := p.pending(0x12ee1, true); v != nil && v.Owned != nil && v.Owned.Kind == "glyph" {
+			must(o.CommitPresentationWork(v.Owned.LastSteps, v.Owned.LastCycles))
+			p.Counters["virtual_instructions"] += v.Owned.LastSteps
 			p.jump(0x12faa)
 		}
 	case 0x110c5, 0x110f8:
@@ -229,6 +223,17 @@ func (p *playerRenderOwner) step(ea uint32) {
 		}
 		if v := p.pending(origin, false); v != nil && v.Owned != nil && r.SP+10 == v.Return.SP {
 			d := v.Owned
+			count := d.W / 4
+			if ea == 0x11107 {
+				count /= 2
+			}
+			steps := uint64(8*d.H - 5)
+			cycles := uint64((7+5*count)*d.H + 24*(d.H-1))
+			if o.PresentationDOSCost() {
+				cycles = steps + uint64(count*d.H)
+			}
+			must(o.CommitPresentationWork(steps, cycles))
+			p.Counters["virtual_instructions"] += steps
 			last := d.Base + (d.H-1)*80
 			o.SetRegs(oracle.CallRegs{SI: uint16(last), DI: uint16(last + d.W/4), CX: 0, DX: 1, SetSI: true, SetDI: true, SetCX: true, SetDX: true})
 			p.jump(tail)
@@ -255,6 +260,24 @@ func (p *playerRenderOwner) glyph() {
 		return
 	}
 	font := o.Bytes(addr, 8)
+	ones := 0
+	for _, row := range font {
+		ones += bits.OnesCount8(row)
+	}
+	lastSteps, lastCycles := uint64(2), uint64(14)
+	prefixOnes := ones
+	if font[7]&1 != 0 {
+		prefixOnes--
+		lastSteps, lastCycles = 1, 12
+	}
+	steps := uint64(691 - prefixOnes)
+	cycles := uint64(3886 - 2*prefixOnes)
+	if o.PresentationDOSCost() {
+		cycles = steps + 8
+		lastCycles = lastSteps
+	}
+	reserve := steps + lastSteps + 64
+	fast := o.PresentationWorkBudget(reserve) == reserve
 	key := fmt.Sprintf("glyph:%x:%04x", font, r.BX)
 	a := p.Assets[key]
 	if a == nil {
@@ -270,10 +293,26 @@ func (p *playerRenderOwner) glyph() {
 		}
 		a = p.cache(key, a)
 	}
-	v.Owned = &ownedDriver{X: x, Y: y, W: 8, H: 8, Kind: "glyph"}
+	v.Owned = &ownedDriver{X: x, Y: y, W: 8, H: 8, Kind: "glyph", LastSteps: lastSteps, LastCycles: lastCycles, Asset: a, Page: uint32(r.ES-0xa000) * 16}
+	if !fast {
+		v.Owned.Kind = "glyph-compat"
+		p.Counters["glyph_budget_fallback"]++
+		return
+	}
 	p.record(a, x, y, uint32(r.ES-0xa000)*16, "glyph")
+	must(o.CommitPresentationWork(steps, cycles))
+	p.Counters["virtual_instructions"] += steps
 	o.SetRegs(oracle.CallRegs{AX: 0, DX: 0x3c4, CX: 1, DI: r.DI + 7*80 + 1, SetAX: true, SetDX: true, SetCX: true, SetDI: true})
 	p.jump(0x12f95)
+}
+
+func (p *playerRenderOwner) finishDriver(d *ownedDriver) {
+	if d == nil || d.Kind != "glyph-compat" {
+		return
+	}
+	// 原版只產生必要索引相容資料；最終原字形或中文仍由同一來源命令擇一畫一次。
+	p.Scene.record(p.Scene.page(d.Page, p.Oracle.PresentationPlane), d.Asset, d.X, d.Y)
+	p.Counters["compatibility_glyph"]++
 }
 
 func (p *playerRenderOwner) fill(word bool) {
@@ -297,6 +336,10 @@ func (p *playerRenderOwner) fill(word bool) {
 	}
 	mask := o.PresentationVideoState()[4] & 15
 	if mask == 0 {
+		return
+	}
+	if reserve := uint64(8*h + 32); o.PresentationWorkBudget(reserve) != reserve {
+		p.Counters["fill_budget_fallback"]++
 		return
 	}
 	key := fmt.Sprintf("fill:%d:%d:%d:%d", width, h, byte(color), mask)
@@ -388,8 +431,7 @@ func (p *playerRenderOwner) image(rle bool) {
 		}
 		a = p.cache(fmt.Sprintf("image:%x:%s", c.Header, digest(body[:used])), decoded)
 	}
-	v.Owned = &ownedDriver{X: c.X, Y: c.Y, W: w, H: h, Kind: "image"}
-	p.record(a, c.X, c.Y, c.Page, "image")
+	v.Owned = &ownedDriver{X: c.X, Y: c.Y, W: w, H: h, Kind: "image", Asset: a, Page: c.Page}
 	for i := len(p.Pending) - 1; i >= 0; i-- {
 		s := p.Pending[i].Image
 		if s != nil && s.Command.Source == c.Source {
@@ -397,4 +439,130 @@ func (p *playerRenderOwner) image(rle bool) {
 			break
 		}
 	}
+}
+
+func (p *playerRenderOwner) fallbackImage(d *ownedDriver) {
+	if d.Fallback {
+		return
+	}
+	d.Fallback = true
+	p.Counters["image_native_fallback"]++
+	model := p.Scene.Pages[d.Page/0x4000]
+	if model == nil {
+		return
+	}
+	for y := d.Y; y < d.Y+d.H; y++ {
+		for x := d.X; x < d.X+d.W; x++ {
+			i := y*320 + x
+			c := &model.Cells[i]
+			if c.Asset != d.Asset || c.Source != (y-d.Y)*d.W+x-d.X {
+				continue
+			}
+			if c.Visible {
+				p.Oracle.SetPresentationPlane(x&3, d.Page+uint32(y*80+x/4), c.Asset.Index[c.Source])
+			}
+			*c = sceneCell{}
+		}
+	}
+	p.Scene.Revision++
+}
+
+// 保留原版解壓與所有外層控制流，僅替換一個事件區間內的實際像素搬移。
+func (p *playerRenderOwner) imageTransfer(ea uint32) {
+	var d *ownedDriver
+	for i := len(p.Pending) - 1; i >= 0; i-- {
+		if v := p.Pending[i].Owned; v != nil && v.Kind == "image" {
+			d = v
+			break
+		}
+	}
+	if d == nil || d.Fallback {
+		return
+	}
+	o := p.Oracle
+	r := o.Regs()
+	s := o.PresentationVideoState()
+	mask := s[4] & 15
+	if !p.guard() || mask == 0 || mask&(mask-1) != 0 || r.ES < 0xa000 || uint32(r.ES-0xa000)*16 != d.Page || r.DI >= 16000 {
+		p.fallbackImage(d)
+		return
+	}
+	units := int(r.CX)
+	n := units
+	if ea == 0x10fd6 {
+		n *= 2
+	}
+	if ea == 0x12ebf {
+		n = int(r.DX)
+		if r.CX != r.DX || byte(r.AX>>8) != 255 {
+			p.fallbackImage(d)
+			return
+		}
+	}
+	plane := bits.TrailingZeros8(mask)
+	x, y := int(r.DI%80)*4+plane, int(r.DI/80)
+	if n < 1 || x < d.X || y < d.Y || x+(n-1)*4 >= d.X+d.W || y >= d.Y+d.H || uint32(r.SI)+uint32(n) > 65536 || uint32(r.DS)*16+uint32(r.SI)+uint32(n) > 0xa0000 {
+		p.fallbackImage(d)
+		return
+	}
+	data := o.Bytes(oracle.Addr{Seg: r.DS, Off: r.SI}, n)
+	opaque := 0
+	for i, v := range data {
+		src := (y-d.Y)*d.W + x + i*4 - d.X
+		if v != d.Asset.Index[src] {
+			p.fallbackImage(d)
+			return
+		}
+		if ea != 0x12ebf || v != 255 {
+			opaque++
+		}
+	}
+	steps, cycles := uint64(1), uint64(3+5*units)
+	target := ea + 2
+	if o.PresentationDOSCost() {
+		cycles = uint64(1 + units)
+	}
+	// 固定 SDK 的 LOOP 只有 base 成本，不加 taken-jump；這是模擬器契約，非硬體週期。
+	if ea == 0x12ebf {
+		steps = uint64(5 * n)
+		cycles = uint64(20 * n)
+		target = 0x12ec7
+		if data[n-1] == 255 {
+			steps++
+			cycles += 7
+		}
+		if o.PresentationDOSCost() {
+			cycles = steps + uint64(n+opaque)
+		}
+	}
+	if o.PresentationWorkBudget(steps+1) != steps+1 {
+		p.Counters["image_budget_fallback"]++
+		p.fallbackImage(d)
+		return
+	}
+	model := p.Scene.page(d.Page, o.PresentationPlane)
+	for i, v := range data {
+		if ea == 0x12ebf && v == 255 {
+			continue
+		}
+		xx := x + i*4
+		at := y*320 + xx
+		src := (y-d.Y)*d.W + xx - d.X
+		model.Cells[at] = sceneCell{Asset: d.Asset, Source: src, Visible: true}
+		model.Index[at] = v
+		o.EmitPresentationWrite(d.Page+uint32(y*80+xx/4), v, mask)
+		p.Counters["logical_writes"]++
+	}
+	p.Scene.Revision++
+	d.Transfers++
+	p.Counters["owned_image_transfers"]++
+	must(o.CommitPresentationWork(steps, cycles))
+	p.Counters["virtual_instructions"] += steps
+	update := oracle.CallRegs{SI: r.SI + uint16(n), DI: r.DI + uint16(n), CX: 0, SetSI: true, SetDI: true, SetCX: true}
+	if ea == 0x12ebf {
+		update.AX = r.AX&0xff00 | uint16(data[n-1])
+		update.SetAX = true
+	}
+	o.SetRegs(update)
+	p.jump(target)
 }

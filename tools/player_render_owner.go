@@ -67,7 +67,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		ImagePositionCallers []oracle.Addr
 	}
 	must(json.Unmarshal(raw, &bindings))
-	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 31 || len(bindings.NativeSteps) != 23 {
+	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 31 || len(bindings.NativeSteps) != 18 {
 		panic("繪圖掛勾資料與原版版本不符")
 	}
 	owner := &playerRenderOwner{Oracle: o, ShadowRGB: make([]byte, 320*200*3),
@@ -143,6 +143,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 				for i := len(owner.Pending) - 1; i >= 0; i-- {
 					p := owner.Pending[i].Return
 					if p.Addr == target && p.SS == r.SS && p.SP == r.SP {
+						owner.finishDriver(owner.Pending[i].Owned)
 						// 同一返回點可被不同呼叫重用，以實際堆疊身分配對。
 						owner.Pending = append(owner.Pending[:i], owner.Pending[i+1:]...)
 						return
@@ -199,7 +200,7 @@ func nativeTextRegion(o *oracle.Oracle, page uint32, w listWord) []byte {
 
 func (p *playerRenderOwner) Busy() bool { return len(p.Pending) != 0 }
 
-func (p *playerRenderOwner) Source() (int, int, []byte) {
+func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 	if !p.Busy() {
 		page, ok := nativeVisiblePage(p.Oracle)
 		if !ok {
@@ -212,15 +213,32 @@ func (p *playerRenderOwner) Source() (int, int, []byte) {
 		} else {
 			model := p.Scene.page(page, p.Oracle.PresentationPlane)
 			pal := p.Oracle.Palette()
+			blocked := [64000]bool{}
+			if g.translate {
+				p.Text.prune()
+				for _, r := range append(g.playerProtectedRectangles(), p.Text.Rectangles()...) {
+					if r[0] < 0 || r[1] < 0 || r[2] > 320 || r[3] > 200 {
+						panic("不透明中文框越界")
+					}
+					for y := r[1]; y < r[3]; y++ {
+						for x := r[0]; x < r[2]; x++ {
+							blocked[y*320+x] = true
+						}
+					}
+				}
+			}
+			omitted := uint64(0)
 			for i, c := range model.Cells {
 				d := i * 3
-				if c.Asset != nil && c.Visible {
+				if blocked[i] || c.Asset != nil && c.Visible {
 					clear(p.ShadowRGB[d : d+3])
+					omitted++
 				} else {
 					col := pal[model.Index[i]]
 					copy(p.ShadowRGB[d:d+3], col[:])
 				}
 			}
+			p.Counters["base_rgb_omitted_pixels"] += omitted
 		}
 	}
 	return 320, 200, p.ShadowRGB

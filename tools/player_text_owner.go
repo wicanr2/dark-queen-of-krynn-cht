@@ -188,7 +188,7 @@ func (p *playerTextOwner) prune() {
 }
 
 func (p *playerTextOwner) Compose(px []byte, g *liveGame, rgb []byte) {
-	p.prune()
+	// 完整畫格的 Source 已按相同色號視圖整理一次，合成期間沒有客體執行。
 	page, ok := nativeVisiblePage(p.Oracle)
 	if !ok {
 		return

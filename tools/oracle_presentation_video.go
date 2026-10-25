@@ -2,6 +2,7 @@
 package oracle
 
 import (
+	"fmt"
 	"github.com/wicanr2/dosgolem/internal/machine"
 )
 
@@ -20,3 +21,20 @@ func (o *Oracle) SetPresentationPlane(plane int, off uint32, v byte) { o.m.VGA.P
 
 // 跳到同一 code segment 的已核對指令；由原 epilogue 還原堆疊，不能偽造 retf。
 func (o *Oracle) JumpPresentationIP(ip uint16) { o.m.CPU.IP = ip }
+
+func (o *Oracle) PresentationWorkBudget(limit uint64) uint64 {
+	if o.presentationRunDeadline <= o.m.Steps {
+		return 0
+	}
+	if remain := o.presentationRunDeadline - o.m.Steps; limit > remain {
+		limit = remain
+	}
+	return o.m.PresentationWorkBudget(limit)
+}
+func (o *Oracle) CommitPresentationWork(steps, cycles uint64) error {
+	if steps > o.PresentationWorkBudget(steps) {
+		return fmt.Errorf("呈現替換超過呼叫端配額")
+	}
+	return o.m.CommitPresentationWork(steps, cycles)
+}
+func (o *Oracle) PresentationDOSCost() bool { return o.m.CPU.DOSBoxCost }

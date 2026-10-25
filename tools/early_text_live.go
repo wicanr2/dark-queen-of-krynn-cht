@@ -557,7 +557,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	var w, h int
 	var rgb []byte
 	if g.player != nil {
-		w, h, rgb = g.player.Renderer.Source()
+		w, h, rgb = g.player.Renderer.Source(g)
 	} else {
 		w, h, rgb = g.o.ScreenRGB()
 	}
@@ -1291,10 +1291,11 @@ type playerSession struct {
 	HDEnabled         bool
 	Screenshot        bool
 	Renderer          playerFrameRenderer
+	Controls          []map[string]any
 }
 
 type playerFrameRenderer interface {
-	Source() (int, int, []byte)
+	Source(*liveGame) (int, int, []byte)
 	Busy() bool
 	Present(*ebiten.Image, *liveGame, []byte, bool)
 	ComposeText([]byte, *liveGame, []byte)
@@ -1428,6 +1429,9 @@ func runPlayer(profile, original, saves string) {
 	ebiten.SetWindowTitle("黑暗之后：繁體中文版")
 	ebiten.SetTPS(60)
 	must(ebiten.RunGame(g))
+	controlLog, err := json.MarshalIndent(p.Controls, "", "  ")
+	must(err)
+	must(os.WriteFile(filepath.Join(saves, "controls.json"), append(controlLog, '\n'), 0644))
 	preferences.Scale = p.Scale
 	preferences.HD = &p.HDEnabled
 	raw, err = json.MarshalIndent(preferences, "", "  ")
@@ -1476,6 +1480,9 @@ func (g *liveGame) playerButtons() []playerButton {
 
 func (g *liveGame) playerAction(action string) {
 	p := g.player
+	defer func() {
+		p.Controls = append(p.Controls, map[string]any{"action": action, "step": g.o.Steps(), "chinese": g.translate, "scale": p.Scale, "hd": p.HDEnabled})
+	}()
 	if p.HD != nil && (action == "scale2" || action == "scale3" || action == "language" || action == "hd") {
 		p.HD.Invalidate()
 	}
@@ -1732,9 +1739,26 @@ func (g *liveGame) playerProtectedRectangles() [][4]int {
 			}
 		}
 	}
-	if g.reader != nil && g.reader.Page != nil {
-		b := g.reader.Page.Box
-		protected = append(protected, [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2})
+	if g.reader != nil {
+		page := g.reader.Page
+		if g.reader.Manual != nil && g.reader.Manual.Page != nil {
+			page = g.reader.Manual.Page
+		}
+		if page != nil {
+			b := page.Box
+			r := [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2}
+			// 閱讀器的左上16x16徽章不填背景，依實際繪製範圍拆開保護框。
+			if r[0] < 16 && r[1] < 16 {
+				if r[2] > 16 {
+					protected = append(protected, [4]int{16, r[1], r[2], min(16, r[3])})
+				}
+				if r[3] > 16 {
+					protected = append(protected, [4]int{r[0], 16, r[2], r[3]})
+				}
+			} else {
+				protected = append(protected, r)
+			}
+		}
 	}
 	return protected
 }

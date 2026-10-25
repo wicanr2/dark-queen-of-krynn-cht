@@ -16,7 +16,7 @@ exe = root / "workplace/input/dos/drkqueen/DQK.EXE"
 bindings = root / "docs/spec/005-render-hooks.json"
 j = json.loads(bindings.read_text())
 assert sha(exe) == j["ExecutableSHA256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
-assert j["Version"] == 2 and len(j["Hooks"]) == 31 and len(j["NativeSteps"]) == 23
+assert j["Version"] == 2 and len(j["Hooks"]) == 31 and len(j["NativeSteps"]) == 18
 b = exe.read_bytes()
 header = struct.unpack_from("<H", b, 8)[0] * 16
 reloc = []
@@ -46,10 +46,30 @@ for name, want in manifest["Files"].items():
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
 sources += [root / "tools" / n for n in ["early_text_live.go", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
+abi_root = root / "workplace/probe/render-abi-20261026-r8"
+abi_path = abi_root / "evidence.json"
+verified = False
+if abi_path.is_file():
+    abi = json.loads(abi_path.read_text())
+    verified = (abi.get("passed") is True and abi.get("machine_effects_verified") is True
+                and abi.get("virtual_time_verified") is True and abi.get("cases") == 50
+                and abi.get("inputs", {}).get("original_exe") == sha(exe)
+                and abi.get("inputs", {}).get("bindings") == sha(bindings)
+                and abi.get("receipt_sha256") == sha(abi_root / "abi-initial.json")
+                and all(sha(root / "tools" / name) == abi.get("sources", {}).get(name) for name in [
+                    "player_owned_drivers.go", "render_scene_state.go", "player_video_overlay.py",
+                    "machine_presentation_video.go", "oracle_presentation_video.go", "oracle_video_observer.go"]))
+player_sample = root / "workplace/probe/player-sample-20261026-r5/checks.json"
+sample = json.loads(player_sample.read_text()) if player_sample.is_file() else {}
+sample_verified = sample.get("passed") is True and sample.get("build_sha256") == sha(output / "dqk-player")
 info = {
-    "state": "DRAFT",
-    "native_effects_verified": False,
-    "virtual_time_accounting_verified": False,
+    "state": "READY" if verified else "DRAFT",
+    "native_effects_verified": verified,
+    "virtual_time_accounting_verified": verified,
+    "function_evidence_sha256": sha(abi_path) if abi_path.is_file() else None,
+    "normal_player_sample_verified": sample_verified,
+    "normal_player_sample_scope": sample.get("scope", []) if sample_verified else [],
+    "normal_player_sample_sha256": sha(player_sample) if sample_verified else None,
     "render_backend": "GPU texture and rectangle batches; CPU pixel reference in pure tests",
     "date": datetime.now(timezone.utc).isoformat(),
     "binary_sha256": sha(output / "dqk-player"),
@@ -62,8 +82,8 @@ info = {
     "verified_resident_points": len(points),
     "native_steps": len(j["NativeSteps"]),
     "sdk_overlay": {p.name: sha(p) for p in sorted((output / "build-overlay").glob("*.go"))},
-    "new_gameplay_verification": False,
-    "new_gui_sampling": False,
+    "new_gameplay_verification": sample_verified,
+    "new_gui_sampling": sample_verified,
     "whole_game_takeover_complete": False,
 }
 (output / "build-info.json").write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n")
