@@ -526,10 +526,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.UpperNative != nil && *f.UpperNative == ([2]int{0, 184}) && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
 				l.sources[f.Key] == "Aim: range = " && f.Length == len(l.sources[f.Key])
 			blueY, bluePosition := map[uint16]int{8004: 8, 8040: 80, 8048: 96}[f.RawY]
+			canonicalName := len(f.SHA256) == 64 && f.Key == "name."+f.SHA256[:20] &&
+				f.Length > 0 && f.Length <= 16 && len(l.sources[f.Key]) == f.Length && f.SHA256 == digest([]byte(l.sources[f.Key]))
 			combatTargetName := (f.Length == 11 && f.SHA256 == "34e6a2c45cd76bd572bc718ec07bba5666ec09acc337edfcc226f81c36949655") ||
 				(f.Length == 12 && f.SHA256 == digest([]byte("GREEN DRAGON"))) ||
-				(f.Length == 15 && (f.SHA256 == "ec48f92529153b54d99a82aa8470a603ed827667c33ef124fd0a1d8a441aefbc" ||
-					f.SHA256 == "1ed983b04da092ad444e51acb9920b4e837590e284fc1dd80deab501625d9afc"))
+				canonicalName
 			combatTarget := f.Pane == "callsite" && f.Group == "body" && f.Start == 0 && combatTargetName && f.Width == 0 && f.RawX == 8092 && bluePosition &&
 				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x088e, Off: 0x16fb}) && f.UpperNative != nil && *f.UpperNative == ([2]int{184, blueY}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.Color != nil && *f.Color == 0x82 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23
