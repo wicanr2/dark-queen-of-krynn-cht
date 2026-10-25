@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/wicanr2/dosgolem/oracle"
 )
 
@@ -36,25 +35,14 @@ type hdAsset struct {
 	Key          string
 	W, H         int
 	Pixels       []hdPixel
-	Texture      *ebiten.Image
+	Image        *playerImageAsset
 	SourceSHA256 string
 	SourceBytes  int
 }
 
-type hdMatch struct {
-	Asset *hdAsset
-	X, Y  int
-	Page  uint32
-}
-
 type hdLayer struct {
 	Assets         []*hdAsset
-	Hash           string
-	Matches        []hdMatch
-	Visible        []hdMatch
-	Commands       []hdMatch
 	BySourceHeader map[string][]*hdAsset
-	Oracle         *oracle.Oracle
 }
 
 func init() { playerHDLoader = loadHDLayer }
@@ -170,7 +158,15 @@ func loadHDLayer(root string) playerHDRenderer {
 		if w < 8 || h < 8 || len(asset.Pixels) < 64 || len(colors) < 4 {
 			return fail(record.Key, fmt.Errorf("來源缺乏可辨識的完整圖像資訊"))
 		}
-		asset.Texture = ebiten.NewImageFromImage(painted)
+		asset.Image = &playerImageAsset{W: w, H: h, Index: indexed, Alpha: make([]byte, w*h), HD: painted.Pix, Reference: make([]byte, w*h*3)}
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				i := y*w + x
+				j := y*original.Stride + x*4
+				asset.Image.Alpha[i] = original.Pix[j+3]
+				copy(asset.Image.Reference[i*3:i*3+3], original.Pix[j:j+3])
+			}
+		}
 		layer.Assets = append(layer.Assets, asset)
 		layer.BySourceHeader[record.SourceHeader] = append(layer.BySourceHeader[record.SourceHeader], asset)
 	}
@@ -178,22 +174,13 @@ func loadHDLayer(root string) playerHDRenderer {
 }
 
 func (h *hdLayer) Available() bool { return len(h.Assets) > 0 }
-func (h *hdLayer) Invalidate() {
-	h.Hash, h.Matches, h.Visible = "", nil, nil
-}
+func (h *hdLayer) Invalidate()     {} // 視窗及偏好不撤除來源命令。
 
-// 在原版第一個影像像素之前，以原始 header＋payload 辨識來源及目的地。
-// 不在完成的畫面中搜尋角色位置，未匹配的來源保持原版。
-func (h *hdLayer) CaptureTile(o *oracle.Oracle, command sourceTileCommand) {
-	h.Oracle = o
+func (h *hdLayer) Lookup(o *oracle.Oracle, command sourceTileCommand) *playerImageAsset {
 	group := h.BySourceHeader[hex.EncodeToString(command.Header[:])]
-	if len(group) == 0 {
-		return
-	}
 	hashes := map[int]string{}
 	for _, asset := range group {
-		if command.X < 0 || command.Y < 0 || command.X+asset.W > 320 || command.Y+asset.H > 200 ||
-			command.Source.Linear()+uint32(asset.SourceBytes-8) > 0xa0000 {
+		if command.X < 0 || command.Y < 0 || command.X+asset.W > 320 || command.Y+asset.H > 200 || command.Source.Linear()+uint32(asset.SourceBytes-8) > 0xa0000 || uint32(command.Source.Off)+uint32(asset.SourceBytes-8) > 65536 {
 			continue
 		}
 		sha, ok := hashes[asset.SourceBytes]
@@ -203,94 +190,9 @@ func (h *hdLayer) CaptureTile(o *oracle.Oracle, command sourceTileCommand) {
 			sha = digest(raw)
 			hashes[asset.SourceBytes] = sha
 		}
-		if sha != asset.SourceSHA256 {
-			continue
-		}
-		match := hdMatch{asset, command.X, command.Y, command.Page}
-		for i, previous := range h.Commands {
-			if previous == match {
-				// 同一圖格重畫時移到最新順序；前後遮擋沿原始命令。
-				h.Commands = append(h.Commands[:i], h.Commands[i+1:]...)
-				h.Commands = append(h.Commands, match)
-				h.Hash = ""
-				return
-			}
-		}
-		if len(h.Commands) >= 4096 {
-			panic("HD 來源命令超過有界容量")
-		}
-		h.Commands = append(h.Commands, match)
-		h.Hash = ""
-		return
-	}
-}
-
-func (h *hdLayer) PrepareFrame(rgb []byte) {
-	if h.Oracle == nil {
-		return
-	}
-	page, known := nativeVisiblePage(h.Oracle)
-	if !known {
-		h.Hash, h.Matches = "", nil
-		return
-	}
-	_, _, indices := h.Oracle.Screen()
-	palette := h.Oracle.Palette()
-	sha := fmt.Sprintf("%x:%s:%s", page, digest(indices), digest(rgb))
-	if sha == h.Hash {
-		return
-	}
-	h.Hash, h.Matches = sha, nil
-	kept := h.Commands[:0]
-	for _, command := range h.Commands {
-		if command.Page != page {
-			kept = append(kept, command)
-			continue
-		}
-		matches := true
-		paletteMatches := true
-		// 這裡只核已攔截命令的遮擋／清除；位置與資產身分不從畫面推測。
-		for _, p := range command.Asset.Pixels {
-			i := (command.Y+p.Y)*320 + command.X + p.X
-			if indices[i] != p.Index {
-				matches = false
-				break
-			}
-			color := palette[p.Index]
-			if uint32(color[0])<<16|uint32(color[1])<<8|uint32(color[2]) != p.RGB {
-				paletteMatches = false
-			}
-		}
-		if matches {
-			kept = append(kept, command)
-			if paletteMatches {
-				h.Matches = append(h.Matches, command)
-			}
+		if sha == asset.SourceSHA256 {
+			return asset.Image
 		}
 	}
-	h.Commands = kept
-}
-
-func (h *hdLayer) Draw(screen *ebiten.Image, rgb []byte, protected [][4]int, held bool) {
-	if !held {
-		h.PrepareFrame(rgb)
-		h.Visible = nil
-		for _, match := range h.Matches {
-			covered := false
-			for _, r := range protected {
-				if match.X < r[2] && match.X+match.Asset.W > r[0] && match.Y < r[3] && match.Y+match.Asset.H > r[1] {
-					covered = true
-					break
-				}
-			}
-			if !covered {
-				h.Visible = append(h.Visible, match)
-			}
-		}
-	}
-	for _, match := range h.Visible {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(match.X*3), float64(match.Y*3))
-		screen.DrawImage(match.Asset.Texture, op)
-	}
+	return nil
 }

@@ -222,7 +222,10 @@ func (p *playerTextOwner) Rectangles() [][4]int {
 			continue
 		}
 		w := run.Word
-		result = append(result, [4]int{w.X, w.Y, w.X + w.Width, w.Y + 8})
+		r := [4]int{w.X, w.Y, w.X + w.Width, w.Y + 8}
+		if owner := renderOwners[p.Oracle]; owner != nil && owner.CanTranslate(r) {
+			result = append(result, r)
+		}
 	}
 	return result
 }

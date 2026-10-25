@@ -587,6 +587,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		pal := g.o.Palette()
 		for _, k := range keys {
 			e := g.active[k]
+			if !g.canTranslate([4]int{e.X, e.Y, e.X + len(e.Source)*8, e.Y + 8}) {
+				continue
+			}
 			x, y, width := e.X*2, e.Y*2, len(e.Source)*16
 			if x < 0 || y < 2 || x+width > 640 || y+22 > 400 {
 				panic("原型文字框越界")
@@ -627,7 +630,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 				}
 			}
 		}
-		if g.page != nil {
+		if g.page != nil && g.canTranslate([4]int{g.page.Box[0] / 2, g.page.Box[1] / 2, (g.page.Box[2] + 1) / 2, (g.page.Box[3] + 1) / 2}) {
 			p := g.page
 			pal := g.o.Palette()
 			bg, fg := pal[p.Background], pal[p.Foreground]
@@ -681,7 +684,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			}
 		}
 	}
-	if g.translate && g.page != nil {
+	if g.translate && g.page != nil && g.canTranslate([4]int{g.page.Box[0] / 2, g.page.Box[1] / 2, (g.page.Box[2] + 1) / 2, (g.page.Box[3] + 1) / 2}) {
 		drawOriginalPrefix(px, g.page)
 	}
 	if g.translate && g.list != nil {
@@ -1295,6 +1298,8 @@ type playerFrameRenderer interface {
 	Busy() bool
 	Present(*ebiten.Image, *liveGame, []byte, bool)
 	ComposeText([]byte, *liveGame, []byte)
+	CanTranslate([4]int) bool
+	Close(string)
 }
 
 // 舊研究來源清單仍可編譯，正式玩家入口必須連入完整畫格提交模組。
@@ -1310,9 +1315,12 @@ type sourceTileCommand struct {
 type playerHDRenderer interface {
 	Available() bool
 	Invalidate()
-	Draw(*ebiten.Image, []byte, [][4]int, bool)
-	CaptureTile(*oracle.Oracle, sourceTileCommand)
-	PrepareFrame([]byte)
+	Lookup(*oracle.Oracle, sourceTileCommand) *playerImageAsset
+}
+
+type playerImageAsset struct {
+	W, H                        int
+	Index, Alpha, HD, Reference []byte
 }
 
 // 可選 HD 模組只由一般玩家建置連入。舊研究建置不需要可選素材或新檔案。
@@ -1409,6 +1417,7 @@ func runPlayer(profile, original, saves string) {
 		panic("缺少玩家繪圖提交模組")
 	}
 	p.Renderer = playerRenderLoader(o, profile, p.HD)
+	defer p.Renderer.Close(saves)
 	g.reader.Live = true
 	g.texture = ebiten.NewImage(640, 400)
 	p.BarTexture = ebiten.NewImage(640, 24)
@@ -1692,20 +1701,35 @@ func (g *liveGame) savePlayerScreenshot(screen *ebiten.Image) {
 
 func (g *liveGame) playerProtectedRectangles() [][4]int {
 	var protected [][4]int
+	for _, e := range g.active {
+		r := [4]int{e.X, e.Y, e.X + len(e.Source)*8, e.Y + 8}
+		if g.canTranslate(r) {
+			protected = append(protected, r)
+		}
+	}
 	if g.list != nil {
 		for _, w := range g.list.snapshot() {
-			protected = append(protected, [4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()})
+			r := [4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()}
+			if g.canTranslate(r) {
+				protected = append(protected, r)
+			}
 		}
 	}
 	if g.cold != nil && g.cold.ui != nil {
 		for _, w := range g.cold.ui.snapshot() {
-			protected = append(protected, [4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()})
+			r := [4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()}
+			if g.canTranslate(r) {
+				protected = append(protected, r)
+			}
 		}
 	}
 	for _, box := range []*storyPage{g.page} {
 		if box != nil {
 			b := box.Box
-			protected = append(protected, [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2})
+			r := [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2}
+			if g.canTranslate(r) {
+				protected = append(protected, r)
+			}
 		}
 	}
 	if g.reader != nil && g.reader.Page != nil {
@@ -1713,6 +1737,10 @@ func (g *liveGame) playerProtectedRectangles() [][4]int {
 		protected = append(protected, [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2})
 	}
 	return protected
+}
+
+func (g *liveGame) canTranslate(r [4]int) bool {
+	return g.player == nil || g.player.Renderer.CanTranslate(r)
 }
 
 func (g *liveGame) drawPlayerToolbar(screen *ebiten.Image) {

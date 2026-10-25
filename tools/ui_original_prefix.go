@@ -66,14 +66,13 @@ func (g *liveGame) captureOriginalPrefix(p paintReturn) {
 		return
 	}
 	prefix := g.page.Prefix
-	w, h, rgb := g.o.ScreenRGB()
-	if w != 320 || h != 200 {
-		panic("原版前綴畫面尺寸不符")
-	}
+	indices, pal := g.o.Indexed(), g.o.Palette()
 	width := len(prefix.Text) * 8
 	for y := 136; y < 144; y++ {
-		at := (y*320 + 8) * 3
-		prefix.rgb = append(prefix.rgb, rgb[at:at+width*3]...)
+		for x := 8; x < 8+width; x++ {
+			col := pal[indices[y*320+x]]
+			prefix.rgb = append(prefix.rgb, col[:]...)
+		}
 	}
 	g.listLog("original-prefix-return", map[string]any{"key": prefix.Key, "source_sha256": digest([]byte(prefix.Text)), "rgb_sha256": digest(prefix.rgb), "native_rect": [4]int{8, 136, width, 8}})
 }

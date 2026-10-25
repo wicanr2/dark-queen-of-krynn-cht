@@ -1,5 +1,5 @@
 {
-  "Version": 1,
+  "Version": 2,
   "ExecutableSHA256": "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58",
   "IDAVersion": "9.4",
   "AddressSpace": "IDA linear and original file offset; runtime resident mapping separately recorded",
@@ -253,6 +253,72 @@
       "offset": 9120,
       "prefix": "558becff760cff76",
       "evidence_level": "靜態已證實：影像header、裁切、分色面呼叫及retf；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_26BB4",
+      "kind": "native-image",
+      "ida_linear": 158644,
+      "file_offset": 102324,
+      "segment": 5678,
+      "offset": 6612,
+      "prefix": "558bec83ec045657",
+      "file_prefix": "558bec83ec045657",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_26DB9",
+      "kind": "native-image",
+      "ida_linear": 159161,
+      "file_offset": 102841,
+      "segment": 5678,
+      "offset": 7129,
+      "prefix": "558bec81ec820256",
+      "file_prefix": "558bec81ec820256",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_2485C",
+      "kind": "readback-scope",
+      "ida_linear": 149596,
+      "file_offset": 93276,
+      "segment": 5063,
+      "offset": 7404,
+      "prefix": "558bec83ec125657",
+      "file_prefix": "558bec83ec125657",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_24CC4",
+      "kind": "readback-scope",
+      "ida_linear": 150724,
+      "file_offset": 94404,
+      "segment": 5063,
+      "offset": 8532,
+      "prefix": "558bec83ec065657",
+      "file_prefix": "558bec83ec065657",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_24DF8",
+      "kind": "readback-scope",
+      "ida_linear": 151032,
+      "file_offset": 94712,
+      "segment": 5063,
+      "offset": 8840,
+      "prefix": "558bec56833e70cb",
+      "file_prefix": "558bec56833e70cb",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_24C92",
+      "kind": "readback-scope",
+      "ida_linear": 150674,
+      "file_offset": 94354,
+      "segment": 5063,
+      "offset": 8482,
+      "prefix": "833e57cb007e0cff",
+      "file_prefix": "833e57cb007e0cff",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
     }
   ],
   "Coverage": "已列primitive；不是全部TLB與動畫來源",
@@ -332,5 +398,260 @@
     "offset": 3254,
     "prefix": "837e06007d0bb800",
     "evidence_level": "已證實：座標正規化已返回，字元尚未改寫，未進入任何繪圖分支"
-  }
+  },
+  "NativeSteps": [
+    {
+      "name": "loc_26BBC",
+      "kind": "single-render-step",
+      "ida_linear": 158652,
+      "file_offset": 102332,
+      "segment": 5678,
+      "offset": 6620,
+      "prefix": "8b7e0e8a4618b400",
+      "file_prefix": "8b7e0e8a4618b400",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26BE8",
+      "kind": "single-render-step",
+      "ida_linear": 158696,
+      "file_offset": 102376,
+      "segment": 5678,
+      "offset": 6664,
+      "prefix": "f746120100752e33",
+      "file_prefix": "f746120100752e33",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26D36",
+      "kind": "single-render-step",
+      "ida_linear": 159030,
+      "file_offset": 102710,
+      "segment": 5678,
+      "offset": 6998,
+      "prefix": "33f6eb25569acb14",
+      "file_prefix": "33f6eb25569acb14",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26D3A",
+      "kind": "single-render-step",
+      "ida_linear": 159034,
+      "file_offset": 102714,
+      "segment": 5678,
+      "offset": 7002,
+      "prefix": "569acb14c71359b0",
+      "file_prefix": "569acb14b71259b0",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26D41",
+      "kind": "single-render-step",
+      "ida_linear": 159041,
+      "file_offset": 102721,
+      "segment": 5678,
+      "offset": 7009,
+      "prefix": "b0ff50ff7616ff76",
+      "file_prefix": "b0ff50ff7616ff76",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26D64",
+      "kind": "single-render-step",
+      "ida_linear": 159076,
+      "file_offset": 102756,
+      "segment": 5678,
+      "offset": 7044,
+      "prefix": "5f5e8be55dcb558b",
+      "file_prefix": "5f5e8be55dcb558b",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26DC2",
+      "kind": "single-render-step",
+      "ida_linear": 159170,
+      "file_offset": 102850,
+      "segment": 5678,
+      "offset": 7138,
+      "prefix": "8b460cf7660e8bf0",
+      "file_prefix": "8b460cf7660e8bf0",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26F70",
+      "kind": "single-render-step",
+      "ida_linear": 159600,
+      "file_offset": 103280,
+      "segment": 5678,
+      "offset": 7568,
+      "prefix": "56168d8680fd50ff",
+      "file_prefix": "56168d8680fd50ff",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26F8B",
+      "kind": "single-render-step",
+      "ida_linear": 159627,
+      "file_offset": 103307,
+      "segment": 5678,
+      "offset": 7595,
+      "prefix": "ff76088b4606ff46",
+      "file_prefix": "ff76088b4606ff46",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_26F9C",
+      "kind": "single-render-step",
+      "ida_linear": 159644,
+      "file_offset": 103324,
+      "segment": 5678,
+      "offset": 7612,
+      "prefix": "33c0509acb14c713",
+      "file_prefix": "33c0509acb14b712",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_27010",
+      "kind": "single-render-step",
+      "ida_linear": 159760,
+      "file_offset": 103440,
+      "segment": 5678,
+      "offset": 7728,
+      "prefix": "b80300509acb14b7",
+      "file_prefix": "b80300509acb14b7",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_2701A",
+      "kind": "single-render-step",
+      "ida_linear": 159770,
+      "file_offset": 103450,
+      "segment": 5678,
+      "offset": 7738,
+      "prefix": "33c05057b8010050",
+      "file_prefix": "33c05057b8010050",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_27174",
+      "kind": "single-render-step",
+      "ida_linear": 160116,
+      "file_offset": 103796,
+      "segment": 5678,
+      "offset": 8084,
+      "prefix": "5f5e8be55dcb558b",
+      "file_prefix": "5f5e8be55dcb558b",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_12EF8",
+      "kind": "single-render-step",
+      "ida_linear": 77560,
+      "file_offset": 21240,
+      "segment": 487,
+      "offset": 8584,
+      "prefix": "bac403b90800ac8a",
+      "file_prefix": "bac403b90800ac8a",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_12F95",
+      "kind": "single-render-step",
+      "ida_linear": 77717,
+      "file_offset": 21397,
+      "segment": 487,
+      "offset": 8741,
+      "prefix": "b002ee42b008ee4a",
+      "file_prefix": "b002ee42b008ee4a",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_12FA1",
+      "kind": "single-render-step",
+      "ida_linear": 77729,
+      "file_offset": 21409,
+      "segment": 487,
+      "offset": 8753,
+      "prefix": "26881deb04902688",
+      "file_prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_12FAA",
+      "kind": "single-render-step",
+      "ida_linear": 77738,
+      "file_offset": 21418,
+      "segment": 487,
+      "offset": 8762,
+      "prefix": "4f36033e6ccb4974",
+      "file_prefix": "4f36033e6ccb4974",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_110C5",
+      "kind": "single-render-step",
+      "ida_linear": 69829,
+      "file_offset": 13509,
+      "segment": 487,
+      "offset": 853,
+      "prefix": "8b56068b5e088a46",
+      "file_prefix": "8b56068b5e088a46",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_110D2",
+      "kind": "single-render-step",
+      "ida_linear": 69842,
+      "file_offset": 13522,
+      "segment": 487,
+      "offset": 866,
+      "prefix": "8bcb8bfef3aa03f5",
+      "file_prefix": "8bcb8bfef3aa03f5",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_110D8",
+      "kind": "single-render-step",
+      "ida_linear": 69848,
+      "file_offset": 13528,
+      "segment": 487,
+      "offset": 872,
+      "prefix": "03f53b3683cb7204",
+      "file_prefix": "03f53b3683cb7204",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_110F8",
+      "kind": "single-render-step",
+      "ida_linear": 69880,
+      "file_offset": 13560,
+      "segment": 487,
+      "offset": 904,
+      "prefix": "8b56068b5e088b46",
+      "file_prefix": "8b56068b5e088b46",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_11107",
+      "kind": "single-render-step",
+      "ida_linear": 69895,
+      "file_offset": 13575,
+      "segment": 487,
+      "offset": 919,
+      "prefix": "8bcb8bfef3ab03f5",
+      "file_prefix": "8bcb8bfef3ab03f5",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "loc_1110D",
+      "kind": "single-render-step",
+      "ida_linear": 69901,
+      "file_offset": 13581,
+      "segment": 487,
+      "offset": 925,
+      "prefix": "03f53b3683cb7204",
+      "file_prefix": "03f53b3683cb7204",
+      "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    }
+  ]
 }

@@ -99,6 +99,7 @@
 
 | 觸發情境 | 必讀入口 |
 |---|---|
+| 直接繪圖替換、事件預算與矩形批次 | 使用者指定 `/home/anr2/cht/mm3/docs/re/direct-render-methodology.md`；本作實作與界線以[規格 005](docs/spec/005-render-owner.md)為準，不移植 MM3 的位址或驗收結論 |
 | 中文化與逆向工作 | `/home/anr2/.codex/skills/reverse-engineer-retro-game-remake/SKILL.md`；只採適用方法，不擴張為重寫遊戲 |
 | 翻譯顯示與語意隔離 | `/home/anr2/.codex/knowledge-base/local/localization-display-semantic-isolation.md` |
 | IDA Pro 9.4、`.i64`、overlay 與交叉參照 | `/home/anr2/.codex/skills/use-ida-pro-9-4/SKILL.md`，再依其入口讀對應工具鏈規範 |
@@ -111,6 +112,13 @@
 
 ## 5. 執行器與呈現層邊界
 
+- 使用者明確要求消除原版與 HD 的重複繪製。已接管命令須在原版像素生成／搬移迴圈前轉交
+  自有繪圖層，跳過對應原版繪圖；未接管命令只走原版一次。契約、目前缺口與入口見
+  [規格 005](docs/spec/005-render-owner.md)，候選入口為 `tools/player_render_owner.go`、`tools/player_owned_drivers.go` 與 `tools/player_scene_backend.go`。
+  直接迴圈替換須補齊機器效果與虛擬時間，未驗證研究建置不得走正式啟動。
+  完整原版繪圖留在背景再合成中文／HD，只算過渡方案，不能宣稱已達成單次繪製。
+- 跳過繪圖前須證實函式副作用、返回值、暫存器／旗標契約，以及遊戲是否讀回顯存。
+  邏輯所需的相容資料由接管層維護；不以每幀完整原版光柵化當作長期相容方式。
 - 以 dosgolem 執行原版、攔截已證實的顯示輸出作為前作經驗起點。正式技術規格須先通過本作
   啟動與掛勾驗證；不可因同屬 Gold Box 就宣稱相容。
 - 原版 EXE、資料、規則、亂數、條件比較、檔名、腳本鍵值與存檔語意保持原樣。

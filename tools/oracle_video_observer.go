@@ -13,9 +13,32 @@ type VideoWriteEvent struct {
 	Unchained          bool
 	DisplayStart       uint32
 	Pitch, LineCompare int
+	Presentation       bool
+}
+
+var presentationWriteObservers = map[*Oracle]func(VideoWriteEvent){}
+
+func (o *Oracle) EmitPresentationWrite(off uint32, value, mask byte) {
+	if fn := presentationWriteObservers[o]; fn != nil {
+		v := o.VideoLayoutState()
+		r := o.Regs()
+		v.Step = o.Steps()
+		v.CS = r.CS
+		v.IP = r.IP
+		v.Offset = off
+		v.Value = value
+		v.MapMask = mask
+		v.Presentation = true
+		fn(v)
+	}
 }
 
 func (o *Oracle) OnVideoWriteEvent(fn func(VideoWriteEvent)) {
+	if fn == nil {
+		delete(presentationWriteObservers, o)
+	} else {
+		presentationWriteObservers[o] = fn
+	}
 	if fn == nil {
 		o.m.ObserveVideoWrites(nil)
 		return

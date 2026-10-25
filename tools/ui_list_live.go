@@ -1768,6 +1768,9 @@ func validCreationText(f listField, source string) bool {
 func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]string, glyphs glyphSet) {
 	pal := g.o.Palette()
 	for _, w := range words {
+		if !g.canTranslate([4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()}) {
+			continue
+		}
 		x, y := w.X*2, w.Y*2
 		textY := y
 		if w.FontSize == 20 {

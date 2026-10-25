@@ -1,4 +1,4 @@
-// 玩家視窗只接收完整的前緩衝；原版顯存保留在背景相容路徑。
+// 已接管命令跳過原版像素迴圈；只提交選定的中文、HD 或原版畫面。
 // 已列 primitive 的來源與界線見規格 005，完整 TLB 命令接管仍另列。
 package main
 
@@ -27,6 +27,8 @@ type renderTransaction struct {
 	Origin oracle.Addr
 	Step   uint64
 	Image  *renderImageSource
+	Owned  *ownedDriver
+	Kind   string
 }
 
 type renderImageSource struct {
@@ -40,6 +42,13 @@ type playerRenderOwner struct {
 	ShadowRGB   []byte
 	Front, Back *ebiten.Image
 	Text        *playerTextOwner
+	Scene       renderScene
+	HD          playerHDRenderer
+	Backend     sceneBackend
+	Counters    map[string]uint64
+	Assets      map[string]*sceneAsset
+	LayerKey    string
+	Rects       []sceneRect
 }
 
 func init() { playerRenderLoader = loadPlayerRenderOwner }
@@ -51,20 +60,21 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		Version              int
 		ExecutableSHA256     string
 		Hooks                []renderPrimitive
+		NativeSteps          []renderPrimitive
 		ImageSource          renderPrimitive
 		TextGlyph            renderPrimitive
 		ImagePosition        renderPrimitive
 		ImagePositionCallers []oracle.Addr
 	}
 	must(json.Unmarshal(raw, &bindings))
-	if bindings.Version != 1 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 25 {
+	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 31 || len(bindings.NativeSteps) != 23 {
 		panic("繪圖掛勾資料與原版版本不符")
 	}
 	owner := &playerRenderOwner{Oracle: o, ShadowRGB: make([]byte, 320*200*3),
-		Front: ebiten.NewImage(960, 600), Back: ebiten.NewImage(960, 600)}
+		Front: ebiten.NewImage(960, 600), Back: ebiten.NewImage(960, 600), HD: hd, Counters: map[string]uint64{}, Assets: map[string]*sceneAsset{}}
 	seen := map[oracle.Addr]bool{}
 	// 先完整驗證，避免掛上半份邊界後才發現版本失配。
-	for _, hook := range bindings.Hooks {
+	for _, hook := range append(append([]renderPrimitive(nil), bindings.Hooks...), bindings.NativeSteps...) {
 		entry := oracle.Addr{Seg: hook.Segment, Off: hook.Offset}
 		want, err := hex.DecodeString(hook.Prefix)
 		must(err)
@@ -96,9 +106,6 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		callers[caller] = true
 	}
 	o.OnCall(imageSource, func(_ *oracle.Oracle) {
-		if hd == nil {
-			return
-		}
 		r := o.Regs()
 		if r.AX|r.DX == 0 {
 			return
@@ -116,31 +123,6 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 			}
 		}
 	})
-	o.OnCall(position, func(_ *oracle.Oracle) {
-		if hd == nil || !callers[o.Caller()] {
-			return
-		}
-		page, ok := nativeRenderPage(o)
-		if !ok {
-			return
-		}
-		r := o.Regs()
-		if o.Word(oracle.Addr{Seg: r.DS, Off: 0xcb85}) >= 16000 {
-			return
-		}
-		for i := len(owner.Pending) - 1; i >= 0; i-- {
-			if owner.Pending[i].Origin != (oracle.Addr{Seg: 0x162e, Off: 0x226c}) {
-				continue
-			}
-			image := owner.Pending[i].Image
-			if image != nil && !image.Bound {
-				image.Bound = true
-				image.Command.Page = page
-				hd.CaptureTile(o, image.Command)
-			}
-			return
-		}
-	})
 	returns := map[oracle.Addr]bool{}
 	for _, hook := range bindings.Hooks {
 		entry := oracle.Addr{Seg: hook.Segment, Off: hook.Offset}
@@ -151,7 +133,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 			r := o.Regs()
 			target := o.Caller()
 			owner.Pending = append(owner.Pending, renderTransaction{
-				Return: paintReturn{target, r.SS, r.SP + 4}, Origin: entry, Step: o.Steps()})
+				Return: paintReturn{target, r.SS, r.SP + 4}, Origin: entry, Step: o.Steps(), Kind: hook.Kind})
 			if returns[target] {
 				return
 			}
@@ -169,6 +151,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 			})
 		})
 	}
+	owner.installOwnedDrivers(bindings.NativeSteps)
 	owner.Text = loadPlayerTextOwner(o, profile, textGlyph)
 	return owner
 }
@@ -199,12 +182,16 @@ func nativeTextRegion(o *oracle.Oracle, page uint32, w listWord) []byte {
 	if !nativePageLayout(o) || page > 0xc000 || page%0x4000 != 0 {
 		return nil
 	}
-	planes := [4][]byte{o.EGAPlane(0), o.EGAPlane(1), o.EGAPlane(2), o.EGAPlane(3)}
 	region := make([]byte, w.Width*8)
 	for y := 0; y < 8; y++ {
 		for x := 0; x < w.Width; x++ {
 			xx := w.X + x
-			region[y*w.Width+x] = planes[xx&3][int(page)+(w.Y+y)*80+(xx>>2)]
+			off := page + uint32((w.Y+y)*80+(xx>>2))
+			if owner := renderOwners[o]; owner != nil {
+				region[y*w.Width+x] = owner.indexAt(page, (w.Y+y)*320+xx)
+			} else {
+				region[y*w.Width+x] = o.EGAPlane(xx & 3)[off]
+			}
 		}
 	}
 	return region
@@ -214,11 +201,27 @@ func (p *playerRenderOwner) Busy() bool { return len(p.Pending) != 0 }
 
 func (p *playerRenderOwner) Source() (int, int, []byte) {
 	if !p.Busy() {
-		w, h, rgb := p.Oracle.ScreenRGB()
-		if w != 320 || h != 200 || len(rgb) != len(p.ShadowRGB) {
-			panic("繪圖來源尺寸不符")
+		page, ok := nativeVisiblePage(p.Oracle)
+		if !ok {
+			p.releaseScene()
+			w, h, rgb := p.Oracle.ScreenRGB()
+			if w != 320 || h != 200 || len(rgb) != len(p.ShadowRGB) {
+				panic("繪圖來源尺寸不符")
+			}
+			copy(p.ShadowRGB, rgb)
+		} else {
+			model := p.Scene.page(page, p.Oracle.PresentationPlane)
+			pal := p.Oracle.Palette()
+			for i, c := range model.Cells {
+				d := i * 3
+				if c.Asset != nil && c.Visible {
+					clear(p.ShadowRGB[d : d+3])
+				} else {
+					col := pal[model.Index[i]]
+					copy(p.ShadowRGB[d:d+3], col[:])
+				}
+			}
 		}
-		copy(p.ShadowRGB, rgb)
 	}
 	return 320, 200, p.ShadowRGB
 }
@@ -235,13 +238,23 @@ func (p *playerRenderOwner) Present(screen *ebiten.Image, g *liveGame, rgb []byt
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Scale(1.5, 1.5)
 		p.Back.DrawImage(g.texture, op)
-		if g.player.HD != nil {
-			// 即使 HD 暫停顯示，也在完整畫格撤除已清掉的來源命令。
-			g.player.HD.PrepareFrame(rgb)
-		}
-		if session := g.player; session.HD != nil && session.HDEnabled && g.translate {
-			protected := append(g.playerProtectedRectangles(), p.Text.Rectangles()...)
-			session.HD.Draw(p.Back, rgb, protected, false)
+		if page, ok := nativeVisiblePage(p.Oracle); ok {
+			protected := [][4]int(nil)
+			if g.translate {
+				protected = append(g.playerProtectedRectangles(), p.Text.Rectangles()...)
+			}
+			model := p.Scene.page(page, p.Oracle.PresentationPlane)
+			pal := p.Oracle.Palette()
+			key := fmt.Sprintf("%d:%x:%t:%x:%v", p.Scene.Revision, page, g.player.HDEnabled && g.translate, pal, protected)
+			if key != p.LayerKey {
+				p.Rects = model.rectangles(g.player.HDEnabled && g.translate, pal, protected)
+				p.LayerKey = key
+				p.Counters["scene_batch_builds"]++
+			}
+			builds, draws := p.Backend.submit(p.Back, p.Rects, pal)
+			p.Counters["scene_texture_builds"] += uint64(builds)
+			p.Counters["scene_rectangle_draws"] += uint64(draws)
+			p.Counters["scene_submissions"]++
 		}
 		p.Front, p.Back = p.Back, p.Front
 	}
