@@ -39,6 +39,7 @@ type listConfig struct {
 	Fields           []listField
 	Paragraphs       []listParagraph
 	OriginalPrefixes []originalPrefixBinding `json:",omitempty"`
+	PassageGroups    []passageSourceBinding  `json:",omitempty"`
 	HUDParagraphs    []listHUDParagraph      `json:",omitempty"`
 	Menus            map[string]string
 	PaneLists        []listPaneSource
@@ -137,6 +138,7 @@ type listBattleNotice struct {
 	Ready, Restoring       bool
 }
 type listState struct {
+	passage                *livePassage
 	battleNotice           *listBattleNotice
 	inputsPath             string
 	request                listRequest
@@ -894,6 +896,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			s[i] = (int(o.StackWord(2+i)) - 8000) * 2
 		}
 		y0, x0, y1, x1, dy, dx := s[0], s[1], s[2], s[3], -s[4], -s[5]
+		g.passageFill(x0/2, y0/2, (x1-x0)/2, (y1-y0)/2, true)
 		// 參數是裁切區。來源及目的都必須留在此區，不能把整個區域搬到區外。
 		next := map[[2]int]listWord{}
 		for _, w := range l.words {
@@ -1444,6 +1447,7 @@ func (g *liveGame) installListFields() {
 }
 func (g *liveGame) updateList() error {
 	l := g.list
+	g.passageProgress()
 	step := g.o.Steps()
 	if l.action >= len(l.request.Actions) {
 		return nil

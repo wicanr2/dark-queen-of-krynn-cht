@@ -335,6 +335,12 @@ func shortECLLiteralSource(o *oracle.Oracle, ptr, caller oracle.Addr) (map[strin
 }
 
 func (g *liveGame) invalidateListParagraph(x, y, width, height int, reason string) {
+	if g.list.passage != nil {
+		g.passageFill(x, y, width, height, false)
+		if g.list.passage != nil {
+			return
+		}
+	}
 	if g.page == nil || len(g.list.paragraphPaints) > 0 {
 		return
 	}
@@ -353,6 +359,7 @@ func (g *liveGame) installListParagraphs() {
 	l, o := g.list, g.o
 	g.validateHUDParagraphs()
 	g.installHUDPanelUpdates()
+	g.installPassages()
 	if len(l.config.Paragraphs) == 0 {
 		return
 	}
@@ -420,8 +427,17 @@ func (g *liveGame) installListParagraphs() {
 			}
 		}
 		fallback := func(reason string) {
+			g.cancelPassage(reason)
 			g.page = nil
 			g.listLog("unknown-paragraph-original", map[string]any{"caller": caller, "reason": reason})
+		}
+		if ok && (binding == nil || binding.JournalEntry == 0) {
+			if grouped, wholeSource, handled := g.passageParagraph(ptr, caller, box, fg, bg, clear, source); handled {
+				if grouped == nil {
+					return
+				}
+				binding, source = grouped, wholeSource
+			}
 		}
 		if binding == nil {
 			if ok {

@@ -684,6 +684,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		if g.translate && g.page != nil && g.page.Prefix != nil && len(g.list.paragraphPaints) > 0 {
 			held = true
 		}
+		if g.translate && g.list.passage != nil {
+			held = true
+		}
 		if c := g.list.battleNotice; g.translate && c != nil && (!c.Ready || c.Restoring) {
 			held = true
 		}

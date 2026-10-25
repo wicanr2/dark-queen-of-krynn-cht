@@ -15,6 +15,7 @@ INDEX=PROBE/'storage-index.json'
 KEEP={'combat-effects-20261024','passage-chain-live-20261024','combat-finish-20261024','combat-movement-20261024','ammo-rows-20261024','ammo-boundaries-20261024','combat-rounds-20261024','passage-chain-camp-20261024','journal-references-20261024','combat-spells-route-20261024','combat-aim-route-20261024','combat-fire-20261025','haste-battle-20261025','victory-text-20261025','captain-dialogue-20261025','journal59-route-20261025','voyage-text-20261025'}
 CHUNK=1024*1024
 KEEP.add('passage-island-20261025')
+KEEP.add('passage-runtime-20261025')
 
 
 def digest(path, compressed=False):

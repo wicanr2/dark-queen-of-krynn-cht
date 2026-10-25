@@ -16,13 +16,14 @@ type passageSourceFragment struct {
 
 // 欄位沿既有 chain-inputs registry，沒有內嵌譯文。
 type passageSourceBinding struct {
-	Key            string                  `json:"key"`
-	ChunkSHA256    string                  `json:"chunk_sha256"`
-	ChunkBytes     int                     `json:"chunk_bytes"`
-	ChunkOffset    int                     `json:"chunk_offset"`
-	EndChunkOffset int                     `json:"end_chunk_offset"`
-	PacketSHA256   string                  `json:"packet_sha256"`
-	Fragments      []passageSourceFragment `json:"fragments"`
+	Key                 string                  `json:"key"`
+	ChunkSHA256         string                  `json:"chunk_sha256"`
+	ChunkBytes          int                     `json:"chunk_bytes"`
+	ChunkOffset         int                     `json:"chunk_offset"`
+	EndChunkOffset      int                     `json:"end_chunk_offset"`
+	PacketSHA256        string                  `json:"packet_sha256"`
+	Fragments           []passageSourceFragment `json:"fragments"`
+	LeadingContinuation bool                    `json:"leading_continuation,omitempty"`
 }
 
 type passageSourceObservation struct {
@@ -75,7 +76,11 @@ func matchPassageSource(b passageSourceBinding, sources map[string]string, part 
 		v.DS != 0x333e || v.PointerSeg != 0x333e || v.PointerOff != 0xb487 || v.CallerSeg != 0x26b4 || v.Kind != 0x80 {
 		return fail()
 	}
-	if (part == 0 && (v.CallerOff != 0x1d81 || v.Opcode != 0x12 || v.Clear != 1)) ||
+	firstCaller, firstOpcode, firstClear := uint16(0x1d81), byte(0x12), byte(1)
+	if b.LeadingContinuation {
+		firstCaller, firstOpcode, firstClear = 0x1d53, 0x11, 0
+	}
+	if (part == 0 && (v.CallerOff != firstCaller || v.Opcode != firstOpcode || v.Clear != firstClear)) ||
 		(part != 0 && (v.CallerOff != 0x1d53 || v.Opcode != 0x11 || v.Clear != 0)) {
 		return fail()
 	}
@@ -93,7 +98,7 @@ func matchPassageSource(b passageSourceBinding, sources map[string]string, part 
 	for i, fragment := range b.Fragments {
 		opcode := byte(0x11)
 		if i == 0 {
-			opcode = 0x12
+			opcode = firstOpcode
 		}
 		if fragment.Offset != pos || pos < 0 || pos+3 > b.EndChunkOffset ||
 			block[pos] != opcode || block[pos+1] != 0x80 || int(block[pos+2]) != fragment.PackedLength || fragment.PackedLength == 0 {
@@ -116,7 +121,11 @@ func matchPassageSource(b passageSourceBinding, sources map[string]string, part 
 		pos = end
 	}
 	text := strings.Join(fragments, "")
-	if pos != b.EndChunkOffset || len(text) > 96 || fragments[part] != v.Source ||
+	limit := 96
+	if b.LeadingContinuation {
+		limit = 128
+	}
+	if pos != b.EndChunkOffset || len(text) > limit || fragments[part] != v.Source ||
 		b.Key != "passage."+passageSourceHash([]byte(text))[:20] || sources[b.Key] != text {
 		return fail()
 	}
