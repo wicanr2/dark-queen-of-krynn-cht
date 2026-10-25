@@ -5,6 +5,31 @@ import (
 	"strings"
 )
 
+// 只辨識清單的顯示結構，名稱及原版次數的字元與位置都不改寫。
+func spellRowSource(source, name string) bool {
+	prefix := "\t" + name
+	if name == "" || !strings.HasPrefix(source, prefix) {
+		return false
+	}
+	tail := source[len(prefix):]
+	if tail == "" {
+		return true
+	}
+	if len(tail) < 4 || !strings.HasPrefix(tail, " (") || !strings.HasSuffix(tail, ")") {
+		return false
+	}
+	number := tail[2 : len(tail)-1]
+	if number[0] < '1' || number[0] > '9' {
+		return false
+	}
+	for _, c := range []byte(number) {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // 只驗完整前綴後的標準十進位顯示數字；不重算或改寫遊戲數值。
 func prefixedDisplayCount(source, prefix string) (uint32, bool) {
 	if prefix == "" || !strings.HasPrefix(source, prefix) {

@@ -25,6 +25,7 @@ KEEP.add('empty-notice-20261025')
 KEEP.add('choice-prompt-20261025')
 KEEP.add('battle-continuation-20261025')
 KEEP.add('combat-names-20261025')
+KEEP.add('spell-catalog-20261025')
 
 
 def digest(path, compressed=False):

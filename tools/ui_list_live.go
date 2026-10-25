@@ -327,6 +327,14 @@ func (l *listState) rowSpans(binding listRow, text string) ([]listSpan, bool) {
 	if binding.SHA256 == digest([]byte(text)) {
 		return binding.Spans, true
 	}
+	if binding.Pane == "grimoire" && len(binding.Spans) == 1 {
+		span := binding.Spans[0]
+		name := l.sources[span.Key]
+		if span.Start == 1 && span.Length == len(name) && span.Key == "grimoire."+digest([]byte(name))[:20] &&
+			binding.SHA256 == digest([]byte("\t"+name)) && spellRowSource(text, name) {
+			return binding.Spans, true
+		}
+	}
 	if binding.Pane != "inventory" || len(binding.Spans) != 2 {
 		return nil, false
 	}
