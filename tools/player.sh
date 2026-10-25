@@ -27,6 +27,7 @@ test "$(stat -c %u:%g /output)" = "$(id -u):$(id -g)"
 mkdir "/output/$1"
 python3 /project/tools/player_inputs.py prepare /project "/output/$1/inputs"
 python3 /project/tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "/output/$1/inputs/toolbar.zh-TW.tsv" "/output/$1/inputs/toolbar-glyphs-16.json" 16
+python3 /project/tools/player_inputs.py fragments /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py display /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py finish /project "/output/$1/inputs"
 mkdir "/output/$1/session"

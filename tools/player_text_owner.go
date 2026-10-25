@@ -33,8 +33,7 @@ type playerTextOwner struct {
 func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Addr) *playerTextOwner {
 	p := &playerTextOwner{Oracle: o, Sources: map[string]string{}, Catalog: readLiveCatalog(filepath.Join(profile, "display.zh-TW.tsv"))}
 	for key, source := range readLiveCatalog(filepath.Join(profile, "display-source.en.tsv")) {
-		if p.Sources[source] != "" || p.Catalog[key] == "" || len(source) < 2 || len(source) > 80 || strings.Contains(source, "%") ||
-			len([]rune(p.Catalog[key])) > len(source) {
+		if p.Sources[source] != "" || p.Catalog[key] == "" || len(source) < 2 || len(source) > 80 || strings.Contains(source, "%") {
 			panic("短字串來源不符")
 		}
 		p.Sources[source] = key
@@ -112,6 +111,9 @@ func (p *playerTextOwner) glyph() {
 	}
 	if run.Next == 0 {
 		run.Word.X, run.Word.Y, run.Word.Width = x, y, len(run.Source)*8
+		if translated := len([]rune(p.Catalog[run.Word.Key])) * 8; translated > run.Word.Width {
+			run.Word.Width = translated
+		}
 		if x < 0 || y < 0 || x+run.Word.Width > 320 || y+8 > 200 {
 			run.Valid = false
 			return

@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from text_catalog import decode6, hlib
+
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -21,6 +23,89 @@ def catalog(path):
 
 def save_catalog(path, data):
     path.write_text('key\ttext\n' + ''.join(k + '\t' + v + '\n' for k, v in data.items()))
+
+
+FRAGMENT_OUTPUTS = ['en.tsv', 'zh-TW.tsv', 'font-zh-TW.tsv', 'glyphs-16.json', 'inputs.json']
+FRAGMENT_FILES = FRAGMENT_OUTPUTS + ['fragment-provenance.json']
+
+
+def fragments(root, output, font):
+    """只接已實際解碼的原位元串，完整段落優先；不預測控制指令。"""
+    assert output.is_dir() and output.stat().st_uid == 1000 and font.is_file()
+    origin = json.loads((output / 'profile-sources.json').read_text())
+    base = (root / origin['gameplay']).resolve()
+    base.relative_to(root.resolve())
+    assert base.is_dir() and base != output.resolve()
+    old = output / 'fragment-provenance.json'
+    expected = json.loads(old.read_text())['outputs'] if old.exists() else {n: sha(base / n) for n in FRAGMENT_OUTPUTS}
+    for name in FRAGMENT_OUTPUTS:
+        assert (output / name).stat().st_uid == 1000 and sha(output / name) == expected[name], name
+    if old.exists():
+        assert old.stat().st_uid == 1000
+    en, zh = catalog(base / 'en.tsv'), catalog(base / 'zh-TW.tsv')
+    config = json.loads((base / 'inputs.json').read_text())
+    covered = {f['key'] for group in config['PassageGroups'] for f in group['fragments']}
+    texts = root / 'workplace/translation'
+    source, formal = catalog(texts / 'en.tsv'), catalog(texts / 'zh-TW.tsv')
+    candidates = json.loads((texts / 'passage-candidates.json').read_text())
+    library = root / 'workplace/input/dos/drkqueen/DISK3/ECL.GLB'
+    raw = library.read_bytes()
+    assert sha(library) == candidates['source_sha256'] == '40542071e42d3cd125eabcead11456a99942bf55a7736fdb79f66a3c27c3664d'
+    blocks = hlib(raw)
+    evidence = {}
+    for group in candidates['groups']:
+        for occurrence in group['sources']:
+            for fragment in occurrence['fragments']:
+                key = fragment['key']
+                if key in covered or key in zh or key not in formal:
+                    continue
+                start, length = fragment['file_offset'], fragment['packed_length']
+                low, high = blocks[fragment['chunk']]
+                assert low <= start < start+2+length <= high
+                assert raw[start:start+2] == bytes([0x80, length])
+                literal = decode6(raw[start+2:start+2+length])
+                assert literal == source[key] and key == 'ecl.' + hashlib.sha256(literal.encode()).hexdigest()[:20]
+                assert 2 <= len(literal) <= 1024 and all(32 <= ord(ch) <= 126 for ch in literal)
+                assert '%' not in literal and '\\' not in literal+formal[key] and 'JOURNAL ENTRY' not in literal
+                assert formal[key] and len(formal[key]) <= 144 and not any(ch in formal[key] for ch in '\t\r\n')
+                evidence.setdefault(key, []).append({'chunk': fragment['chunk'], 'file_offset': start, 'packed_length': length})
+    wanted = {k for k in formal if k.startswith('ecl.') and k not in zh and k not in covered}
+    assert set(evidence) == wanted and len(wanted) == 375
+    glyphs = json.loads((base / 'glyphs-16.json').read_text())
+    original = dict(glyphs['glyphs'])
+    missing = sorted(set(''.join(formal[k] for k in wanted))-set(original))
+    additions, generated = output / 'fragment-font-additions.tmp.tsv', output / 'fragment-added-glyphs.tmp.json'
+    assert not additions.exists() and not generated.exists()
+    if missing:
+        save_catalog(additions, {'font.fragments': ''.join(missing)})
+        try:
+            subprocess.run([sys.executable, str(root / 'tools/menu_glyphs.py'), str(font), str(additions), str(generated), '16'], check=True)
+            extra = json.loads(generated.read_text())
+            assert extra['size'] == 16 and extra['height'] == 20
+            glyphs['glyphs'].update(extra['glyphs'])
+        finally:
+            additions.unlink(missing_ok=True)
+            generated.unlink(missing_ok=True)
+    assert all(glyphs['glyphs'][k] == v for k, v in original.items())
+    words = catalog(base / 'font-zh-TW.tsv')
+    for key in sorted(wanted):
+        en[key], zh[key], words[key] = source[key], formal[key], formal[key]
+        for offset, color, clear in [(0x1d81, 3, 1), (0x1d81, 7, 1), (0x1d53, 3, 0), (0x1d53, 7, 0)]:
+            config['Paragraphs'].append(dict(Key=key, SHA256=hashlib.sha256(source[key].encode()).hexdigest(),
+                Caller=dict(Seg=0x26b4, Off=offset), NativeBox=[8, 136, 312, 184],
+                Foreground=color, Background=0, Clear=clear, LiteralFragment=True))
+    for name, data in [('en.tsv', en), ('zh-TW.tsv', zh), ('font-zh-TW.tsv', words)]:
+        save_catalog(output / name, data)
+    (output / 'inputs.json').write_text(json.dumps(config, ensure_ascii=False, indent=2)+'\n')
+    (output / 'glyphs-16.json').write_text(json.dumps(glyphs, ensure_ascii=False, separators=(',', ':'))+'\n')
+    provenance = dict(base=origin['gameplay'], base_files={n: sha(base / n) for n in FRAGMENT_OUTPUTS},
+        formal_sha256=sha(texts / 'zh-TW.tsv'), source_sha256=sha(texts / 'en.tsv'),
+        candidate_sha256=sha(texts / 'passage-candidates.json'), library_sha256=sha(library),
+        keys=sorted(wanted), occurrences=evidence, added_bindings=len(wanted)*4, added_glyphs=missing,
+        outputs={n: sha(output / n) for n in FRAGMENT_OUTPUTS},
+        scope='只接當下已解碼的80h原位元串；既有完整段落優先，不前瞻控制指令', new_gameplay_sampling=False)
+    (output / 'fragment-provenance.json').write_text(json.dumps(provenance, ensure_ascii=False, indent=2)+'\n')
+    print(json.dumps(dict(literal_fragments=len(wanted), added_glyphs=len(missing), en=len(en), zh=len(zh), new_gameplay_sampling=False)))
 
 
 def display(root, output, font):
@@ -39,7 +124,7 @@ def display(root, output, font):
             continue
         if '%' in source or any(not 32 <= ord(ch) <= 126 for ch in source):
             continue
-        if text == source or not text or len(text) > len(source) or any(ch in text for ch in '\t\r\n') or '\\n' in text:
+        if text == source or not text or any(ch in text for ch in '\t\r\n') or '\\n' in text:
             continue
         candidates.setdefault(source, []).append((key, text))
     ambiguous = {source for source, rows in candidates.items() if len({text for _, text in rows}) != 1}
@@ -179,7 +264,7 @@ def finish(root, output, replace=False):
 def refresh(root, output, font):
     assert output.is_dir() and output.stat().st_uid == 1000
     assert (output / 'player-profile.json').is_file() and font.is_file()
-    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json', 'render-hooks.json'] + DISPLAY_FILES
+    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json', 'render-hooks.json'] + DISPLAY_FILES + FRAGMENT_FILES
     for name in owned:
         if (output / name).exists():
             assert (output / name).stat().st_uid == 1000
@@ -189,6 +274,7 @@ def refresh(root, output, font):
     shutil.copyfile(root / 'docs/spec/005-render-hooks.json', output / 'render-hooks.json')
     subprocess.run([sys.executable, str(root / 'tools/menu_glyphs.py'), str(font),
                     str(output / 'toolbar.zh-TW.tsv'), str(output / 'toolbar-glyphs-16.json'), '16'], check=True)
+    fragments(root, output, font)
     display(root, output, font)
     finish(root, output, replace=True)
     assert all(sha(output / name) == digest for name, digest in unchanged.items())
@@ -196,12 +282,12 @@ def refresh(root, output, font):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['prepare', 'finish', 'refresh', 'display'])
+    parser.add_argument('mode', choices=['prepare', 'finish', 'refresh', 'display', 'fragments'])
     parser.add_argument('root', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--font', type=Path)
     args = parser.parse_args()
-    if args.mode in ['refresh', 'display']:
+    if args.mode in ['refresh', 'display', 'fragments']:
         assert args.font is not None
         globals()[args.mode](args.root, args.output, args.font)
     else:

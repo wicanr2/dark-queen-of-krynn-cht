@@ -18,6 +18,7 @@ type listParagraph struct {
 	JournalEntry                  int    `json:",omitempty"`
 	PredecessorKey                string `json:",omitempty"`
 	prefix                        *originalPrefix
+	LiteralFragment               bool `json:",omitempty"`
 }
 
 type serviceNotice struct {
@@ -410,6 +411,12 @@ func (g *liveGame) installListParagraphs() {
 		source := l.sources[p.Key]
 		suffix := digest([]byte(source))[:20]
 		literal := p.Key == "ecl."+suffix
+		if p.LiteralFragment && (!literal || len(source) < 2 ||
+			!((p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x1d81}) && p.Clear == 1) ||
+				(p.Caller == (oracle.Addr{Seg: 0x26b4, Off: 0x1d53}) && p.Clear == 0)) ||
+			(p.Foreground != 3 && p.Foreground != 7) || p.JournalEntry != 0 || p.PredecessorKey != "") {
+			panic("敘事片段的實際來源契約不符")
+		}
 		if literal && len(source) == 1 && p.PredecessorKey == "" {
 			panic("單字元敘事缺少前文限制")
 		}
@@ -498,7 +505,7 @@ func (g *liveGame) installListParagraphs() {
 			return
 		}
 		var shortSource map[string]any
-		if strings.HasPrefix(binding.Key, "ecl.") && len(source) <= 15 {
+		if strings.HasPrefix(binding.Key, "ecl.") && (len(source) <= 15 || binding.LiteralFragment) {
 			var literal bool
 			shortSource, literal = shortECLLiteralSource(o, ptr, caller)
 			if !literal {
