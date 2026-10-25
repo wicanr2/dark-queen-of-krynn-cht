@@ -17,6 +17,7 @@ type ownedPrint struct {
 	Next      int
 	Valid     bool
 	Reference []byte
+	Page      uint32
 }
 
 type playerTextOwner struct {
@@ -93,15 +94,6 @@ func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Add
 	return p
 }
 
-func textRegion(rgb []byte, w listWord) []byte {
-	region := make([]byte, 0, w.Width*8*3)
-	for y := w.Y; y < w.Y+8; y++ {
-		i := (y*320 + w.X) * 3
-		region = append(region, rgb[i:i+w.Width*3]...)
-	}
-	return region
-}
-
 func (p *playerTextOwner) glyph() {
 	if len(p.Runs) == 0 {
 		return
@@ -113,7 +105,8 @@ func (p *playerTextOwner) glyph() {
 	o, r := p.Oracle, p.Oracle.Regs()
 	word := func(offset uint16) uint16 { return o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + offset}) }
 	x, y, ch := int(int16(word(8))), int(int16(word(6))), byte(word(10))
-	if run.Next >= len(run.Source) || ch != run.Source[run.Next] || word(12) != run.Color {
+	page, pageKnown := nativeRenderPage(o)
+	if !pageKnown || run.Next >= len(run.Source) || ch != run.Source[run.Next] || word(12) != run.Color || (run.Next > 0 && page != run.Page) {
 		run.Valid = false
 		return
 	}
@@ -123,25 +116,19 @@ func (p *playerTextOwner) glyph() {
 			run.Valid = false
 			return
 		}
-		_, _, rgb := o.ScreenRGB()
-		before := textRegion(rgb, run.Word)
-		for i := 3; i < len(before); i += 3 {
-			if !bytes.Equal(before[:3], before[i:i+3]) {
+		run.Page = page
+		before := nativeTextRegion(o, page, run.Word)
+		if len(before) == 0 {
+			run.Valid = false
+			return
+		}
+		for _, index := range before {
+			if index != before[0] {
 				run.Valid = false
 				return
 			}
 		}
-		found := false
-		for index, color := range o.Palette() {
-			if bytes.Equal(before[:3], color[:]) {
-				run.Word.Background, found = byte(index), true
-				break
-			}
-		}
-		if !found {
-			run.Valid = false
-			return
-		}
+		run.Word.Background = before[0]
 		run.Word.Foreground = byte(run.Color & 15)
 	}
 	if y != run.Word.Y || x != run.Word.X+run.Next*8 {
@@ -155,28 +142,29 @@ func (p *playerTextOwner) finish(run *ownedPrint) {
 	if !run.Valid || run.Next != len(run.Source) {
 		return
 	}
-	_, _, rgb := p.Oracle.ScreenRGB()
-	reference := textRegion(rgb, run.Word)
-	palette := p.Oracle.Palette()
-	bg, fg := palette[run.Word.Background], palette[run.Word.Foreground]
+	reference := nativeTextRegion(p.Oracle, run.Page, run.Word)
+	if len(reference) == 0 {
+		return
+	}
+	bg, fg := run.Word.Background, run.Word.Foreground
 	ink := false
-	for i := 0; i < len(reference); i += 3 {
-		if bytes.Equal(reference[i:i+3], bg[:]) {
+	for _, index := range reference {
+		if index == bg {
 			continue
 		}
-		if !bytes.Equal(reference[i:i+3], fg[:]) {
+		if index != fg {
 			return
 		}
 		ink = true
 	}
-	// 未顯示的後頁仍是空白底色，不提前把該頁的中文放進目前畫面。
+	// 隱藏頁也保存來源，但只在該頁成為可見頁後合成。
 	if !ink {
 		return
 	}
 	run.Reference = reference
-	p.prune(rgb)
+	p.prune()
 	for i, previous := range p.Words {
-		if previous.Word.X == run.Word.X && previous.Word.Y == run.Word.Y {
+		if previous.Page == run.Page && previous.Word.X == run.Word.X && previous.Word.Y == run.Word.Y {
 			p.Words[i] = run
 			return
 		}
@@ -187,10 +175,10 @@ func (p *playerTextOwner) finish(run *ownedPrint) {
 	p.Words = append(p.Words, run)
 }
 
-func (p *playerTextOwner) prune(rgb []byte) {
+func (p *playerTextOwner) prune() {
 	kept := p.Words[:0]
 	for _, run := range p.Words {
-		if bytes.Equal(run.Reference, textRegion(rgb, run.Word)) {
+		if bytes.Equal(run.Reference, nativeTextRegion(p.Oracle, run.Page, run.Word)) {
 			kept = append(kept, run)
 		}
 	}
@@ -198,9 +186,16 @@ func (p *playerTextOwner) prune(rgb []byte) {
 }
 
 func (p *playerTextOwner) Compose(px []byte, g *liveGame, rgb []byte) {
-	p.prune(rgb)
+	p.prune()
+	page, ok := nativeVisiblePage(p.Oracle)
+	if !ok {
+		return
+	}
 	protected := g.playerProtectedRectangles()
 	for _, run := range p.Words {
+		if run.Page != page {
+			continue
+		}
 		w, covered := run.Word, false
 		for _, r := range protected {
 			if w.X < r[2] && w.X+w.Width > r[0] && w.Y < r[3] && w.Y+8 > r[1] {
@@ -216,7 +211,14 @@ func (p *playerTextOwner) Compose(px []byte, g *liveGame, rgb []byte) {
 
 func (p *playerTextOwner) Rectangles() [][4]int {
 	result := make([][4]int, 0, len(p.Words))
+	page, ok := nativeVisiblePage(p.Oracle)
+	if !ok {
+		return result
+	}
 	for _, run := range p.Words {
+		if run.Page != page {
+			continue
+		}
 		w := run.Word
 		result = append(result, [4]int{w.X, w.Y, w.X + w.Width, w.Y + 8})
 	}

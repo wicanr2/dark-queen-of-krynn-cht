@@ -5,6 +5,36 @@
   "AddressSpace": "IDA linear and original file offset; runtime resident mapping separately recorded",
   "Hooks": [
     {
+      "name": "sub_12E66",
+      "kind": "palette-batch",
+      "ida_linear": 77414,
+      "file_offset": 21094,
+      "segment": 487,
+      "offset": 8438,
+      "prefix": "558bec568a66068b",
+      "evidence_level": "靜態已證實：整批3C8/3C9寫入與retf；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_233B9",
+      "kind": "surface-clear-dispatch",
+      "ida_linear": 144313,
+      "file_offset": 87993,
+      "segment": 5063,
+      "offset": 2121,
+      "prefix": "b8ffff505050509a",
+      "evidence_level": "靜態已證實：整頁清除分派與retf；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_2357B",
+      "kind": "page-update-dispatch",
+      "ida_linear": 144763,
+      "file_offset": 88443,
+      "segment": 5063,
+      "offset": 2571,
+      "prefix": "558bec81ec000156",
+      "evidence_level": "靜態已證實：CRTC換頁、表面交換與retf；未新增遊戲抽驗"
+    },
+    {
       "name": "sub_10DFF",
       "kind": "masked-copy",
       "ida_linear": 69119,
@@ -243,6 +273,57 @@
     "destination_x_ss_bp_offset": 8,
     "evidence_level": "已證實：sub_26A25返回後、首個影像分派前；以原始header與payload雜湊辨識"
   },
+  "ImagePosition": {
+    "name": "sub_2416C-retf",
+    "ida_linear": 148219,
+    "file_offset": 91899,
+    "segment": 5063,
+    "offset": 6027,
+    "prefix": "cb558becf6460602",
+    "evidence_level": "靜態已證實：DS:CA33目的段與DS:CB85頁內位移已備妥；僅接受已列影像呼叫者"
+  },
+  "ImagePositionCallers": [
+    {
+      "Seg": 5678,
+      "Off": 6662
+    },
+    {
+      "Seg": 5678,
+      "Off": 6774
+    },
+    {
+      "Seg": 5678,
+      "Off": 6996
+    },
+    {
+      "Seg": 5678,
+      "Off": 7297
+    },
+    {
+      "Seg": 5678,
+      "Off": 7407
+    },
+    {
+      "Seg": 5678,
+      "Off": 7610
+    },
+    {
+      "Seg": 5678,
+      "Off": 7826
+    },
+    {
+      "Seg": 5678,
+      "Off": 7965
+    },
+    {
+      "Seg": 5678,
+      "Off": 8052
+    },
+    {
+      "Seg": 5678,
+      "Off": 8595
+    }
+  ],
   "TextGlyph": {
     "name": "sub_23806+0x20",
     "ida_linear": 145446,

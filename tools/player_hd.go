@@ -1,4 +1,4 @@
-// HD 只比對原始可見像素；不讀寫遊戲規則、資源索引或存檔。
+// HD 由繪製前的原始來源及目的頁命令辨識；像素只核遮擋，不搜尋角色位置。
 // 此檔只加入一般玩家建置，研究工具不需要連入可選 HD 載入器。
 package main
 
@@ -12,7 +12,6 @@ import (
 	"image/draw"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -21,14 +20,16 @@ import (
 
 type hdAssetRecord struct {
 	Key, Original, Image, OriginalSHA256, SHA256 string
+	Indexed, IndexedSHA256                       string
 	SourceSHA256                                 string `json:"source_block_sha256"`
 	SourceBytes                                  int    `json:"source_block_bytes"`
 	SourceHeader                                 string `json:"source_header_hex"`
 }
 
 type hdPixel struct {
-	X, Y int
-	RGB  uint32
+	X, Y  int
+	RGB   uint32
+	Index byte
 }
 
 type hdAsset struct {
@@ -43,6 +44,7 @@ type hdAsset struct {
 type hdMatch struct {
 	Asset *hdAsset
 	X, Y  int
+	Page  uint32
 }
 
 type hdLayer struct {
@@ -52,6 +54,7 @@ type hdLayer struct {
 	Visible        []hdMatch
 	Commands       []hdMatch
 	BySourceHeader map[string][]*hdAsset
+	Oracle         *oracle.Oracle
 }
 
 func init() { playerHDLoader = loadHDLayer }
@@ -131,6 +134,14 @@ func loadHDLayer(root string) playerHDRenderer {
 			return fail(record.Key, fmt.Errorf("缺少完整的原版影像來源"))
 		}
 		asset := &hdAsset{Key: record.Key, W: w, H: h, SourceSHA256: record.SourceSHA256, SourceBytes: record.SourceBytes}
+		indexedPath, err := hdPath(root, record.Indexed)
+		if err != nil {
+			return fail(record.Key, err)
+		}
+		indexed, err := os.ReadFile(indexedPath)
+		if err != nil || len(indexed) != w*h || len(record.IndexedSHA256) != 64 || digest(indexed) != record.IndexedSHA256 {
+			return fail(record.Key, fmt.Errorf("原版色號來源失配"))
+		}
 		colors := map[uint32]bool{}
 		for y := 0; y < h; y++ {
 			for x := 0; x < w; x++ {
@@ -150,7 +161,7 @@ func loadHDLayer(root string) playerHDRenderer {
 				if a == 0 {
 					continue
 				}
-				pixel := hdPixel{X: x, Y: y, RGB: uint32(original.Pix[i])<<16 | uint32(original.Pix[i+1])<<8 | uint32(original.Pix[i+2])}
+				pixel := hdPixel{X: x, Y: y, Index: indexed[y*w+x], RGB: uint32(original.Pix[i])<<16 | uint32(original.Pix[i+1])<<8 | uint32(original.Pix[i+2])}
 				asset.Pixels = append(asset.Pixels, pixel)
 				colors[pixel.RGB] = true
 			}
@@ -163,10 +174,6 @@ func loadHDLayer(root string) playerHDRenderer {
 		layer.Assets = append(layer.Assets, asset)
 		layer.BySourceHeader[record.SourceHeader] = append(layer.BySourceHeader[record.SourceHeader], asset)
 	}
-	// 小型地形先畫，較大的前景／插畫後畫；只在原版像素仍完整吻合時使用。
-	sort.SliceStable(layer.Assets, func(i, j int) bool {
-		return layer.Assets[i].W*layer.Assets[i].H < layer.Assets[j].W*layer.Assets[j].H
-	})
 	return layer
 }
 
@@ -178,6 +185,7 @@ func (h *hdLayer) Invalidate() {
 // 在原版第一個影像像素之前，以原始 header＋payload 辨識來源及目的地。
 // 不在完成的畫面中搜尋角色位置，未匹配的來源保持原版。
 func (h *hdLayer) CaptureTile(o *oracle.Oracle, command sourceTileCommand) {
+	h.Oracle = o
 	group := h.BySourceHeader[hex.EncodeToString(command.Header[:])]
 	if len(group) == 0 {
 		return
@@ -198,9 +206,12 @@ func (h *hdLayer) CaptureTile(o *oracle.Oracle, command sourceTileCommand) {
 		if sha != asset.SourceSHA256 {
 			continue
 		}
-		match := hdMatch{asset, command.X, command.Y}
-		for _, previous := range h.Commands {
+		match := hdMatch{asset, command.X, command.Y, command.Page}
+		for i, previous := range h.Commands {
 			if previous == match {
+				// 同一圖格重畫時移到最新順序；前後遮擋沿原始命令。
+				h.Commands = append(h.Commands[:i], h.Commands[i+1:]...)
+				h.Commands = append(h.Commands, match)
 				h.Hash = ""
 				return
 			}
@@ -215,29 +226,49 @@ func (h *hdLayer) CaptureTile(o *oracle.Oracle, command sourceTileCommand) {
 }
 
 func (h *hdLayer) PrepareFrame(rgb []byte) {
-	sha := digest(rgb)
+	if h.Oracle == nil {
+		return
+	}
+	page, known := nativeVisiblePage(h.Oracle)
+	if !known {
+		h.Hash, h.Matches = "", nil
+		return
+	}
+	_, _, indices := h.Oracle.Screen()
+	palette := h.Oracle.Palette()
+	sha := fmt.Sprintf("%x:%s:%s", page, digest(indices), digest(rgb))
 	if sha == h.Hash {
 		return
 	}
 	h.Hash, h.Matches = sha, nil
+	kept := h.Commands[:0]
 	for _, command := range h.Commands {
+		if command.Page != page {
+			kept = append(kept, command)
+			continue
+		}
 		matches := true
+		paletteMatches := true
 		// 這裡只核已攔截命令的遮擋／清除；位置與資產身分不從畫面推測。
 		for _, p := range command.Asset.Pixels {
-			i := ((command.Y+p.Y)*320 + command.X + p.X) * 3
-			if uint32(rgb[i])<<16|uint32(rgb[i+1])<<8|uint32(rgb[i+2]) != p.RGB {
+			i := (command.Y+p.Y)*320 + command.X + p.X
+			if indices[i] != p.Index {
 				matches = false
 				break
 			}
+			color := palette[p.Index]
+			if uint32(color[0])<<16|uint32(color[1])<<8|uint32(color[2]) != p.RGB {
+				paletteMatches = false
+			}
 		}
 		if matches {
-			h.Matches = append(h.Matches, command)
+			kept = append(kept, command)
+			if paletteMatches {
+				h.Matches = append(h.Matches, command)
+			}
 		}
 	}
-	h.Commands = append(h.Commands[:0], h.Matches...)
-	sort.SliceStable(h.Matches, func(i, j int) bool {
-		return h.Matches[i].Asset.W*h.Matches[i].Asset.H < h.Matches[j].Asset.W*h.Matches[j].Asset.H
-	})
+	h.Commands = kept
 }
 
 func (h *hdLayer) Draw(screen *ebiten.Image, rgb []byte, protected [][4]int, held bool) {

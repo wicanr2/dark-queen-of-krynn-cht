@@ -96,6 +96,11 @@ def add(root, output, key, generated, round_number):
         assert sha(output / original_name) == sha(original)
     else:
         shutil.copyfile(original, output / original_name)
+    indexed_name = f'originals/{key}.idx'
+    indexed_source = inventory / Path(record['image']).with_suffix('.idx')
+    assert sha(indexed_source) == record['indexed_sha256']
+    assert indexed_source.stat().st_size == record['width']*record['height']
+    shutil.copyfile(indexed_source, output / indexed_name)
     shutil.copyfile(generated, output / raw_name)
     with Image.open(original) as source, Image.open(generated) as master:
         target = compile_image(source, master)
@@ -103,6 +108,7 @@ def add(root, output, key, generated, round_number):
         assert target.getchannel('A').tobytes() == source.getchannel('A').resize(target.size, Image.Resampling.NEAREST).tobytes()
         target.save(output / target_name)
     item = dict(Key=key, Original=original_name, Image=target_name,
+                Indexed=indexed_name, IndexedSHA256=sha(output / indexed_name),
                 OriginalSHA256=sha(output / original_name), SHA256=sha(output / target_name),
                 master=raw_name, master_sha256=sha(output / raw_name),
                 generator='內建imagegen；工具未提供模型版本', review_round=round_number,
@@ -133,6 +139,15 @@ def accept(root, output):
             assert sha(output / item[field]) == item[expected], item['Key']
         assert item['review_round'] in [1, 2]
         record, = [r for r in inventory['records'] if r['key'] == item['Key'] and 'image' in r]
+        indexed_source = root / 'workplace/probe/hd-assets-20261025' / Path(record['image']).with_suffix('.idx')
+        assert sha(indexed_source) == record['indexed_sha256']
+        assert indexed_source.stat().st_size == record['width']*record['height']
+        indexed_name = f"originals/{item['Key']}.idx"
+        if (output / indexed_name).exists():
+            assert sha(output / indexed_name) == record['indexed_sha256']
+        else:
+            shutil.copyfile(indexed_source, output / indexed_name)
+        item.update(Indexed=indexed_name, IndexedSHA256=record['indexed_sha256'])
         source_file, = [r for r in inventory['input_files'] if Path(r['path']).stem == record['source']]
         assert item['OriginalSHA256'] == record['image_sha256']
         native_file = root / 'workplace/input/dos/drkqueen' / source_file['path']

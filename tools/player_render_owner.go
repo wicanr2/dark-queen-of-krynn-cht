@@ -26,6 +26,12 @@ type renderTransaction struct {
 	Return paintReturn
 	Origin oracle.Addr
 	Step   uint64
+	Image  *renderImageSource
+}
+
+type renderImageSource struct {
+	Command sourceTileCommand
+	Bound   bool
 }
 
 type playerRenderOwner struct {
@@ -42,14 +48,16 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 	raw, err := os.ReadFile(filepath.Join(profile, "render-hooks.json"))
 	must(err)
 	var bindings struct {
-		Version          int
-		ExecutableSHA256 string
-		Hooks            []renderPrimitive
-		ImageSource      renderPrimitive
-		TextGlyph        renderPrimitive
+		Version              int
+		ExecutableSHA256     string
+		Hooks                []renderPrimitive
+		ImageSource          renderPrimitive
+		TextGlyph            renderPrimitive
+		ImagePosition        renderPrimitive
+		ImagePositionCallers []oracle.Addr
 	}
 	must(json.Unmarshal(raw, &bindings))
-	if bindings.Version != 1 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 22 {
+	if bindings.Version != 1 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 25 {
 		panic("繪圖掛勾資料與原版版本不符")
 	}
 	owner := &playerRenderOwner{Oracle: o, ShadowRGB: make([]byte, 320*200*3),
@@ -75,6 +83,18 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		hex.EncodeToString(o.Bytes(textGlyph, 8)) != bindings.TextGlyph.Prefix {
 		panic("字形來源掛勾失配")
 	}
+	position := oracle.Addr{Seg: bindings.ImagePosition.Segment, Off: bindings.ImagePosition.Offset}
+	if position != (oracle.Addr{Seg: 0x13c7, Off: 0x178b}) || len(bindings.ImagePosition.Prefix) != 16 ||
+		hex.EncodeToString(o.Bytes(position, 8)) != bindings.ImagePosition.Prefix || len(bindings.ImagePositionCallers) != 10 {
+		panic("影像目的頁掛勾失配")
+	}
+	callers := map[oracle.Addr]bool{}
+	for _, caller := range bindings.ImagePositionCallers {
+		if caller.Seg != 0x162e || callers[caller] {
+			panic("影像目的頁呼叫者失配")
+		}
+		callers[caller] = true
+	}
 	o.OnCall(imageSource, func(_ *oracle.Oracle) {
 		if hd == nil {
 			return
@@ -88,8 +108,38 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		command.Source = oracle.Addr{Seg: r.DX, Off: r.AX}
 		command.Y = int(int16(o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 6}))) - int(int16(binary.LittleEndian.Uint16(command.Header[2:4])))
 		command.X = int(int16(o.Word(oracle.Addr{Seg: r.SS, Off: r.BP + 8}))) - int(int16(binary.LittleEndian.Uint16(command.Header[4:6])))
-		// header 已取得，尚未進入整張影像的分派、裁切或任何前景繪製。
-		hd.CaptureTile(o, command)
+		// header 已取得；實際目的頁須等座標函式完成才能綁定。
+		for i := len(owner.Pending) - 1; i >= 0; i-- {
+			if owner.Pending[i].Origin == (oracle.Addr{Seg: 0x162e, Off: 0x226c}) {
+				owner.Pending[i].Image = &renderImageSource{Command: command}
+				break
+			}
+		}
+	})
+	o.OnCall(position, func(_ *oracle.Oracle) {
+		if hd == nil || !callers[o.Caller()] {
+			return
+		}
+		page, ok := nativeRenderPage(o)
+		if !ok {
+			return
+		}
+		r := o.Regs()
+		if o.Word(oracle.Addr{Seg: r.DS, Off: 0xcb85}) >= 16000 {
+			return
+		}
+		for i := len(owner.Pending) - 1; i >= 0; i-- {
+			if owner.Pending[i].Origin != (oracle.Addr{Seg: 0x162e, Off: 0x226c}) {
+				continue
+			}
+			image := owner.Pending[i].Image
+			if image != nil && !image.Bound {
+				image.Bound = true
+				image.Command.Page = page
+				hd.CaptureTile(o, image.Command)
+			}
+			return
+		}
 	})
 	returns := map[oracle.Addr]bool{}
 	for _, hook := range bindings.Hooks {
@@ -121,6 +171,43 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 	}
 	owner.Text = loadPlayerTextOwner(o, profile, textGlyph)
 	return owner
+}
+
+// 本作已證實的 Mode X 頁面契約；不更改 CRTC 或借換頁來讀隱藏頁。
+func nativePageLayout(o *oracle.Oracle) bool {
+	v := o.VideoLayoutState()
+	return v.Mode == 0x13 && v.Unchained && v.Pitch == 80 && v.LineCompare >= 400
+}
+
+func nativeRenderPage(o *oracle.Oracle) (uint32, bool) {
+	if !nativePageLayout(o) {
+		return 0, false
+	}
+	segment := o.Word(oracle.Addr{Seg: o.Regs().DS, Off: 0xca33})
+	if segment < 0xa000 || segment > 0xac00 || (segment-0xa000)%0x400 != 0 {
+		return 0, false
+	}
+	return uint32(segment-0xa000) * 16, true
+}
+
+func nativeVisiblePage(o *oracle.Oracle) (uint32, bool) {
+	v := o.VideoLayoutState()
+	return v.DisplayStart, nativePageLayout(o) && v.DisplayStart <= 0xc000 && v.DisplayStart%0x4000 == 0
+}
+
+func nativeTextRegion(o *oracle.Oracle, page uint32, w listWord) []byte {
+	if !nativePageLayout(o) || page > 0xc000 || page%0x4000 != 0 {
+		return nil
+	}
+	planes := [4][]byte{o.EGAPlane(0), o.EGAPlane(1), o.EGAPlane(2), o.EGAPlane(3)}
+	region := make([]byte, w.Width*8)
+	for y := 0; y < 8; y++ {
+		for x := 0; x < w.Width; x++ {
+			xx := w.X + x
+			region[y*w.Width+x] = planes[xx&3][int(page)+(w.Y+y)*80+(xx>>2)]
+		}
+	}
+	return region
 }
 
 func (p *playerRenderOwner) Busy() bool { return len(p.Pending) != 0 }

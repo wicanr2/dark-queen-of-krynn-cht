@@ -1304,6 +1304,7 @@ type sourceTileCommand struct {
 	Header [8]byte
 	Source oracle.Addr
 	X, Y   int
+	Page   uint32
 }
 
 type playerHDRenderer interface {
