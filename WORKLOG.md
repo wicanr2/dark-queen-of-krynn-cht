@@ -3048,3 +3048,5 @@
 - `player-current/dqk-player` 為研究建置，SHA `5499bd2f7e8cb63b5fe16c84fbc087c3d59f1471dee3804b21276d82b327d049`。Go 1.24.13、SDK `f79eab6db8c64a524a06535e53e5d32b0bbcf7c8` 固定且唯讀，SDK source hashes 先核後產生建置覆層。三十四份資料的內容與整體 manifest 檢查通過；`build-info.json` 明列 DRAFT 及未驗證項目，正式 `run` 在啟動前拒絕啟用，未手改收據解鎖。
 - 本輪沒有執行遊戲、候選程式、繪圖函式或 GUI。Python 語法、Bash 語法、Go 格式、建置、純狀態／素材檢查與 Git 空白檢查通過。沒有新生圖、改 HD 輪次或動前作、dosgolem 上游。
 - 擁有權抽查為 1000:1000，專案 root-owned／錯誤 `.md` 目錄掃描無輸出；隔離 SDK 乾淨，專案容器均已退出，沒有新 image。現況見 CONTEXT 與規格 005。提交及遠端回讀結果於完成後追加。
+
+- 本批實作 `d72264a` 已推送 main，工作樹乾淨。Issue #7 保持 OPEN，正文同步 DRAFT、MM3 方法及待核對的時間／機器效果範圍；本輪沒有釋出版或新包。
