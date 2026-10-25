@@ -1,0 +1,72 @@
+{
+  "approved_date": "2026-10-25",
+  "decision": "角色20px、其餘16px、原框閱讀、頂端懸停工具列",
+  "source": "workplace/probe/player-integration-20261025/toolbar-layout-preview.png",
+  "source_sha256": "8234ae48681374f1f5eb4f72a2b569ed038a71dbfab0730fbf613b43cb4128d7",
+  "approved_toolbar_png_sha256": "d1b6c11f27e08fcadefa630e512ba04d37850ee74f0604dfa729a08c15e3167e",
+  "rectangle": [
+    0,
+    0,
+    640,
+    24
+  ],
+  "items": [
+    {
+      "key": "toolbar.scale2",
+      "x": 4,
+      "width": 48,
+      "enabled": true
+    },
+    {
+      "key": "toolbar.scale3",
+      "x": 52,
+      "width": 48,
+      "enabled": true
+    },
+    {
+      "key": "toolbar.chinese",
+      "x": 100,
+      "width": 48,
+      "enabled": true
+    },
+    {
+      "key": "toolbar.nohd",
+      "x": 148,
+      "width": 80,
+      "enabled": false
+    },
+    {
+      "key": "toolbar.journal",
+      "x": 228,
+      "width": 48,
+      "enabled": true
+    },
+    {
+      "key": "toolbar.manual",
+      "x": 276,
+      "width": 48,
+      "enabled": true
+    },
+    {
+      "key": "toolbar.guide",
+      "x": 324,
+      "width": 48,
+      "enabled": false
+    },
+    {
+      "key": "toolbar.screenshot",
+      "x": 372,
+      "width": 48,
+      "enabled": true
+    },
+    {
+      "key": "toolbar.fullscreen",
+      "x": 420,
+      "width": 64,
+      "enabled": true
+    }
+  ],
+  "rights": "自有工具列文案與排版；不含原版遊戲像素",
+  "runtime_status_text_may_change": true,
+  "geometry_fixed": true
+}

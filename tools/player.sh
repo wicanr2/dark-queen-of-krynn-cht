@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 中文整合開發入口。所有工作負載在既有 Docker 中；不自動執行抽驗。
+# 中文整合入口。所有工作負載在既有 Docker 中；不自動執行抽驗。
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-NAME="${2:-player-integration-20261025}"
+NAME="${2:-player-current}"
 [[ "$NAME" =~ ^player-[a-zA-Z0-9-]+$ ]] || { echo '整合目錄名稱必須以 player- 開頭' >&2; exit 2; }
 BASE="$ROOT/workplace/probe/$NAME"
 GO=sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581
@@ -32,6 +32,16 @@ mkdir "/output/$1/session"
 find "/output/$1" -user root -o -type d -name "*.md"
 ' -- "$NAME"
   ;;
+ refresh-ui)
+  test -d "$BASE/inputs"
+  test -d "$FONT"
+  test -f "$FONT/jf-openhuninn-2.1.ttf"
+  timeout 60s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
+    --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
+    -e PYTHONDONTWRITEBYTECODE=1 -v "$ROOT:/project:ro" -v "$BASE/inputs:/inputs" \
+    -v "$FONT:/font:ro" --entrypoint python3 "$PIL" /project/tools/player_inputs.py \
+    refresh /project /inputs --font /font/jf-openhuninn-2.1.ttf
+  ;;
  build)
   test -d "$BASE/inputs"
   test -d "$SDK"
@@ -48,7 +58,7 @@ find "/output/$1" -user root -o -type d -name "*.md"
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
 printf "%s\n" "{\"Replace\":{\"/src/oracle/dqk_video_observer.go\":\"/tools/oracle_video_observer.go\",\"/src/oracle/dqk_input_modifier.go\":\"/tools/oracle_input_modifier.go\"}}" >/tmp/player-overlay.json
-go build -overlay /tmp/player-overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
+go build -overlay /tmp/player-overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
 sha256sum /out/dqk-player >/out/binary.sha256
 find /out -user root -o -type d -name "*.md"
 '
@@ -74,5 +84,5 @@ find /out -user root -o -type d -name "*.md"
     -v "$BASE:/player:ro" -v "$BASE/session:/session" --entrypoint /player/dqk-player "$GO" \
     -player /player/inputs -original /orig -saves /session
   ;;
- *) echo '用法：bash tools/player.sh prepare|build|run [player-新名稱]' >&2; exit 2 ;;
+ *) echo '用法：bash tools/player.sh prepare|refresh-ui|build|run [player-新名稱]' >&2; exit 2 ;;
 esac

@@ -5,6 +5,8 @@ import csv
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -75,7 +77,7 @@ def prepare(root, output):
     }, ensure_ascii=False, indent=2) + '\n')
     (output / 'profile-sources.json').write_text(json.dumps({
         'version': 1,
-        'scope': '中文整合開發入口；未執行新增遊戲抽驗，正式版面及HD另行接入',
+        'scope': '已定稿介面的中文整合入口；未執行新增遊戲抽驗，HD另行接入',
         'gameplay': str(current.relative_to(root)),
         'gameplay_evidence': sha(current.parent / 'evidence.json'),
         'startup': str(startup.relative_to(root)),
@@ -88,8 +90,8 @@ def prepare(root, output):
     }, ensure_ascii=False, indent=2) + '\n')
 
 
-def finish(root, output):
-    assert not (output / 'player-profile.json').exists()
+def finish(root, output, replace=False):
+    assert replace or not (output / 'player-profile.json').exists()
     for name in ['glyphs-16.json', 'glyphs-20.json', 'toolbar-glyphs-16.json']:
         data = json.loads((output / name).read_text())
         # Go 的字模欄位不分大小寫；產生器目前用小寫欄名。
@@ -101,21 +103,49 @@ def finish(root, output):
                    == size * height for v in glyphs.values())
     with (output / 'toolbar.zh-TW.tsv').open() as file:
         rows = list(csv.DictReader(file, delimiter='\t', quoting=csv.QUOTE_NONE))
-    assert len({r['key'] for r in rows}) == len(rows) == 13
+    assert len({r['key'] for r in rows}) == len(rows) == 14
     assert max(len(r['text']) for r in rows) <= 38
     # 不解釋原版狀態，不移動舊收據，只核對整合內容及來源。
-    files = {str(p.relative_to(output)): sha(p) for p in sorted(output.rglob('*')) if p.is_file()}
-    result = {'Version': 1, 'Files': files, 'draft': True,
+    files = {str(p.relative_to(output)): sha(p) for p in sorted(output.rglob('*'))
+             if p.is_file() and p.name not in ['player-profile.json', 'player-profile.json.tmp']}
+    approved = root / 'docs/spec/003-toolbar-approved.json'
+    ui = json.loads(approved.read_text())
+    assert ui['approved_date'] == '2026-10-25' and ui['geometry_fixed']
+    assert ui['approved_toolbar_png_sha256'] == sha(root / 'docs/spec/003-toolbar-approved.png')
+    result = {'Version': 1, 'Files': files, 'state': 'READY', 'interface_approved': True,
+              'approved_interface_sha256': sha(approved),
               'new_gameplay_verification': False, 'new_gui_sampling': False,
               'tools': {n: sha(root / 'tools' / n) for n in ['player_inputs.py', 'player.sh']}}
-    (output / 'player-profile.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
-    print(json.dumps({'profile_files': len(files), 'draft': True, 'gameplay_replayed': False}))
+    temporary = output / 'player-profile.json.tmp'
+    temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+    temporary.replace(output / 'player-profile.json')
+    print(json.dumps({'profile_files': len(files), 'state': 'READY', 'gameplay_replayed': False}))
+
+
+def refresh(root, output, font):
+    assert output.is_dir() and output.stat().st_uid == 1000
+    assert (output / 'player-profile.json').is_file() and font.is_file()
+    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json']
+    for name in owned:
+        assert (output / name).stat().st_uid == 1000
+    unchanged = {str(p.relative_to(output)): sha(p) for p in output.rglob('*')
+                 if p.is_file() and str(p.relative_to(output)) not in owned}
+    shutil.copyfile(root / 'text/toolbar.zh-TW.tsv', output / 'toolbar.zh-TW.tsv')
+    subprocess.run([sys.executable, str(root / 'tools/menu_glyphs.py'), str(font),
+                    str(output / 'toolbar.zh-TW.tsv'), str(output / 'toolbar-glyphs-16.json'), '16'], check=True)
+    finish(root, output, replace=True)
+    assert all(sha(output / name) == digest for name, digest in unchanged.items())
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['prepare', 'finish'])
+    parser.add_argument('mode', choices=['prepare', 'finish', 'refresh'])
     parser.add_argument('root', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--font', type=Path)
     args = parser.parse_args()
-    globals()[args.mode](args.root, args.output)
+    if args.mode == 'refresh':
+        assert args.font is not None
+        refresh(args.root, args.output, args.font)
+    else:
+        globals()[args.mode](args.root, args.output)

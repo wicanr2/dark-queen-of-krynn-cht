@@ -1,4 +1,4 @@
-// DRAFT 研究原型：角色選單往返與正常開場劇情，不供正式遊玩。
+// 研究重播與中文整合共用呈現程式；一般玩家入口使用 -player，不執行重播。
 package main
 
 import (
@@ -547,7 +547,12 @@ func (g *liveGame) Update() error {
 	}
 	return nil
 }
-func (g *liveGame) Layout(_, _ int) (int, int) { return 640, 400 }
+func (g *liveGame) Layout(_, _ int) (int, int) {
+	if g.player != nil {
+		return 960, 600
+	}
+	return 640, 400
+}
 func (g *liveGame) Draw(screen *ebiten.Image) {
 	w, h, rgb := g.o.ScreenRGB()
 	if w != 320 || h != 200 {
@@ -715,8 +720,19 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		g.textureHash = composedHash
 		g.uploads++
 	}
-	screen.DrawImage(g.texture, nil)
+	var baseOptions *ebiten.DrawImageOptions
 	if g.player != nil {
+		baseOptions = &ebiten.DrawImageOptions{}
+		baseOptions.GeoM.Scale(1.5, 1.5)
+	}
+	screen.DrawImage(g.texture, baseOptions)
+	if g.player != nil {
+		if p := g.player; p.HD != nil && p.HDEnabled && g.translate {
+			p.HD.Draw(screen, rgb, g.playerProtectedRectangles(), held)
+		}
+		if g.player.Screenshot {
+			g.savePlayerScreenshot(screen)
+		}
 		g.drawPlayerToolbar(screen)
 		if g.reader != nil {
 			g.reader.WaitDraw = false
@@ -813,7 +829,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 }
 func main() {
-	playerPath := flag.String("player", "", "中文整合開發入口的資料目錄；接受一般鍵盤，不執行重播")
+	playerPath := flag.String("player", "", "中文整合入口的資料目錄；接受一般鍵盤，不執行重播")
 	playerOriginal := flag.String("original", "/orig", "唯讀原版資料目錄")
 	playerSaves := flag.String("saves", "/session", "可寫存檔與前端偏好目錄")
 	state := flag.String("state", "", "正常冷啟動的 #239M 快照")
@@ -1252,7 +1268,7 @@ func main() {
 }
 
 // playerSession 整合已存在的呈現掛勾；不載入研究快照、動作或答案。
-// 目前仍為開發入口，正式字級、閱讀版面及 HD 由規格 003 追蹤。
+// 字級、閱讀版面與工具列已定稿；實作範圍及未驗項目由規格 003 追蹤。
 type playerSession struct {
 	Directory, Notice string
 	NoticeUntil       time.Time
@@ -1263,7 +1279,19 @@ type playerSession struct {
 	BarTexture        *ebiten.Image
 	Mouse             [2]int
 	MouseButtons      [2]bool
+	HD                playerHDRenderer
+	HDEnabled         bool
+	Screenshot        bool
 }
+
+type playerHDRenderer interface {
+	Available() bool
+	Invalidate()
+	Draw(*ebiten.Image, []byte, [][4]int, bool)
+}
+
+// 可選 HD 模組只由一般玩家建置連入。舊研究建置不需要可選素材或新檔案。
+var playerHDLoader func(string) playerHDRenderer
 
 type playerButton struct {
 	Key, Action string
@@ -1310,7 +1338,10 @@ func runPlayer(profile, original, saves string) {
 	defer o.Close()
 	o.SetCmdLine("SB220 SI7 RB330")
 	o.SetScratch(filepath.Join(saves, "saves"))
-	p := &playerSession{Directory: saves, Scale: 2, Mouse: [2]int{-1, -1}}
+	p := &playerSession{Directory: saves, Scale: 2, Mouse: [2]int{-1, -1}, HDEnabled: true}
+	if playerHDLoader != nil {
+		p.HD = playerHDLoader(filepath.Join(profile, "..", "hd"))
+	}
 	p.Text = readLiveCatalog(filepath.Join(profile, "toolbar.zh-TW.tsv"))
 	loadPlayerJSON(filepath.Join(profile, "toolbar-glyphs-16.json"), &p.ToolbarGlyphs)
 	if p.ToolbarGlyphs.Size != 16 || p.ToolbarGlyphs.Height != 20 {
@@ -1323,10 +1354,18 @@ func runPlayer(profile, original, saves string) {
 			}
 		}
 	}
-	var preferences struct{ Scale int }
+	var preferences struct {
+		Scale int
+		HD    *bool
+	}
 	if raw, err := os.ReadFile(filepath.Join(saves, "preferences.json")); err == nil {
-		if json.Unmarshal(raw, &preferences) == nil && (preferences.Scale == 2 || preferences.Scale == 3) {
-			p.Scale = preferences.Scale
+		if json.Unmarshal(raw, &preferences) == nil {
+			if preferences.Scale == 2 || preferences.Scale == 3 {
+				p.Scale = preferences.Scale
+			}
+			if preferences.HD != nil {
+				p.HDEnabled = *preferences.HD
+			}
 		}
 	}
 	g := &liveGame{o: o, out: saves, translate: true, player: p, active: map[[2]int]liveEvent{},
@@ -1348,10 +1387,11 @@ func runPlayer(profile, original, saves string) {
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowSizeLimits(640, 400, -1, -1)
 	ebiten.SetWindowClosingHandled(true)
-	ebiten.SetWindowTitle("黑暗之后：繁體中文整合開發版")
+	ebiten.SetWindowTitle("黑暗之后：繁體中文版")
 	ebiten.SetTPS(60)
 	must(ebiten.RunGame(g))
 	preferences.Scale = p.Scale
+	preferences.HD = &p.HDEnabled
 	raw, err = json.MarshalIndent(preferences, "", "  ")
 	must(err)
 	tmp := filepath.Join(saves, "preferences.tmp")
@@ -1366,11 +1406,15 @@ func (g *liveGame) playerButtons() []playerButton {
 		mode = "toolbar.original"
 	}
 	reader := g.translate && g.reader != nil && g.reader.Ready
+	hdKey, hdEnabled := "toolbar.nohd", false
+	if p.HD != nil && p.HD.Available() {
+		hdKey, hdEnabled = "toolbar.hd", g.translate
+	}
 	buttons := []playerButton{
 		{Key: "toolbar.scale2", Action: "scale2", Enabled: true},
 		{Key: "toolbar.scale3", Action: "scale3", Enabled: true},
 		{Key: mode, Action: "language", Enabled: true},
-		{Key: "toolbar.nohd", Action: "hd", Enabled: false},
+		{Key: hdKey, Action: "hd", Enabled: hdEnabled},
 		{Key: "toolbar.journal", Action: "journal", Enabled: reader},
 		{Key: "toolbar.manual", Action: "manual", Enabled: reader && g.reader.Manual != nil},
 		{Key: "toolbar.guide", Action: "guide", Enabled: false},
@@ -1380,6 +1424,10 @@ func (g *liveGame) playerButtons() []playerButton {
 	for i := range buttons {
 		b := &buttons[i]
 		b.X, b.Width = x, len([]rune(p.Text[b.Key]))*16+16
+		if b.Action == "hd" {
+			// 定稿的80像素格位固定，載入HD後不讓後方項目移位。
+			b.Width = 80
+		}
 		x += b.Width
 	}
 	if x > 640 {
@@ -1390,6 +1438,9 @@ func (g *liveGame) playerButtons() []playerButton {
 
 func (g *liveGame) playerAction(action string) {
 	p := g.player
+	if p.HD != nil && (action == "scale2" || action == "scale3" || action == "language" || action == "hd") {
+		p.HD.Invalidate()
+	}
 	switch action {
 	case "scale2", "scale3":
 		p.Scale = 2
@@ -1418,18 +1469,20 @@ func (g *liveGame) playerAction(action string) {
 			g.reader.WaitDraw = true
 		}
 	case "hd", "guide":
+		if action == "hd" && p.HD != nil && p.HD.Available() && g.translate {
+			p.HDEnabled = !p.HDEnabled
+			return
+		}
 		key := "toolbar.hd_pending"
+		if action == "hd" && p.HD != nil && p.HD.Available() {
+			key = "toolbar.hd_mode_hint"
+		}
 		if action == "guide" {
 			key = "toolbar.guide_pending"
 		}
 		p.Notice, p.NoticeUntil = p.Text[key], time.Now().Add(3*time.Second)
 	case "screenshot":
-		name := "DQK-" + time.Now().Format("20060102-150405.000000000") + ".png"
-		f, err := os.OpenFile(filepath.Join(p.Directory, "screenshots", name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-		must(err)
-		im := &image.RGBA{Pix: g.lastPixels, Stride: 640 * 4, Rect: image.Rect(0, 0, 640, 400)}
-		must(png.Encode(f, im))
-		must(f.Close())
+		p.Screenshot = true
 	case "fullscreen":
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
@@ -1437,7 +1490,7 @@ func (g *liveGame) playerAction(action string) {
 
 func (g *liveGame) tickPlayerToolbar() bool {
 	p := g.player
-	x, y := ebiten.CursorPosition()
+	x, y := g.playerCursor()
 	if x >= 0 && x < 640 && y >= 0 && y < 6 {
 		p.Toolbar = true
 	} else if y < 0 || y >= 24 || x < 0 || x >= 640 {
@@ -1552,7 +1605,7 @@ func (g *liveGame) updatePlayer() error {
 
 func (g *liveGame) playerMouse() {
 	p := g.player
-	x, y := ebiten.CursorPosition()
+	x, y := g.playerCursor()
 	accept := x >= 0 && x < 640 && y >= 0 && y < 400 && !p.Toolbar &&
 		!(g.translate && g.reader != nil && g.reader.Mode != "")
 	if accept && p.Mouse != ([2]int{x / 2, y / 2}) {
@@ -1589,27 +1642,73 @@ func playerText(px []byte, stride, x, y int, text string, glyphs glyphSet, fg [3
 	}
 }
 
+func (g *liveGame) playerCursor() (int, int) {
+	x, y := ebiten.CursorPosition()
+	return x * 2 / 3, y * 2 / 3
+}
+
+func (g *liveGame) savePlayerScreenshot(screen *ebiten.Image) {
+	p := g.player
+	bounds := screen.Bounds()
+	px := make([]byte, bounds.Dx()*bounds.Dy()*4)
+	screen.ReadPixels(px)
+	name := "DQK-" + time.Now().Format("20060102-150405.000000000") + ".png"
+	f, err := os.OpenFile(filepath.Join(p.Directory, "screenshots", name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	must(err)
+	im := &image.RGBA{Pix: px, Stride: bounds.Dx() * 4, Rect: image.Rect(0, 0, bounds.Dx(), bounds.Dy())}
+	must(png.Encode(f, im))
+	must(f.Close())
+	p.Screenshot = false
+}
+
+func (g *liveGame) playerProtectedRectangles() [][4]int {
+	var protected [][4]int
+	if g.list != nil {
+		for _, w := range g.list.snapshot() {
+			protected = append(protected, [4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()})
+		}
+	}
+	if g.cold != nil && g.cold.ui != nil {
+		for _, w := range g.cold.ui.snapshot() {
+			protected = append(protected, [4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()})
+		}
+	}
+	for _, box := range []*storyPage{g.page} {
+		if box != nil {
+			b := box.Box
+			protected = append(protected, [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2})
+		}
+	}
+	if g.reader != nil && g.reader.Page != nil {
+		b := g.reader.Page.Box
+		protected = append(protected, [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2})
+	}
+	return protected
+}
+
 func (g *liveGame) drawPlayerToolbar(screen *ebiten.Image) {
 	p := g.player
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(1.5, 1.5)
 	if p.Toolbar {
 		px := make([]byte, 640*24*4)
 		for i := 0; i < len(px); i += 4 {
 			px[i], px[i+1], px[i+2], px[i+3] = 15, 18, 25, 255
 		}
-		x, _ := ebiten.CursorPosition()
+		x, _ := g.playerCursor()
 		for _, b := range g.playerButtons() {
 			fg := [3]byte{232, 232, 232}
 			if !b.Enabled {
 				fg = [3]byte{115, 118, 125}
 			} else if x >= b.X && x < b.X+b.Width {
 				fg = [3]byte{255, 217, 100}
-			} else if (b.Action == "scale2" && p.Scale == 2) || (b.Action == "scale3" && p.Scale == 3) || b.Action == "language" {
+			} else if (b.Action == "scale2" && p.Scale == 2) || (b.Action == "scale3" && p.Scale == 3) || b.Action == "language" || (b.Action == "hd" && p.HDEnabled) {
 				fg = [3]byte{102, 230, 235}
 			}
 			playerText(px, 640, b.X+8, 4, p.Text[b.Key], p.ToolbarGlyphs, fg)
 		}
 		p.BarTexture.WritePixels(px)
-		screen.DrawImage(p.BarTexture, nil)
+		screen.DrawImage(p.BarTexture, op)
 	}
 	if p.Notice != "" && time.Now().Before(p.NoticeUntil) {
 		px := make([]byte, 640*24*4)
@@ -1620,6 +1719,7 @@ func (g *liveGame) drawPlayerToolbar(screen *ebiten.Image) {
 		p.BarTexture.WritePixels(px)
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(0, 376)
+		op.GeoM.Scale(1.5, 1.5)
 		screen.DrawImage(p.BarTexture, op)
 	}
 }

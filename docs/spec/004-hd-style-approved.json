@@ -1,0 +1,12 @@
+{
+  "approved": true,
+  "date": "2026-10-25",
+  "decision": "HD歸HD；視窗大小歸視窗大小",
+  "window_size_independent": true,
+  "asset_scale": 3,
+  "asset_scale_is_window_scale": false,
+  "art_direction": "本批接續既有試繪方向，保留原版配色與構圖；人物細緻油畫、怪物細緻奇幻",
+  "art_direction_basis": "既有本機試繪，本輪使用者更正的是HD與視窗的綁定；未另要求更換畫風",
+  "max_review_rounds": 2,
+  "new_gameplay_sampling": false
+}
