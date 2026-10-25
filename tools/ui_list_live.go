@@ -372,6 +372,16 @@ func (l *listState) footerCompatible(signature string) bool {
 	}
 	return expected > 0 && actual == expected
 }
+func validEmptyNoticeField(f listField, source string) bool {
+	return f.Key == "ui.31f10d38edf50b7a3f39" && source == "Empty!" &&
+		f.Pane == "callsite" && f.Group == "footer" && f.SourcePattern == "" && f.Start == 0 && f.Length == 6 && f.Width == 0 &&
+		f.RawX == 8004 && f.RawY == 189 && f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) &&
+		f.UpperCaller == (oracle.Addr{Seg: 0x88e, Off: 0x1560}) && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) &&
+		f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
+		f.SHA256 == digest([]byte(source)) && f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
+		f.MenuSignature == "72c4041e90650eaa2c0b46505cfc183082f23966891560a9b9dec4ad6e4fdfaa"
+}
+
 func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 	l := g.list
 	l.inputsPath = inputs
@@ -974,6 +984,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				continue
 			}
 			r, at := o.Regs(), o.Caller()
+			emptyNotice := validEmptyNoticeField(f, l.sources[f.Key]) && l.pane == "" && !l.hudActive
+			if emptyNotice {
+				menu, valid := readMenuSource(o)
+				emptyNotice = valid && menu.Signature == f.MenuSignature && l.config.Menus[menu.Signature] == "exploration"
+			}
 			battleWarning := f.Key == "round.50e28de96686ceec7dc0" && l.hudActive && l.pane == ""
 			battleStatus := validMagicToggleField(f, l.sources[f.Key]) && l.pane == ""
 			if battleStatus {
@@ -992,7 +1007,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				if !ok || digest([]byte(text)) != f.SHA256 {
 					continue
 				}
-				if l.pane != "shop-stock" && l.pane != "inventory" && !battleWarning && !battleStatus {
+				if l.pane != "shop-stock" && l.pane != "inventory" && !battleWarning && !battleStatus && !emptyNotice {
 					l.erase(8, 189, 304, 8)
 					l.footerTransition = false
 					g.listLog("unknown-feedback-original", map[string]any{"caller": at, "source_sha256": f.SHA256, "native_rect": [4]int{8, 189, 304, 8}, "reason": "unrecognized return context"})
@@ -1026,6 +1041,9 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 						panic("購買回報越界")
 					}
 					feedback := &listFeedback{Upper: l.fieldWrapper.Return, Entry: o.Steps(), SourceSHA: f.SHA256, ReturnPane: l.pane, Rect: rect, Pixels: listRectPixels(o.Indexed(), rect)}
+					if emptyNotice {
+						feedback.ReturnPane = "exploration"
+					}
 					for _, word := range l.snapshot() {
 						if word.X < rect[0]+rect[2] && word.X+word.Width > rect[0] && word.Y < rect[1]+rect[3] && word.Y+word.height() > rect[1] {
 							feedback.Saved = append(feedback.Saved, word)
