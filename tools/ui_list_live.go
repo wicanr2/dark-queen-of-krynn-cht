@@ -517,6 +517,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.Width == 0 && f.Start == 0 && f.UpperFormatSHA256 == digest([]byte("%s")) &&
 				((f.Length == 5 && l.sources[f.Key] == "items") ||
 					(f.Length == len(l.sources[f.Key]) && (l.sources[f.Key] == "Is It a Deal?" || l.sources[f.Key] == "Will you sell it?" ||
+						(f.Key == "ui.6a11455ae32b7edfde7a" && len(f.SHA256) == 64 && f.Key == "ui."+f.SHA256[:20] && f.SHA256 == digest([]byte(l.sources[f.Key]))) ||
 						(f.SHA256 == "4a24b8af9cecf11b09456a1860e0e0c8652cae907b3180568e9e3c2ddfdcec22" && digest([]byte(l.sources[f.Key])) == "3d996c6634ba9017dd157e5e38c31a6f7be6b859a8dbf03ae9435765a8de6ca4"))))
 			loadPrompt := f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.Pane == "callsite" && f.Group == "footer" && f.RawX == 8004 && f.RawY == 189 &&
 				f.Start == 0 && (f.Width == 0 || slotWidth) && f.Length == len(l.sources[f.Key]) && f.Color != nil && ((f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x995}) && f.UpperFormatSHA256 == digest([]byte("%s")) && *f.Color == 0x70 &&
@@ -1095,6 +1096,11 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 							l.footerTransition = false
 							g.listLog("exploration-cast-heading-ready", map[string]any{"caller": at, "ss": r.SS, "sp": r.SP, "source_sha256": digest([]byte(p.Source))})
 						}
+						if at == (oracle.Addr{Seg: 0x2c4a, Off: 0x46ad}) && p.X == 8 && p.Y == 160 && g.restMemoReady(p.Source) {
+							// 休息回報完成後仍使用原底列，不等待整段休息結束才提交。
+							l.footerTransition = false
+							g.listLog("rest-memo-ready", map[string]any{"caller": at, "source_sha256": digest([]byte(p.Source))})
+						}
 						if feedback := l.feedback; feedback != nil && feedback.Upper == p.Return {
 							feedback.Ready = true
 							l.footerTransition = false
@@ -1579,6 +1585,31 @@ func (g *liveGame) syncBattleNotice() {
 }
 
 // 字串入口負責建立譯文。原版色號區塊失配時只撤除覆層，不從畫面辨字。
+func (g *liveGame) restMemoReady(source string) bool {
+	l := g.list
+	menu, ok := readMenuSource(g.o)
+	if !ok || menu.Signature != "744578f86fd82e27ec8c0b3ed07c8404cbb7061d6e459626ed7c33ae19e38999" ||
+		l.config.Menus[menu.Signature] != "rest" || !l.footerCompatible(menu.Signature) {
+		return false
+	}
+	label, ok := l.words[[2]int{104, 152}]
+	if !ok || label.Key != "ui.5c4efffc1a548cffaeab" || label.Group != "body" || label.Foreground != 7 || label.Background != 23 {
+		return false
+	}
+	word, ok := l.words[[2]int{8, 160}]
+	if !ok || word.Group != "body" || word.Foreground != 7 || word.Background != 23 || l.sources[word.Key] != source {
+		return false
+	}
+	for _, f := range l.config.Fields {
+		if f.Key == word.Key && f.Pane == "callsite" && f.Group == "body" && f.UpperCaller == (oracle.Addr{Seg: 0x2c4a, Off: 0x46ad}) &&
+			f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.RawX == 8004 && f.RawY == 8080 && f.Start == 0 && f.Length == len(source) &&
+			f.SHA256 == digest([]byte(source)) && f.FormatSHA256 == digest([]byte("%s")) {
+			return true
+		}
+	}
+	return false
+}
+
 func validMagicToggleField(f listField, source string) bool {
 	known := ((f.Key == "ui.3dd44f96ef1d6b028dfe" && f.Length == 8) || (f.Key == "ui.25fd2397b3b79835861d" && f.Length == 9)) &&
 		f.MenuSignature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b"
