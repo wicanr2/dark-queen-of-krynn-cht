@@ -40,7 +40,7 @@ func (g *gpuCheck) Draw(screen *ebiten.Image) {
 	if g.Frame >= 3 {
 		return
 	}
-	hd := g.Frame == 1
+	hd := g.Frame != 0
 	mode := []string{"native", "hd", "palette"}[g.Frame]
 	pal := g.Palette
 	if g.Frame == 2 {

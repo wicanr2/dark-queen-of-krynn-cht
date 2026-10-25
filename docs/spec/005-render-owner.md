@@ -222,7 +222,7 @@ F2切到3倍，F12兩次實際狀態為 false／true，HD偏好保持，F10截�
 早先 GUI 輸入的短按及零時間戳會漏鍵，已以實際控制紀錄與有效 X11 時間戳修正；這是驗證工具問題。
 本輪沒有建角完成、探索、戰鬥或存讀檔新驗收，不覆蓋舊正常主線。
 
-GPU收據 `render-abi-gpu-20261026-r1/` 使用真實 CPIC..6，原版、HD及色盤三組與獨立 CPU 參考逐 byte 一致。
+GPU收據 `render-abi-gpu-20261026-r2/` 使用真實 CPIC..6，原版、HD及色盤三組與獨立 CPU 參考逐 byte 一致。
 [render_gpu_probe.go](../../tools/render_gpu_probe.go)只驗紋理／矩形，
 [player_gui_probe.c](../../tools/player_gui_probe.c)與[player-sample.sh](../../tools/player-sample.sh)只送正常視窗輸入。
 [render_abi_probe.go](../../tools/render_abi_probe.go)、[oracle_render_probe.go](../../tools/oracle_render_probe.go)、
@@ -241,3 +241,5 @@ GPU收據 `render-abi-gpu-20261026-r1/` 使用真實 CPIC..6，原版、HD及色
 僅代表這三個可見狀態的呈現一致，不稱完整CPU同狀態。
 手冊面板開啟有實際畫面差異，左上保留區保持，關閉後與開啟前畫面完全相同。
 該段省略6,591,862個原版底圖RGB像素轉換，為跨畫格累計，不能換算成全遊戲FPS或素材數。
+
+圖形後端抽驗使用 Xvfb 與軟體 OpenGL，不是實體 GPU 效能驗證。末次 r2 明確在 HD 偏好保持啟用時改色盤，驗證自動回退；原版、HD、HD啟用下的色盤回退三組差異皆0。r1的原版色盤重繪收據保持。
