@@ -23,6 +23,7 @@ KEEP.add('manual-reader-rows-20261025')
 KEEP.add('shared-menu-20261025')
 KEEP.add('empty-notice-20261025')
 KEEP.add('choice-prompt-20261025')
+KEEP.add('battle-continuation-20261025')
 
 
 def digest(path, compressed=False):

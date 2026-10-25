@@ -54,7 +54,8 @@ type listHUDPending struct {
 const automaticSpellMenuSignature = "c5b214e0c009d9bf9bb1be3435f8b0c72be521577ac3912c57dfa55d39b0a5c2"
 
 func automaticDamageMenu(signature string) bool {
-	return signature == automaticSpellMenuSignature || signature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b"
+	return signature == automaticSpellMenuSignature || signature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b" ||
+		signature == "326aacadb1a01c55f2e08f88cd3fc3ce209f7cfb0826f53439bd66558839a4dc"
 }
 
 type listHUDPanelPending struct {
@@ -146,7 +147,9 @@ func (g *liveGame) validateHUDParagraphs() {
 		weapon := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x097e}) && p.NativeBox == ([4]int{184, 56, 312, 80})
 		status := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 88, 312, 176})
 		miss := p.Caller == (oracle.Addr{Seg: 0x22f4, Off: 0x048f}) && p.NativeBox == ([4]int{184, 104, 312, 136})
-		death := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) && p.NativeBox == ([4]int{184, 112, 312, 176})
+		death := p.Caller == (oracle.Addr{Seg: 0x088e, Off: 0x15e1}) &&
+			(p.NativeBox == ([4]int{184, 112, 312, 176}) || (p.NativeBox == ([4]int{184, 120, 312, 176}) &&
+				p.SHA256 == "3639be1dab675907c6bf2d573639a1a3c2c15f7bfd8169f2b4e64e5c43291d64"))
 		tailSources := map[int]string{
 			104: "e6f16936a01e776202d7148017f7c770f31925d4f97f5312106a685880a34152",
 			136: "bcf47e35fc5fe9b78d1ce32a9b98b05adeb3e2aae129207ef29f5fdaeb290f93",

@@ -527,7 +527,9 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				l.sources[f.Key] == "Aim: range = " && f.Length == len(l.sources[f.Key])
 			blueY, bluePosition := map[uint16]int{8004: 8, 8040: 80, 8048: 96}[f.RawY]
 			combatTargetName := (f.Length == 11 && f.SHA256 == "34e6a2c45cd76bd572bc718ec07bba5666ec09acc337edfcc226f81c36949655") ||
-				(f.Length == 12 && f.SHA256 == digest([]byte("GREEN DRAGON")))
+				(f.Length == 12 && f.SHA256 == digest([]byte("GREEN DRAGON"))) ||
+				(f.Length == 15 && (f.SHA256 == "ec48f92529153b54d99a82aa8470a603ed827667c33ef124fd0a1d8a441aefbc" ||
+					f.SHA256 == "1ed983b04da092ad444e51acb9920b4e837590e284fc1dd80deab501625d9afc"))
 			combatTarget := f.Pane == "callsite" && f.Group == "body" && f.Start == 0 && combatTargetName && f.Width == 0 && f.RawX == 8092 && bluePosition &&
 				f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x088e, Off: 0x16fb}) && f.UpperNative != nil && *f.UpperNative == ([2]int{184, blueY}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.Color != nil && *f.Color == 0x82 && f.BackgroundOverride != nil && *f.BackgroundOverride == 23
@@ -1569,13 +1571,16 @@ func (g *liveGame) syncBattleNotice() {
 
 // 字串入口負責建立譯文。原版色號區塊失配時只撤除覆層，不從畫面辨字。
 func validMagicToggleField(f listField, source string) bool {
-	known := (f.Key == "ui.3dd44f96ef1d6b028dfe" && f.Length == 8) || (f.Key == "ui.25fd2397b3b79835861d" && f.Length == 9)
+	known := ((f.Key == "ui.3dd44f96ef1d6b028dfe" && f.Length == 8) || (f.Key == "ui.25fd2397b3b79835861d" && f.Length == 9)) &&
+		f.MenuSignature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b"
+	// Quick 期間的守衛回報沿同一個暫時狀態繪製及撤除交易。
+	known = known || (f.Key == "ui.0323473424f14da356d4" && f.Length == 8 &&
+		f.MenuSignature == "326aacadb1a01c55f2e08f88cd3fc3ce209f7cfb0826f53439bd66558839a4dc")
 	return known && f.Pane == "callsite" && f.Group == "footer" && f.Start == 0 && f.Width == 0 &&
 		f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) && f.UpperCaller == (oracle.Addr{Seg: 0x88e, Off: 0x1560}) &&
 		f.RawX == 8004 && f.RawY == 189 && f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil &&
 		f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
-		f.FormatSHA256 == digest([]byte("%s")) && f.SHA256 == digest([]byte(source)) && f.Key == "ui."+f.SHA256[:20] &&
-		f.MenuSignature == "b891f7b3c26270165eaf8756b7b4d59704d7cf11b45fccb5cdae13dd2468ae6b"
+		f.FormatSHA256 == digest([]byte("%s")) && f.SHA256 == digest([]byte(source)) && f.Key == "ui."+f.SHA256[:20]
 }
 
 // 已有魔法飛彈與本批完整來源鍵共用同一個原版施法底列生命週期。
