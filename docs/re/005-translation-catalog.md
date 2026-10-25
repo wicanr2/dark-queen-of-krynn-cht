@@ -4310,3 +4310,51 @@ Drop 的語境待查原版說明或呼叫者，不逕用背包「丟棄」替換
 `evidence.json` 封存並回驗 1,440 個產物、28 個來源與 30 份工具。
 `weapon_hud_inputs.py evidence／audit 專案根 工作區` 另需前作 `text/` 唯讀掛至 `/previous-text`。
 所有原版、全文、字模、圖像及原始重播只留本機；封存後不改寫。
+
+## 2026-10-25：人物資料頁三種表形與財物語境
+
+工作區 `workplace/probe/status-menu-20261025/`，對應 Issue #7 及
+[規格 001](../spec/001-early-text.md#人物資料頁財物按鈕的-draft-擴充)，維持 DRAFT。
+沿既有 Go 1.24.13、dosgolem `f79eab6d…` 與未修改前端
+`weapon-hud-20261025/programs-r3/ui-list-live`，SHA-256
+`90baaeab2a45c1b114f2cf47b8c6bdad8d326395aef99466c96295e1ee4e523b`。
+DQK.EXE 及 ECL.GLB 雜湊沿上節，原版探針仍為 `243a58b0…`。
+
+**已證實**：操作手冊印刷第 38 頁說明人物頁 Trade 為轉交錢幣、珠寶及寶石，
+Drop 為永久丟棄財物。本次檢視掃描 `workplace/manual-ocr/Image024-right.png`，
+並核對 `manual-gameplay-20261023/appendix-r1/core-review/operation-review.zh-TW.tsv`。
+這與手冊第 37 頁的背包丟棄物品、第 41 頁的刪除角色不同。
+新增「轉交財物／丟棄財物」兩個本機 TSV 情境鍵，不改共用 Trade／Drop 的舊譯。
+
+| 表形 SHA-256 | 按鈕 | 原版來源 |
+|---|---|---|
+| `c8e6a5099c5cec86a73756c7edc06264de1214283e1a33480d631e42ab259456` | Items／Spells／Trade／Drop／Exit | `ammo-boundaries-20261024/bolts-observe-r1/receipt.json` |
+| `7f64b83332ab0f1c6041c30a354332372fdbcec1ebacca5f8ace5c772c23af38` | Items／Trade／Drop／Exit | `creation-20261024/observe-r2/receipt.json` |
+| `02b12afcec7ad80572357eac11f9544fa509c197a8d87dd98524d89c284f145c` | Items／Spells／Drop／Exit | `weapon-hud-20261025/observe-r2/receipt.json` |
+
+十三個欄位核對原文、完整表形、索引、handler、來源指標與座標；
+共用入口為 dosgolem 執行期 `0CEB:01BE`，原始 Y=8094，覆繪座標 Y=189。
+此處位址均為執行期 segment:offset，不是 IDA linear。
+父批已知分類保留，新四鈕沿 status 分類；其他來源及欄位保持。
+原文 6,420／繁中 6,415，正式主表 7,730、術語 971、字模 2,752、角色 20px 及閱讀資料保持。
+
+按使用者指示只作代表性抽驗：由原版 885M 背包按兩次 Exit，取得城內人物頁及返回商店，
+新增觀測／控制兩點；沿既有 15,626M 快照及正常 Return／View／Exit 驗戰鬥四鈕與返回。
+兩個起點保留原有亂數狀態，沒有改座標、角色、財物、裝備或存檔。
+有效 `inputs-r1`、`city-observe/control`、`city-en/zh`、`battle-en/zh`、`check.json`。
+戰鬥原版直接使用已封存武器批 135 點，沒有另跑原版或重編譯。
+
+共 518 組雙語 GPU／137 個原版狀態通過，326 組保留完整前畫面。
+城內五鈕、戰鬥四鈕各三十九組可見；十一個初印／反白事件都在原版首字形前匹配。
+每個非保留畫格按獨立原版底圖、TSV、字模及來源色彩重建比較；
+返回戰場左側與原版加值四十組另驗，資料頁三張實際圖已看，沒有殘字。
+建角表形只驗既有原版來源，不宣稱新增正常 GUI；沒有為此重跑整段建角。
+
+準備器初版少計 Exit 反白重印的一次來源，改依實際五次呼叫重新生成。
+比較器初版把商店合法的 Exit 誤當人物頁殘字，改核對鍵與原始座標；
+所有原版狀態及逐像素檢查保留。兩者都是驗證工具問題，不列遊戲缺陷。
+
+`evidence.json` 封存並回驗 105 個產物、27 個來源與六份工具，完整命令順序見 `run.json`。
+資料及抽驗由 `status_menu_inputs.py prepare／samples／check／seal／audit 專案根 工作區` 執行；
+全部沿離線 Docker，唯獨本批工作區可寫。來源、譯文及畫格只留本機，封存後不改寫。
+主線仍從武器批 15,686M／`63d13f57…` 接續；正式入口、說明面板與完整中文化尚未完成。

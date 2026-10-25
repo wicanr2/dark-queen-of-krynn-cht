@@ -17,6 +17,7 @@ CHUNK=1024*1024
 KEEP.add('passage-island-20261025')
 KEEP.add('passage-runtime-20261025')
 KEEP.add('weapon-hud-20261025')
+KEEP.add('status-menu-20261025')
 
 
 def digest(path, compressed=False):
