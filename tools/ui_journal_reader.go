@@ -78,6 +78,7 @@ type journalReader struct {
 	WaitDraw      bool
 	Images        map[int]readerIllustration
 	ImageSHA      string
+	Manual        *manualReader
 }
 
 func readerLines(body string) []string {
@@ -258,10 +259,21 @@ func (g *liveGame) openReader(p *listParagraph) {
 }
 
 func (g *liveGame) composeReader(px []byte) {
-	if g.reader == nil || g.reader.Page == nil {
+	if g.reader == nil {
 		return
 	}
-	p, pal := g.reader.Page, g.o.Palette()
+	p := g.reader.Page
+	if g.reader.Manual != nil && g.reader.Manual.Page != nil {
+		p = g.reader.Manual.Page
+	}
+	if p == nil {
+		return
+	}
+	g.composeReaderPage(px, p)
+}
+
+func (g *liveGame) composeReaderPage(px []byte, p *readerPage) {
+	pal := g.o.Palette()
 	for y := p.Box[1]; y < p.Box[3]; y++ {
 		for x := p.Box[0]; x < p.Box[2]; x++ {
 			if x < 32 && y < 32 {
@@ -333,7 +345,7 @@ func (g *liveGame) installReaderControls(path, nativeRequest string, live, probe
 		panic("查閱控制與原版請求不符")
 	}
 	var last uint64
-	manual := false
+	manual, handbook, article := false, false, false
 	for _, c := range input.Controls {
 		if c.Key != "Preview" && c.Entry != 0 {
 			panic("查閱控制含多餘編號")
@@ -344,9 +356,26 @@ func (g *liveGame) installReaderControls(path, nativeRequest string, live, probe
 		switch c.Key {
 		case "F5":
 			manual = !manual
+		case "F6":
+			if r.Manual == nil || (manual && !handbook) {
+				panic("手冊控制未載入手冊")
+			}
+			manual = !manual
+			handbook, article = manual, false
 		case "Esc":
-			manual = false
+			if handbook && article {
+				article = false
+			} else {
+				manual, handbook = false, false
+			}
 		case "PgUp", "PgDn", "Left", "Right":
+		case "Up", "Down", "Return":
+			if r.Manual == nil || !handbook {
+				panic("手冊選項控制不在查閱中")
+			}
+			if c.Key == "Return" {
+				article = true
+			}
 		case "ZoomIn", "ZoomOut", "PanLeft", "PanRight", "PanUp", "PanDown", "Home":
 			if len(r.Images) == 0 {
 				panic("圖文控制未載入圖文")
@@ -376,6 +405,10 @@ func (g *liveGame) readerKey(key, source string, entry int) {
 			panic("查閱控制點不在完整畫面")
 		}
 		r.UIEvents = append(r.UIEvents, map[string]any{"step": step, "frame": len(g.frames), "key": key, "source": source, "ignored": "unstable"})
+		return
+	}
+	if key == "F6" || r.Mode == "manual" {
+		g.manualKey(key, source)
 		return
 	}
 	switch key {
@@ -490,6 +523,27 @@ func (g *liveGame) tickReader() bool {
 		}
 	}
 	if r.Live {
+		if r.Manual != nil && inpututil.IsKeyJustPressed(ebiten.KeyF6) {
+			g.readerKey("F6", "keyboard", 0)
+			r.WaitDraw = true
+			return true
+		}
+		if r.Mode == "manual" {
+			for _, k := range []struct {
+				code ebiten.Key
+				name string
+			}{
+				{ebiten.KeyArrowUp, "Up"}, {ebiten.KeyArrowDown, "Down"}, {ebiten.KeyArrowLeft, "Left"}, {ebiten.KeyArrowRight, "Right"},
+				{ebiten.KeyEnter, "Return"}, {ebiten.KeyPageUp, "PgUp"}, {ebiten.KeyPageDown, "PgDn"}, {ebiten.KeyEscape, "Esc"},
+			} {
+				if inpututil.IsKeyJustPressed(k.code) {
+					g.readerKey(k.name, "keyboard", 0)
+					r.WaitDraw = true
+					return true
+				}
+			}
+			return true
+		}
 		if r.Page != nil && r.Page.Image != nil {
 			for _, k := range []struct {
 				code ebiten.Key

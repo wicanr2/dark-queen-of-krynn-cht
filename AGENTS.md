@@ -194,7 +194,7 @@
 | `README.md` | 遊戲與專案介紹、穩定操作入口、現況摘要，不放逐輪歷程 |
 | `docs/re/README.md`、`docs/re/` | 研究索引與可公開的最小證據；私人原始輸出留 `workplace/` |
 | `docs/spec/README.md`、`docs/spec/` | 規格索引、狀態、依賴、驗收條件與 Issue 回鏈 |
-| `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則 |
+| `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，書籍正文仍留本機 |
 | `tools/` | 可重現的 Docker、盤點、驗證與打包入口 |
 | `workplace/` | 唯一研究工作區，含隔離副本、解壓、掃描轉錄、快取與 HD 批次；不入 Git |
 | `dist-all/` | 唯一正式交付根，建立前讀第 4 節交付契約；本機含原版產物不入 Git |

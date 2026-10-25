@@ -737,6 +737,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		g.list.frames = append(g.list.frames, map[string]any{"step": g.o.Steps(), "list_event_count": len(g.list.events), "words": g.list.snapshot(), "palette": g.o.Palette(), "display_start": g.o.VideoLayoutState().DisplayStart, "render_page": g.list.renderPage, "paragraph": g.page})
 		if g.reader != nil {
 			g.list.frames[len(g.list.frames)-1]["reader"] = g.reader.Page
+			if g.reader.Manual != nil {
+				g.list.frames[len(g.list.frames)-1]["manual"] = g.reader.Manual.Page
+			}
 			g.reader.WaitDraw = false
 		}
 	}
@@ -752,6 +755,10 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			r := g.reader
 			state["reader_mode"], state["reader_stable"], state["reader_seen"] = r.Mode, g.readerStable(), r.seenIDs()
 			state["reader_inputs"] = len(r.UIEvents)
+			if r.Manual != nil {
+				m := r.Manual
+				state["manual_inputs"], state["manual_book"], state["manual_cursor"], state["manual_part"] = len(m.Events), m.Book, m.Cursor, m.Part
+			}
 			state["reader_entry"], state["reader_page"] = 0, 0
 			if r.Page != nil {
 				state["reader_entry"], state["reader_page"] = r.Page.Entry, max(1, r.Page.Number)
@@ -816,6 +823,8 @@ func main() {
 	readerControls := flag.String("reader-controls", "", "DRAFT：獨立前端查閱控制重播")
 	readerInteractive := flag.Bool("reader-interactive", false, "DRAFT：接受真正鍵盤的查閱控制")
 	readerProbe := flag.Bool("reader-probe", false, "DRAFT：允許明列的手札畫面元件預覽")
+	manualCatalog := flag.String("manual-catalog", "", "DRAFT：已校讀說明手冊 TSV")
+	manualIndex := flag.String("manual-index", "", "DRAFT：獨立手冊分冊與文章索引")
 	flag.Parse()
 	if *coldFine != "" && (*coldPath == "" || !*fine) {
 		panic("冷讀細驗區間需要冷讀及 fine 模式")
@@ -825,6 +834,10 @@ func main() {
 	}
 	if *readerIllustrations != "" && *readerCatalog == "" {
 		panic("圖文清單需要手札 TSV")
+	}
+	if (*manualCatalog == "") != (*manualIndex == "") || (*manualCatalog != "" &&
+		(!*listMode || *coldPath != "" || *readerCatalog == "")) {
+		panic("手冊原型需要列表模式、手札元件及兩份獨立手冊資料")
 	}
 	if _, err := os.Stat(*out); !os.IsNotExist(err) {
 		panic("輸出必須為全新目錄")
@@ -985,6 +998,9 @@ func main() {
 		g.installList(*listInputs, *listRequest, *sourceCatalog)
 		if *readerCatalog != "" {
 			g.installReader(*readerCatalog, *readerIllustrations)
+		}
+		if *manualCatalog != "" {
+			g.installManual(*manualCatalog, *manualIndex)
 		}
 		if *readerControls != "" || *readerInteractive || *readerProbe {
 			g.installReaderControls(*readerControls, *listRequest, *readerInteractive, *readerProbe)
@@ -1162,6 +1178,19 @@ func main() {
 				result["reader_seen"], result["final_auto_reader"] = r.seenIDs(), r.Auto
 				result["reader_complete"] = r.Mode == "" && r.Gallery == nil && r.ControlIndex == len(r.Controls)
 				result["reader_probe"], result["reader_interactive"] = r.Probe, r.Live
+				if r.Manual != nil {
+					m := r.Manual
+					result["manual_catalog_sha256"], result["manual_index_sha256"] = m.SHA, m.IndexSHA
+					result["manual_events"], result["final_manual"] = m.Events, m.Page
+					layouts := []map[string]any{}
+					for _, book := range m.Books {
+						for _, doc := range book.Documents {
+							layouts = append(layouts, map[string]any{"id": doc.ID, "lines": len(doc.Lines), "pages": (len(doc.Lines) + 12) / 13,
+								"sha256": digest([]byte(strings.Join(doc.Lines, "\n")))})
+						}
+					}
+					result["manual_layouts"] = layouts
+				}
 			}
 		}
 		for key, path := range map[string]string{"list_inputs_sha256": *listInputs, "list_request_sha256": *listRequest, "source_catalog_sha256": *sourceCatalog} {

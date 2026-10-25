@@ -1,0 +1,12 @@
+key	text
+manual.book.operation	操作手冊
+manual.book.adventurer	冒險手冊
+manual.book.appendix	附表
+manual.index_heading	%s目錄
+manual.document_heading	%s %s：%s
+manual.index_item	%s%s %s
+manual.index_hint	←→換冊 ↑↓選擇 Enter閱讀 F6離開
+manual.document_hint	%s/%s PgUp/PgDn翻頁 Esc目錄 F6離開
+manual.image_pending	此頁為原版世界地圖，重繪尚未完成。
+manual.selected	>
+manual.cell	%s：%s

@@ -153,7 +153,7 @@ def evidence(project,primary,cancel,focus):
     snapshot=roots[0]/"tool-snapshots";assert not snapshot.exists();snapshot.mkdir()
     names=["load_prompt_inputs.py","load_prompt_check.py","ui_cold_prompts.go","cold_load.py","cold_load_probe.go","cold-load.sh",
            "early_text_live.go","ui_list_live.go","ui_hud_integer.go","ui_inventory_ammo.go","ui_list_live_check.py","ui_list_inputs.py","ui_list_paragraphs.go",
-           "ui_journal_reader.go","ui_journal_illustrations.go","ui_menu_source.go","oracle_video_observer.go","ui_hud_weapon.go","ui_passage_source.go","ui_passage_live.go","ui_original_prefix.go",
+           "ui_journal_reader.go","ui_manual_reader.go","ui_journal_illustrations.go","ui_menu_source.go","oracle_video_observer.go","ui_hud_weapon.go","ui_passage_source.go","ui_passage_live.go","ui_original_prefix.go",
            "ui_context_probe.go","ui_context_check.py","ui-context.sh","ui-list-live.sh","early-live.sh",
            "ui_journal_reader_check.py","ui_journal_illustrations_check.py","camp_live_inputs.py","menu_glyphs.py"]
     tools={}
