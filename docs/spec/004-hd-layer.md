@@ -119,3 +119,11 @@ IDA9.4證據在 `localization-hd-20261026/method25-ida/result.json` 與 `method2
 原192項的記錄及原圖、生成圖、色號索引、編譯圖雜湊保持。新增生成版本、提示詞、來源、完整主圖與分格保存在本機 `references/cpic-next-20261026/evidence.json`，未加入Git。正式Go載入器對319項逐項驗證並匹配原始區塊；資料檢查不等於逐格正常遊戲走訪。
 
 素材安裝未改二進位、中文資料或存檔。主題manifest SHA-256為 `b947d495df8d9219612bbcb281eccfab0ae2d0e5c44601a89dc9e32100f1711c`，本機收據為 `localization-hd-20261026/install-hd319-check.json`。背景、地形、其他插畫及動畫持續製作，完整現況以[CONTEXT](../../CONTEXT.md)為準。
+
+### 379項背景、插畫與動畫接入
+
+正式主題新增60格：19張BACK背景、GEN灰石材、29張靜態插畫及三組11格動畫。BACK16純黑保留原生填色。三組動畫沿原始來源鍵分格，不改動畫呼叫、遊戲狀態或繪製次數。原319項及50個非HD檔案逐項保持，沒有更換54ee455a程式。
+
+完整主圖、提示詞、來源圖、分格及輪次保存於本機 `references/scenes-20261026/evidence.json`，52個邏輯素材共54個生成版本。BACK17與雕像動畫在第二輪接受，其他第一輪接受，不另開第三輪。雕像的中間生長形態屬美術近似，不當作原版逐格視覺一致。PICC15人魚插畫兩次遭生成工具安全檢查拒絕，保留原版，沒有以不同來源冒充該圖。
+
+379項正式Go載入及完整原始來源匹配通過，manifest SHA-256為 `b325b73f8e12b5dfc5cc2a810197db7248f2645c456f8db51e4fc347be9c556a`。本機 `localization-hd-20261026/hd379-final-evidence.json` 保存工具、來源、生成與安裝雜湊。這是素材載入驗證，沒有新冒險重播。地形、其餘動畫、FINAL／TITLE及地圖仍待完成，現況見[CONTEXT](../../CONTEXT.md)。
