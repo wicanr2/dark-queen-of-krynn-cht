@@ -148,7 +148,7 @@ func (p *playerRenderOwner) record(a *sceneAsset, x, y int, page uint32, kind st
 	} else {
 		p.Scene.record(model, a, x, y)
 		// 事件切開圖片命令時仍保留同一素材身分，不因小區塊搬移丟失 HD。
-		if kind == "source_blit" || kind == "boundary_span" {
+		if kind == "source_blit" || kind == "boundary_span" || kind == "masked_blit" {
 			for i := len(p.Pending) - 1; i >= 0; i-- {
 				d := p.Pending[i].Owned
 				if d == nil || d.Kind != "image" || d.Fallback || d.Page != page {
@@ -165,7 +165,7 @@ func (p *playerRenderOwner) record(a *sceneAsset, x, y int, page uint32, kind st
 							continue
 						}
 						original := (py-d.Y)*d.W + px - d.X
-						if d.Asset.Index[original] == a.Index[src] {
+						if (len(d.Asset.Alpha) == 0 || d.Asset.Alpha[original] != 0) && d.Asset.Index[original] == a.Index[src] {
 							model.Cells[py*320+px] = sceneCell{Asset: d.Asset, Source: original, Visible: true}
 						}
 					}
@@ -259,6 +259,8 @@ func (p *playerRenderOwner) step(ea uint32) {
 	switch ea {
 	case 0x26bbc, 0x26dc2:
 		p.image(ea == 0x26dc2)
+	case 0x26d7b:
+		p.imagePacket()
 	case 0x10fd6, 0x11017, 0x12ebf:
 		p.imageTransfer(ea)
 	case 0x12ef8:
@@ -1109,6 +1111,62 @@ func (p *playerRenderOwner) fill(word bool) {
 	p.record(a, x, y, uint32(r.ES-0xa000)*16, "fill")
 }
 
+// 23h 封包圖只附來源身分；原資料解析與裁切控制沿用原路徑，像素仍由 Go 命令繪製。
+func (p *playerRenderOwner) imagePacket() {
+	o := p.Oracle
+	r := o.Regs()
+	v := p.pending(0x26d6a, true)
+	if v == nil || !p.guard() || p.inReadback() || r.DS != r.SS || v.Return.Addr.Linear() != (oracle.Addr{Seg: 0x162e, Off: 0x273ff - 0x251e0}).Linear() {
+		return
+	}
+	var source *renderImageSource
+	for i := len(p.Pending) - 1; i >= 0; i-- {
+		if s := p.Pending[i].Image; s != nil && !s.Bound {
+			source = s
+			break
+		}
+	}
+	if source == nil {
+		return
+	}
+	c := source.Command
+	w, h := int(c.Header[6])*4, int(binary.LittleEndian.Uint16(c.Header[:2]))
+	if c.Header[7] != 23 || w < 1 || h < 1 || c.X < 0 || c.Y < 0 || c.X%4 != 0 || c.X+w > 320 || c.Y+h > 200 ||
+		c.X < int(p.global(0xcdb3)) || c.Y < int(p.global(0xcdae)) || c.X+w > int(p.global(0xcdb5)) || c.Y+h > int(p.global(0xcdb9)) ||
+		p.global(0xcb63) != 2 || p.global(0xcd9e) != 4 {
+		return
+	}
+	if p.word(6) != uint16(c.Y) || p.word(8) != uint16(c.X) || p.word(10) != uint16(h) || p.word(12) != uint16(w/4) || p.word(14) != 4 ||
+		p.word(16) != 0 || p.word(18) != 0 || p.word(20) != 0 || p.word(22) != 0 || p.word(24) != c.Source.Off || p.word(26) != c.Source.Seg {
+		return
+	}
+	seg := p.global(0xca33)
+	if seg < 0xa000 || seg > 0xac00 || (seg-0xa000)%0x400 != 0 {
+		return
+	}
+	c.Page = uint32(seg-0xa000) * 16
+	var a *sceneAsset
+	if p.HD != nil {
+		if asset := p.HD.Lookup(o, c); asset != nil {
+			a = p.cache("hd:"+digest(asset.HD), &sceneAsset{W: asset.W, H: asset.H, Index: asset.Index, Alpha: asset.Alpha, HD: asset.HD, Reference: asset.Reference})
+		}
+	}
+	if a == nil {
+		if c.Source.Linear() >= 0xa0000 {
+			return
+		}
+		n := min(2*w*h+4*h, int(0xa0000-c.Source.Linear()), 65536-int(c.Source.Off))
+		body := o.Bytes(c.Source, n)
+		decoded, used, err := decodeSceneImage(c.Header, body)
+		if err != nil {
+			return
+		}
+		a = p.cache(fmt.Sprintf("image:%x:%s", c.Header, digest(body[:used])), decoded)
+	}
+	v.Owned = &ownedDriver{X: c.X, Y: c.Y, W: w, H: h, Kind: "image", Asset: a, Page: c.Page}
+	source.Bound = true
+}
+
 func (p *playerRenderOwner) image(rle bool) {
 	o := p.Oracle
 	r := o.Regs()
@@ -1149,7 +1207,7 @@ func (p *playerRenderOwner) image(rle bool) {
 			return
 		}
 	} else {
-		if (c.Header[7] != 16 && c.Header[7] != 21) || p.word(6) != c.Source.Off || p.word(8) != c.Source.Seg || p.word(10) != uint16(c.Y) || p.word(12) != uint16(c.X) || p.word(14) != uint16(w*h/4) || p.word(16) != uint16(h) || p.word(18) != uint16(w/4) || p.word(20) != 4 || p.word(22) != 0 || byte(p.word(24)) != c.Header[7]&15 {
+		if (c.Header[7] != 16 && c.Header[7] != 17 && c.Header[7] != 21) || p.word(6) != c.Source.Off || p.word(8) != c.Source.Seg || p.word(10) != uint16(c.Y) || p.word(12) != uint16(c.X) || p.word(14) != uint16(w*h/4) || p.word(16) != uint16(h) || p.word(18) != uint16(w/4) || p.word(20) != 4 || p.word(22) != 0 || byte(p.word(24)) != c.Header[7]&15 {
 			return
 		}
 	}
@@ -1169,6 +1227,9 @@ func (p *playerRenderOwner) image(rle bool) {
 			return
 		}
 		n := w * h
+		if c.Header[7] == 17 {
+			n *= 2
+		}
 		if rle {
 			n = n*2 + 16
 		}

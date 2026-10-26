@@ -482,6 +482,55 @@ func main() {
 			cases = append(cases, probeCase{Name: fmt.Sprintf("image-%s-%02x", asset.Key, method), Entry: entry, Args: args, Image: &c, Data: data})
 		}
 	}
+
+	// 新格式按來源檔抽樣；全部素材另由離線解碼比對覆蓋。
+	var inventory struct {
+		Records []struct {
+			Key, Source                          string
+			Offset, Bytes, Method, Width, Height int
+		}
+	}
+	raw, err = os.ReadFile(filepath.Join(root, "workplace/probe/hd-assets-20261026-r1/inventory.json"))
+	must(err)
+	must(json.Unmarshal(raw, &inventory))
+	seenFormats := map[string]bool{}
+	for _, asset := range inventory.Records {
+		if asset.Method != 17 && asset.Method != 23 || asset.Width < 1 || asset.Width > 320 || asset.Height < 1 || asset.Height > 200 {
+			continue
+		}
+		family := fmt.Sprintf("%s-%d", asset.Source, asset.Method)
+		if seenFormats[family] {
+			continue
+		}
+		seenFormats[family] = true
+		path, err := filepath.Glob(filepath.Join(base, "*", asset.Source+".TLB"))
+		must(err)
+		if len(path) != 1 {
+			panic("來源檔歧義")
+		}
+		blob, err := os.ReadFile(path[0])
+		must(err)
+		block := blob[asset.Offset : asset.Offset+asset.Bytes]
+		var hh [8]byte
+		copy(hh[:], block[:8])
+		h, w := uint16(asset.Height), uint16(asset.Width)
+		y := uint16(31)
+		if int(y)+asset.Height > 200 {
+			y = 0
+		}
+		x := uint16(8)
+		if int(x)+asset.Width > 320 {
+			x = 0
+		}
+		c := sourceTileCommand{Header: hh, Source: oracle.Addr{Seg: 0x7000, Off: 0x100}, X: int(x), Y: int(y)}
+		entry := oracle.Addr{Seg: 0x162e, Off: 0x19d4}
+		args := []uint16{0x100, 0x7000, y, x, w * h / 4, h, w / 4, 4, 0, uint16(hh[7] & 15)}
+		if asset.Method == 23 {
+			entry.Off = 0x1b8a
+			args = []uint16{y, x, h, w / 4, 4, 0, 0, 0, 0, 0x100, 0x7000}
+		}
+		cases = append(cases, probeCase{Name: fmt.Sprintf("image-%s-%02x", asset.Key, hh[7]), Entry: entry, Args: args, Image: &c, Data: append([]byte(nil), block[8:]...)})
+	}
 	for _, test := range append([]probeCase(nil), cases...) {
 		if test.RawTransfer && test.Args[2] == 7 && test.Args[3] == 12 && test.Mask == 15 ||
 			test.RawMasked && test.Args[4] == 7 && test.Args[5] == 14 && test.Mask == 15 && test.FrameAt == 0 && test.Name == "masked-blit-7-14-0f-2" ||
@@ -505,7 +554,9 @@ func main() {
 			c.Name += "-alias-byte-high"
 			c.AliasReturn = true
 			c.Args = append([]uint16(nil), test.Args...)
-			c.Args[len(c.Args)-1] |= 0x6800
+			if c.Image.Header[7] != 23 {
+				c.Args[len(c.Args)-1] |= 0x6800
+			}
 			cases = append(cases, c)
 			c = test
 			c.Name += "-reject-return"
@@ -552,6 +603,9 @@ func main() {
 					ret = oracle.Addr{Seg: 0x162e, Off: 0x2263}
 					if test.Image.Header[7] == 18 {
 						ret.Off = 0x21f3
+					}
+					if test.Image.Header[7] == 23 {
+						ret.Off = 0x221f
 					}
 					if test.AliasReturn {
 						ret = oracle.Addr{Seg: 0x17ab, Off: uint16(ret.Linear() - 0x17ab0)}
@@ -670,6 +724,22 @@ func main() {
 					res.DirectSteps = o.Steps()
 					res.DirectWrites = writes
 					res.Counters = owner.Counters
+					if test.Image != nil && !test.Reject {
+						d := owner.Pending[0].Owned
+						if d == nil || d.Kind != "image" || d.Asset == nil {
+							res.SourceOwnershipEqual = false
+						} else if d.Fallback {
+							// 已有事件邊界契約允許整圖身分撤回；像素與機器效果仍須一致。
+							res.SourceOwnershipEqual = test.FrameAt > 0 || test.IRQAt > 0
+						} else {
+							model := owner.Scene.page(d.Page, o.PresentationPlane)
+							for i := range d.Asset.Index {
+								if len(d.Asset.Alpha) != 0 && d.Asset.Alpha[i] == 0 { continue }
+								cell := model.Cells[(d.Y+i/d.W)*320+d.X+i%d.W]
+								res.SourceOwnershipEqual = res.SourceOwnershipEqual && cell.Asset == d.Asset && cell.Source == i && cell.Visible
+							}
+						}
+					}
 					if test.Temporary {
 						for i, cell := range owner.Scene.page(0, o.PresentationPlane).Cells {
 							res.SourceOwnershipEqual = res.SourceOwnershipEqual && cell.Asset == sourceAsset && cell.Source == i
@@ -740,12 +810,15 @@ func main() {
 				res.Passed = res.Passed && res.DirectWrites == 0 && int(res.Counters["owned_copy_prefix"]) == prefix && res.NativeWrites > res.DirectWrites && res.Counters["owned_ram_upload_rep"]+res.Counters["owned_video_copy_rep"] == 1
 			} else if test.Clear && test.Args[2] == 0 {
 				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites == 0
+			} else if test.Image != nil && res.NativeWrites == 0 {
+				// 原始空封包沒有像素，仍核對返回、時間與全部狀態。
+				res.Passed = res.Passed && res.DirectWrites == 0 && res.Counters["virtual_instructions"] == 0
 			} else if test.FrameAt == 0 && test.IRQAt == 0 && !test.Reject {
 				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites > 0 && res.Counters["virtual_instructions"] > 0
 			}
 			if test.Reject {
 				if test.Image != nil {
-					res.Passed = res.Passed && res.DirectWrites == 0 && res.Counters["owned_image_transfers"] == 0 && res.Counters["owned_source_blit_bytes"] > 0
+					res.Passed = res.Passed && res.DirectWrites == 0 && res.Counters["owned_image_transfers"] == 0 && (res.NativeWrites == 0 || res.Counters["owned_source_blit_bytes"]+res.Counters["owned_masked_blit"] > 0)
 				} else {
 					res.Passed = res.Passed && res.DirectWrites == res.NativeWrites && res.Counters["virtual_instructions"] == 0
 				}

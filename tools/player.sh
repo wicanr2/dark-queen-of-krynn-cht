@@ -63,7 +63,7 @@ find "/output/$1" -user root -o -type d -name "*.md"
     -w /src --entrypoint bash "$GO" -c '
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
-go build -overlay /out/build-overlay/overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_owned_drivers.go /tools/player_scene_backend.go /tools/render_scene_state.go /tools/player_text_owner.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
+go build -overlay /out/build-overlay/overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_owned_drivers.go /tools/player_scene_backend.go /tools/render_scene_state.go /tools/player_text_owner.go /tools/player_text_format.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
 sha256sum /out/dqk-player >/out/binary.sha256
 find /out -user root -o -type d -name "*.md"
 '

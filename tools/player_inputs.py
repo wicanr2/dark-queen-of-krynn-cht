@@ -117,10 +117,25 @@ def display(root, output, font):
     formal_path = root / 'workplace/translation/zh-TW.tsv'
     source_path = root / 'workplace/translation/en.tsv'
     formal, sources = catalog(formal_path), catalog(source_path)
+    # 背包／商店的單複數名稱是既有正式資料，帶變數的句子也要使用同一份名稱。
+    profile_sources, profile_text = catalog(output / 'en.tsv'), catalog(output / 'zh-TW.tsv')
+    for key, source in profile_sources.items():
+        if key.startswith(('inventory.', 'service.item.')) and key in profile_text:
+            assert key not in sources or sources[key] == source
+            assert key not in formal or formal[key] == profile_text[key]
+            sources[key], formal[key] = source, profile_text[key]
+    changed_profile = False
+    for key, source in sources.items():
+        if key.startswith(('ui.', 'name.')) and '%' in source and profile_sources.get(key) == source and key in formal:
+            if profile_text.get(key) != formal[key]:
+                profile_text[key] = formal[key]
+                changed_profile = True
+    if changed_profile:
+        save_catalog(output / 'zh-TW.tsv', profile_text)
     candidates = {}
     for key, text in sorted(formal.items()):
         source = sources.get(key, '')
-        if key.split('.')[0] not in ['ui', 'name'] or not 2 <= len(source) <= 80:
+        if not key.startswith(('ui.', 'name.', 'inventory.', 'service.item.')) or not 2 <= len(source) <= 128:
             continue
         if '%' in source or any(not 32 <= ord(ch) <= 126 for ch in source):
             continue
@@ -129,11 +144,21 @@ def display(root, output, font):
         candidates.setdefault(source, []).append((key, text))
     ambiguous = {source for source, rows in candidates.items() if len({text for _, text in rows}) != 1}
     rows = [(items[0][0], source, items[0][1]) for source, items in sorted(candidates.items()) if source not in ambiguous]
+    formats = {}
+    for key, text in sorted(formal.items()):
+        source = sources.get(key, '')
+        if key.startswith(('ui.', 'name.')) and '%' in source and source != text:
+            formats.setdefault(source, []).append((key, text))
+    format_rows = [(items[0][0], source, items[0][1]) for source, items in sorted(formats.items())
+                   if len({text for _, text in items}) == 1]
     save_catalog(output / 'display-source.en.tsv', {key: source for key, source, _ in rows})
     save_catalog(output / 'display.zh-TW.tsv', {key: text for key, _, text in rows})
+    save_catalog(output / 'display-format.en.tsv', {key: source for key, source, _ in format_rows})
+    save_catalog(output / 'display-format.zh-TW.tsv', {key: text for key, _, text in format_rows})
     base = json.loads((output / 'glyphs-16.json').read_text())
     original_glyphs = dict(base['glyphs'])
-    missing = sorted(set(''.join(text for _, _, text in rows)) - set(original_glyphs))
+    missing = sorted(set(''.join(text for _, _, text in rows + format_rows) +
+                         ''.join(chr(n) for n in range(32, 127))) - set(original_glyphs))
     save_catalog(output / 'display-font-additions.tsv', {'font.display': ''.join(missing)})
     if missing:
         extra_path = output / 'display-added-glyphs-16.json'
@@ -152,13 +177,15 @@ def display(root, output, font):
     provenance = {'formal_sha256': sha(formal_path), 'source_sha256': sha(source_path), 'font_sha256': sha(font),
                   'base_glyphs_sha256': sha(output / 'glyphs-16.json'), 'rows': len(rows),
                   'ambiguous_sources_skipped': len(ambiguous), 'new_glyphs': len(missing),
+                  'format_sources': len(format_rows),
                   'scope': '完整短字串來源；尚未逐項走訪，不包含ECL片段', 'new_gameplay_sampling': False}
     (output / 'display-provenance.json').write_text(json.dumps(provenance, ensure_ascii=False, indent=2)+'\n')
     print(json.dumps({'display_sources': len(rows), 'new_glyphs': len(missing), 'new_gameplay_sampling': False}))
 
 
 DISPLAY_FILES = ['display-source.en.tsv', 'display.zh-TW.tsv', 'display-glyphs-16.json',
-                 'display-font-additions.tsv', 'display-provenance.json']
+                 'display-font-additions.tsv', 'display-provenance.json',
+                 'display-format.en.tsv', 'display-format.zh-TW.tsv']
 
 
 def prepare(root, output):
@@ -264,7 +291,7 @@ def finish(root, output, replace=False):
 def refresh(root, output, font):
     assert output.is_dir() and output.stat().st_uid == 1000
     assert (output / 'player-profile.json').is_file() and font.is_file()
-    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json', 'render-hooks.json'] + DISPLAY_FILES + FRAGMENT_FILES
+    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json', 'render-hooks.json', 'zh-TW.tsv'] + DISPLAY_FILES + FRAGMENT_FILES
     for name in owned:
         if (output / name).exists():
             assert (output / name).stat().st_uid == 1000

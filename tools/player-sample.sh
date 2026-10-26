@@ -15,6 +15,10 @@ test -d "$ROOT/workplace/probe"
 test -f "$ROOT/workplace/probe/player-sample-20261026-r5/02-return.ppm"
 test -f "$ROOT/workplace/probe/player-sample-20261026-r5/02a-player.ppm"
 test -f "$ROOT/workplace/probe/player-current/hd/hd.json"
+HD="$ROOT/workplace/probe/player-current/hd"
+if [[ -f "$ROOT/workplace/probe/$PLAYER/hd/hd.json" ]]; then
+  HD="$ROOT/workplace/probe/$PLAYER/hd"
+fi
 test -d "$ROOT/workplace/dosgolem"
 test -d /home/anr2/cht/dosgolem/workplace/gomodcache
 test -d "$ROOT/workplace/probe/gocache"
@@ -38,7 +42,7 @@ timeout --kill-after=5s 120s docker run --rm --pull never --init --network none 
  -v "$ROOT/workplace/dosgolem:/src:ro" -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro \
  -v "$ROOT/workplace/probe/gocache:/gocache" -w /src \
  -v "$ROOT/tools:/tools:ro" -v "$ROOT/workplace/probe/$PLAYER:/player:ro" \
- -v "$ROOT/workplace/probe/player-current/hd:/player/hd:ro" \
+ -v "$HD:/player/hd:ro" \
  -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" -v "$ROOT/workplace/probe/$NAME:/out" \
  -v "$ROOT/workplace/probe/player-sample-20261026-r5:/reference:ro" \
  --entrypoint bash "$GO" -c '

@@ -88,7 +88,34 @@ def pixels(data,width,height,method):
         for y in range(height):
             for plane in range(4):result[y*width+plane:(y+1)*width:4]=stream[y*width+plane*quarter:y*width+(plane+1)*quarter]
         return result,pos
+    if method==23:
+        raw,used,_=packet_pixels(data,width,height)
+        return raw,used
     raise ValueError('未支援的繪圖方法 '+str(method))
+
+
+def packet_pixels(data,width,height):
+    """sub_26D6A／sub_11B26 已證實的逐平面、逐列 signed RLE。"""
+    assert width%4==0 and width>0 and height>0
+    raw,alpha=bytearray([255])*(width*height),bytearray(width*height)
+    pos=0;quarter=width//4
+    for plane in range(4):
+        for y in range(height):
+            x=0
+            while True:
+                if pos>=len(data):raise ValueError('method23 缺少列終止')
+                op=data[pos];pos+=1
+                if op==0:break
+                count=op if op<128 else 256-op
+                if x+count>quarter:raise ValueError('method23 封包超出原列')
+                if op<128:
+                    if pos+count>len(data):raise ValueError('method23 常值不足')
+                    for i in range(count):
+                        at=y*width+(x+i)*4+plane
+                        raw[at]=data[pos+i];alpha[at]=255
+                    pos+=count
+                x+=count
+    return raw,pos,alpha
 
 
 def extract_bank(data,base,context,palette,records,output,source_name):
@@ -120,11 +147,15 @@ def extract_bank(data,base,context,palette,records,output,source_name):
         record=dict(key=key,source=source_name,offset=base+start,bytes=end-start,sha256=sha(data[start:end]),
             context=context,block=i,ids=mapping.get(i,[]),width=width,height=height,x=dx,y=dy,method=method,
             palette_range=[first,count],palette_cycling=cycling,palette_cycles=ranges,header_magic=magic)
-        try:raw,used=pixels(data[start+8:end],width,height,method)
+        opacity=None
+        try:
+            if method==23:raw,used,opacity=packet_pixels(data[start+8:end],width,height)
+            else:raw,used=pixels(data[start+8:end],width,height,method)
         except ValueError as error:record['unsupported']=str(error);records.append(record);continue
         assert len(raw)==width*height and used<=end-start-8
         rgba=bytearray()
-        for value in raw:
+        for index,value in enumerate(raw):
+            if opacity is not None and opacity[index]==0:rgba.extend((0,0,0,0));continue
             if method in (17,21) and value==255:rgba.extend((0,0,0,0));continue
             color=palette[value];assert color is not None,('缺少色盤',key,value)
             rgba.extend((*dac_color(color),255))

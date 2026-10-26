@@ -349,6 +349,7 @@ func decodeSceneImage(header [8]byte, body []byte) (*sceneAsset, int, error) {
 	method := header[7]
 	used := 0
 	data := body
+	var opacity []byte
 	switch method {
 	case 16, 21:
 		if len(body) < n {
@@ -356,6 +357,59 @@ func decodeSceneImage(header [8]byte, body []byte) (*sceneAsset, int, error) {
 		}
 		data = body[:n]
 		used = n
+	case 17:
+		if len(body) < 2*n {
+			return nil, 0, fmt.Errorf("遮罩資料不足")
+		}
+		data, opacity = make([]byte, n), make([]byte, n)
+		for i := 0; i < n; i++ {
+			mask := body[i]
+			if mask != 0 && mask != 255 {
+				return nil, 0, fmt.Errorf("部分位元遮罩保留原控制路徑")
+			}
+			data[i] = 255
+			if mask == 0 {
+				data[i], opacity[i] = body[n+i], 255
+			}
+		}
+		used = 2 * n
+	case 23:
+		data, opacity = make([]byte, n), make([]byte, n)
+		for i := range data {
+			data[i] = 255
+		}
+		quarter := w / 4
+		for plane := 0; plane < 4; plane++ {
+			for y := 0; y < h; y++ {
+				x := 0
+				for {
+					if used >= len(body) {
+						return nil, 0, fmt.Errorf("封包缺少列結尾")
+					}
+					op := int(int8(body[used]))
+					used++
+					if op == 0 {
+						break
+					}
+					if op < 0 {
+						x -= op
+						if x > quarter {
+							return nil, 0, fmt.Errorf("封包跳格越界")
+						}
+						continue
+					}
+					if x+op > quarter || used+op > len(body) {
+						return nil, 0, fmt.Errorf("封包常值越界")
+					}
+					at := plane*(n/4) + y*quarter + x
+					copy(data[at:at+op], body[used:used+op])
+					for i := at; i < at+op; i++ {
+						opacity[i] = 255
+					}
+					x, used = x+op, used+op
+				}
+			}
+		}
 	case 18:
 		data = make([]byte, 0, n)
 		for len(data) < n {
@@ -387,7 +441,7 @@ func decodeSceneImage(header [8]byte, body []byte) (*sceneAsset, int, error) {
 		return nil, 0, fmt.Errorf("未接管圖像格式")
 	}
 	a := &sceneAsset{W: w, H: h, Index: make([]byte, n)}
-	if method == 21 {
+	if method == 21 || opacity != nil {
 		a.Alpha = make([]byte, n)
 	}
 	for y := 0; y < h; y++ {
@@ -400,6 +454,9 @@ func decodeSceneImage(header [8]byte, body []byte) (*sceneAsset, int, error) {
 			a.Index[i] = data[src]
 			if method == 21 && data[src] != 255 {
 				a.Alpha[i] = 255
+			}
+			if opacity != nil {
+				a.Alpha[i] = opacity[src]
 			}
 		}
 	}

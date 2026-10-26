@@ -71,9 +71,9 @@ def save_manifest(output, data):
     temporary.replace(output / 'hd.json')
 
 
-def add(root, output, key, generated, round_number):
+def add(root, output, key, generated, round_number, inventory=None):
     assert round_number in [1, 2], '同批最多兩輪，不建立第三輪美化'
-    inventory = root / 'workplace/probe/hd-assets-20261025'
+    inventory = inventory or root / 'workplace/probe/hd-assets-20261025'
     index = json.loads((inventory / 'inventory.json').read_text())
     record, = [r for r in index['records'] if r['key'] == key and 'image' in r]
     source_file, = [r for r in index['input_files'] if Path(r['path']).stem == record['source']]
@@ -116,6 +116,7 @@ def add(root, output, key, generated, round_number):
                 source_block_sha256=record['sha256'], source_block_bytes=record['bytes'], native_size=[record['width'], record['height']],
                 source_method=record['method'], source_header_xy=[record['x'], record['y']],
                 palette_sha256=hashlib.sha256(json.dumps(record['palette'], separators=(',', ':')).encode()).hexdigest(),
+                inventory_path=str(inventory.relative_to(root)), inventory_sha256=sha(inventory / 'inventory.json'),
                 native_foreground_preserved=True, new_gameplay_verification=False)
     manifest['Assets'] = [r for r in manifest['Assets'] if r['Key'] != key] + [item]
     manifest['Assets'].sort(key=lambda r: r['Key'])
@@ -133,13 +134,17 @@ def accept(root, output):
     assert decision['asset_scale'] == 3 and decision['window_size_independent'] and decision['approved'] is True
     manifest = read_manifest(output)
     assert manifest['Assets']
-    inventory = json.loads((root / 'workplace/probe/hd-assets-20261025/inventory.json').read_text())
     for item in manifest['Assets']:
+        inventory_path = root / item.get('inventory_path', 'workplace/probe/hd-assets-20261025')
+        assert inventory_path.resolve().is_relative_to((root / 'workplace/probe').resolve())
+        inventory = json.loads((inventory_path / 'inventory.json').read_text())
+        if 'inventory_sha256' in item:
+            assert sha(inventory_path / 'inventory.json') == item['inventory_sha256']
         for field, expected in [('Original', 'OriginalSHA256'), ('Image', 'SHA256'), ('master', 'master_sha256')]:
             assert sha(output / item[field]) == item[expected], item['Key']
         assert item['review_round'] in [1, 2]
         record, = [r for r in inventory['records'] if r['key'] == item['Key'] and 'image' in r]
-        indexed_source = root / 'workplace/probe/hd-assets-20261025' / Path(record['image']).with_suffix('.idx')
+        indexed_source = inventory_path / Path(record['image']).with_suffix('.idx')
         assert sha(indexed_source) == record['indexed_sha256']
         assert indexed_source.stat().st_size == record['width']*record['height']
         indexed_name = f"originals/{item['Key']}.idx"
@@ -173,11 +178,12 @@ if __name__ == '__main__':
     a.add_argument('key')
     a.add_argument('generated', type=Path)
     a.add_argument('--round', type=int, choices=[1, 2], default=1)
+    a.add_argument('--inventory', type=Path, help='新的離線盤點目錄；既有素材保留原來源')
     a = sub.add_parser('accept')
     a.add_argument('root', type=Path)
     a.add_argument('output', type=Path)
     args = parser.parse_args()
     if args.mode == 'add':
-        add(args.root, args.output, args.key, args.generated, args.round)
+        add(args.root, args.output, args.key, args.generated, args.round, args.inventory)
     else:
         accept(args.root, args.output)

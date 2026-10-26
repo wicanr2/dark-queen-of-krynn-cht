@@ -99,7 +99,7 @@ func TestImageDecoderLimits(t *testing.T) {
 	if err != nil || used != 2 || !bytes.Equal(a.Index, bytes.Repeat([]byte{6}, 8)) {
 		t.Fatal(a, used, err)
 	}
-	header[7] = 23
+	header[7] = 25
 	if _, _, err := decodeSceneImage(header, make([]byte, 8)); err == nil {
 		t.Fatal("未知格式不可猜解")
 	}
@@ -111,7 +111,11 @@ func TestNativeAssetCorpus(t *testing.T) {
 	if root == "" {
 		t.Skip("未提供本機唯讀原版資料")
 	}
-	raw, err := os.ReadFile(filepath.Join(root, "workplace/probe/player-current/hd/hd.json"))
+	theme := os.Getenv("DQK_HD_THEME")
+	if theme == "" {
+		theme = filepath.Join(root, "workplace/probe/player-current/hd")
+	}
+	raw, err := os.ReadFile(filepath.Join(theme, "hd.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,8 +144,8 @@ func TestNativeAssetCorpus(t *testing.T) {
 			Offset                           int
 		}{r.Key, r.Indexed, r.File, r.Header, r.Offset})
 	}
-	if len(corpus.Assets) != 78 {
-		t.Fatalf("目前素材數量改變：%d", len(corpus.Assets))
+	if len(corpus.Assets) == 0 {
+		t.Fatal("素材清單不可為空")
 	}
 	for _, r := range corpus.Assets {
 		t.Run(r.Key, func(t *testing.T) {
@@ -162,14 +166,14 @@ func TestNativeAssetCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want, err := os.ReadFile(filepath.Join(root, "workplace/probe/player-current/hd", r.Indexed))
+			want, err := os.ReadFile(filepath.Join(theme, r.Indexed))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !bytes.Equal(a.Index, want) {
 				t.Fatal("來源色號與既有盤點不同")
 			}
-			pngPath := filepath.Join(root, "workplace/probe/player-current/hd", r.Indexed[:len(r.Indexed)-4]+".png")
+			pngPath := filepath.Join(theme, r.Indexed[:len(r.Indexed)-4]+".png")
 			file, err := os.Open(pngPath)
 			if err != nil {
 				t.Fatal(err)
@@ -189,6 +193,92 @@ func TestNativeAssetCorpus(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// signed RLE 的常值 255 與透明跳格具有不同語意。
+func TestPacketOpacityAndBounds(t *testing.T) {
+	h := [8]byte{1, 0, 0, 0, 0, 0, 2, 23}
+	a, n, err := decodeSceneImage(h, []byte{1, 255, 255, 0, 254, 0, 2, 7, 8, 0, 0})
+	if err != nil || n != 11 || a.Index[0] != 255 || a.Alpha[0] != 255 || a.Alpha[4] != 0 || a.Index[2] != 7 || a.Index[6] != 8 {
+		t.Fatal(a, n, err)
+	}
+	for _, bad := range [][]byte{{}, {3, 1, 2, 3, 0}, {253, 0}, {1}} {
+		if _, _, err := decodeSceneImage(h, bad); err == nil {
+			t.Fatalf("損壞封包被接受：%x", bad)
+		}
+	}
+}
+
+// 交叉核對離線擷取器與 Go 解碼器，包含所有新解出的 17／23 格式。
+func TestDecodedInventoryCorpus(t *testing.T) {
+	root := os.Getenv("DQK_ASSET_CORPUS")
+	if root == "" {
+		t.Skip("未提供本機唯讀原版資料")
+	}
+	base := filepath.Join(root, "workplace/probe/hd-assets-20261026-r1")
+	raw, err := os.ReadFile(filepath.Join(base, "inventory.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inv struct {
+		Records []struct {
+			Key, Source, Image    string
+			Offset, Bytes, Method int
+		}
+	}
+	if err = json.Unmarshal(raw, &inv); err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, r := range inv.Records {
+		if r.Image == "" {
+			continue
+		}
+		count++
+		t.Run(r.Key, func(t *testing.T) {
+			paths, err := filepath.Glob(filepath.Join(root, "workplace/input/dos/drkqueen/*", r.Source+".TLB"))
+			if err != nil || len(paths) != 1 {
+				t.Fatal(paths, err)
+			}
+			data, err := os.ReadFile(paths[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var header [8]byte
+			copy(header[:], data[r.Offset:r.Offset+8])
+			a, used, err := decodeSceneImage(header, data[r.Offset+8:r.Offset+r.Bytes])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if used > r.Bytes-8 {
+				t.Fatal("解碼超過原區塊")
+			}
+			want, err := os.ReadFile(filepath.Join(base, r.Image[:len(r.Image)-4]+".idx"))
+			if err != nil || !bytes.Equal(a.Index, want) {
+				t.Fatal("色號不同", err)
+			}
+			f, err := os.Open(filepath.Join(base, r.Image))
+			if err != nil {
+				t.Fatal(err)
+			}
+			pic, err := png.Decode(f)
+			f.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for y := 0; y < a.H; y++ {
+				for x := 0; x < a.W; x++ {
+					_, _, _, alpha := pic.At(x, y).RGBA()
+					if (len(a.Alpha) == 0 || a.Alpha[y*a.W+x] != 0) != (alpha != 0) {
+						t.Fatal("透明度不同")
+					}
+				}
+			}
+		})
+	}
+	if count != 1817 {
+		t.Fatalf("盤點範圍不同：%d", count)
 	}
 }
 

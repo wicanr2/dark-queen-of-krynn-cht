@@ -155,7 +155,7 @@ func loadHDLayer(root string) playerHDRenderer {
 			}
 		}
 		// 純色及過短的幾何邊緣保留原版，不將它們當作可辨識圖像。
-		if w < 8 || h < 8 || len(asset.Pixels) < 64 || len(colors) < 4 {
+		if w < 8 || h < 8 || len(asset.Pixels) < 64 || len(colors) < 2 {
 			return fail(record.Key, fmt.Errorf("來源缺乏可辨識的完整圖像資訊"))
 		}
 		asset.Image = &playerImageAsset{W: w, H: h, Index: indexed, Alpha: make([]byte, w*h), HD: painted.Pix, Reference: make([]byte, w*h*3)}

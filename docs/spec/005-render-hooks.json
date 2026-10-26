@@ -361,6 +361,17 @@
       "offset": 1406,
       "prefix": "558bec56578e0633",
       "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "sub_26D6A",
+      "kind": "packet-image",
+      "ida_linear": 159082,
+      "file_offset": 102762,
+      "segment": 5678,
+      "offset": 7050,
+      "prefix": "558bec56ff7608ff",
+      "file_prefix": "558bec56ff7608ff",
+      "evidence_level": "已證實：IDA 9.4 sub_26D6A 與 sub_11B26 控制流；完整來源身分，像素沿用已接管封包命令"
     }
   ],
   "Coverage": "已列primitive；不是全部TLB與動畫來源",
@@ -1107,6 +1118,17 @@
       "offset": 1720,
       "prefix": "f3aae976ff0ac074",
       "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_26D7B",
+      "kind": "single-render-step",
+      "ida_linear": 159099,
+      "file_offset": 102779,
+      "segment": 5678,
+      "offset": 7067,
+      "prefix": "33f6eb32569acb14",
+      "file_prefix": "33f6eb32569acb14",
+      "evidence_level": "已證實：IDA 9.4 sub_26D6A 與 sub_11B26 控制流；完整來源身分，像素沿用已接管封包命令"
     }
   ]
 }

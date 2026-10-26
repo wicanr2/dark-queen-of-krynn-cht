@@ -67,7 +67,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		ImagePositionCallers []oracle.Addr
 	}
 	must(json.Unmarshal(raw, &bindings))
-	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 35 || len(bindings.NativeSteps) != 64 {
+	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 36 || len(bindings.NativeSteps) != 65 {
 		panic("繪圖掛勾資料與原版版本不符")
 	}
 	owner := &playerRenderOwner{Oracle: o, ShadowRGB: make([]byte, 320*200*3),
@@ -202,14 +202,30 @@ func nativeTextRegion(o *oracle.Oracle, page uint32, w listWord) []byte {
 	return region
 }
 
-func (p *playerRenderOwner) Busy() bool { return len(p.Pending) != 0 }
+func (p *playerRenderOwner) Busy() bool {
+	if len(p.Pending) != 0 {
+		return true
+	}
+	if p.Text != nil {
+		for _, run := range p.Text.Runs {
+			if run.Valid {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func (p *playerRenderOwner) Diagnostics() any {
 	pending := make([]map[string]any, 0, len(p.Pending))
 	for _, v := range p.Pending {
 		pending = append(pending, map[string]any{"origin": v.Origin, "return": v.Return, "kind": v.Kind, "step": v.Step})
 	}
-	return map[string]any{"pending": pending, "registers": p.Oracle.Regs()}
+	result := map[string]any{"pending": pending, "registers": p.Oracle.Regs()}
+	if p.Text != nil {
+		result["text_commands"] = p.Text.Counters
+	}
+	return result
 }
 
 func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {

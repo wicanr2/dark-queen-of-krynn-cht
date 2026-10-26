@@ -16,7 +16,7 @@ exe = root / "workplace/input/dos/drkqueen/DQK.EXE"
 bindings = root / "docs/spec/005-render-hooks.json"
 j = json.loads(bindings.read_text())
 assert sha(exe) == j["ExecutableSHA256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
-assert j["Version"] == 2 and len(j["Hooks"]) == 35 and len(j["NativeSteps"]) == 64
+assert j["Version"] == 2 and len(j["Hooks"]) == 36 and len(j["NativeSteps"]) == 65
 b = exe.read_bytes()
 header = struct.unpack_from("<H", b, 8)[0] * 16
 reloc = []
@@ -46,13 +46,13 @@ for name, want in manifest["Files"].items():
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
 sources += [root / "tools" / n for n in ["early_text_live.go", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
-abi_root = root / "workplace/probe/render-abi-canvas-complete-20261026-r1"
+abi_root = root / "workplace/probe/render-abi-formats-20261026-r4"
 abi_path = abi_root / "evidence.json"
 verified = False
 if abi_path.is_file():
     abi = json.loads(abi_path.read_text())
     verified = (abi.get("passed") is True and abi.get("machine_effects_verified") is True
-                and abi.get("virtual_time_verified") is True and abi.get("cases") == 1452
+                and abi.get("virtual_time_verified") is True and abi.get("cases") == 1524
                 and abi.get("inputs", {}).get("original_exe") == sha(exe)
                 and abi.get("inputs", {}).get("bindings") == sha(bindings)
                 and abi.get("receipt_sha256") == sha(abi_root / "abi-initial.json")
@@ -60,10 +60,14 @@ if abi_path.is_file():
                     "player_owned_drivers.go", "render_scene_state.go", "player_video_overlay.py",
                     "machine_presentation_video.go", "oracle_presentation_video.go", "oracle_video_observer.go"]))
     cases=json.loads((abi_root / "abi-initial.json").read_text())
-    verified = verified and len(cases)==1452 and all(
+    verified = verified and len(cases)==1524 and all(
         row.get("Passed") is True and ("reject" in row["Name"] or row["DirectWrites"]==0)
         for row in cases)
 player_sample = root / "workplace/probe/player-sample-canvas-complete-20261026-r1/checks.json"
+for candidate in sorted((root / "workplace/probe").glob("player-sample-*/checks.json")):
+    candidate_data=json.loads(candidate.read_text())
+    if candidate_data.get("passed") is True and candidate_data.get("build_sha256")==sha(output / "dqk-player"):
+        player_sample=candidate
 sample = json.loads(player_sample.read_text()) if player_sample.is_file() else {}
 sample_verified = sample.get("passed") is True and sample.get("build_sha256") == sha(output / "dqk-player")
 info = {
