@@ -82,17 +82,21 @@ func nativeVisiblePage(o *oracle.Oracle) (uint32, bool) {
 }
 
 type probeCase struct {
-	Name       string
-	Entry      oracle.Addr
-	Args       []uint16
-	Font       []byte
-	Image      *sourceTileCommand
-	Data       []byte
-	FrameAt    uint64
-	Reject     bool
-	Pattern    bool
-	Mask       byte
-	MemoryCopy bool
+	Name        string
+	Entry       oracle.Addr
+	Args        []uint16
+	Font        []byte
+	Image       *sourceTileCommand
+	Data        []byte
+	FrameAt     uint64
+	Reject      bool
+	Pattern     bool
+	Mask        byte
+	MemoryCopy  bool
+	Upload      bool
+	VideoCopy   bool
+	VideoMode   byte
+	OwnedSource bool
 }
 type probeResult struct {
 	Name                       string
@@ -103,6 +107,7 @@ type probeResult struct {
 	RAMDiff, VGAPlanesDiff     int
 	FirstRAM                   []string
 	VideoEqual                 bool
+	SourceOwnershipEqual       bool
 	Counters                   map[string]uint64
 	Checkpoints                map[string][][2]uint64
 	Frames                     [2][]oracle.RenderProbeFrame
@@ -152,6 +157,81 @@ func main() {
 				color = 0x0707
 			}
 			cases = append(cases, probeCase{Name: fmt.Sprintf("fill-%t-%d", word, h), Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: []uint16{h, 12, color}})
+		}
+	}
+	for _, h := range []uint16{1, 17} {
+		for _, mask := range []byte{15, 5} {
+			cases = append(cases, probeCase{Name: fmt.Sprintf("fill-word-alternating-%d-%02x", h, mask),
+				Entry: oracle.Addr{Seg: 0x1e7, Off: 0x37b}, Args: []uint16{h, 12, 0x0e03}, Mask: mask})
+		}
+	}
+	for _, entry := range []uint16{0x8c2, 0x918} {
+		for _, count := range []uint16{64, 65, 161, 16000} {
+			for _, mask := range []byte{1, 5, 15} {
+				for _, page := range []uint16{0xa000, 0xac00} {
+					data := make([]byte, int(count))
+					for i := range data {
+						data[i] = byte(i*37 + i/11)
+					}
+					c := probeCase{Name: fmt.Sprintf("upload-%04x-%d-%02x-%04x", entry, count, mask, page),
+						Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: []uint16{0x100, 0x7000, 0, page, count},
+						Upload: true, Mask: mask, Data: data}
+					cases = append(cases, c)
+					if count == 161 && mask == 15 {
+						c.Name += "-frame"
+						c.FrameAt = 30
+						cases = append(cases, c)
+					}
+				}
+			}
+		}
+		for _, args := range [][]uint16{
+			{0x100, 0x7000, 15999, 0xa000, 64},
+			{0x100, 0xa000, 0x200, 0xa000, 64},
+			{0xfff0, 0x7000, 0, 0xa000, 64},
+		} {
+			cases = append(cases, probeCase{Name: fmt.Sprintf("upload-%04x-reject-%04x-%04x-%04x", entry, args[0], args[1], args[2]),
+				Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: args, Upload: true, Reject: true})
+		}
+	}
+	for _, entry := range []uint16{0x8c2, 0x918} {
+		for _, pages := range [][2]uint16{{0xa000, 0xac00}, {0xac00, 0xa000}} {
+			for _, mode := range []byte{0x40, 0x41} {
+				for _, mask := range []byte{1, 5, 15} {
+					for _, count := range []uint16{64, 65, 16000} {
+						c := probeCase{Name: fmt.Sprintf("pagecopy-%04x-%04x-%04x-%02x-%02x-%d", entry, pages[0], pages[1], mode, mask, count),
+							Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: []uint16{0, pages[0], 0, pages[1], count},
+							VideoCopy: true, VideoMode: mode, Mask: mask, OwnedSource: count != 64}
+						cases = append(cases, c)
+						if count == 64 && mask == 15 {
+							// r1實際原版返回步數減去原尾端指令，定位REP前後的事件。
+							step := uint64(303)
+							if entry == 0x918 {
+								step = 299
+								if pages[0] > pages[1] {
+									step = 296
+								}
+							} else if pages[0] > pages[1] {
+								step = 298
+							}
+							for _, delta := range []uint64{1, 2} {
+								c.Name = fmt.Sprintf("pagecopy-event-%04x-%04x-%02x-%d", entry, pages[0], mode, delta)
+								c.FrameAt = step + delta
+								c.Reject = delta == 1
+								cases = append(cases, c)
+							}
+						}
+					}
+				}
+			}
+		}
+		for _, args := range [][]uint16{
+			{0, 0xa000, 0x200, 0xa000, 64},
+			{15999, 0xa000, 0, 0xac00, 64},
+			{0, 0xa000, 15999, 0xac00, 64},
+		} {
+			cases = append(cases, probeCase{Name: fmt.Sprintf("pagecopy-reject-%04x-%04x-%04x-%04x", entry, args[0], args[2], args[3]),
+				Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: args, VideoCopy: true, VideoMode: 0x40, Mask: 15, Reject: true})
 		}
 	}
 	for _, h := range []uint16{1, 2, 17} {
@@ -243,7 +323,7 @@ func main() {
 			pair := make([]*oracle.Oracle, 2)
 			var owner *playerRenderOwner
 			var before [2][]byte
-			res := probeResult{Name: test.Name, DOSCost: dosCost, Checkpoints: map[string][][2]uint64{}}
+			res := probeResult{Name: test.Name, DOSCost: dosCost, Checkpoints: map[string][][2]uint64{}, SourceOwnershipEqual: true}
 			for side := 0; side < 2; side++ {
 				o, err := oracle.Load(filepath.Join(base, "DQK.EXE"), base)
 				must(err)
@@ -260,6 +340,19 @@ func main() {
 				if test.Mask != 0 {
 					o.RenderProbePlaneMask(test.Mask)
 				}
+				var sourceAsset *sceneAsset
+				if test.VideoCopy {
+					o.RenderProbeVideoMode(test.VideoMode, 2)
+					sourceAsset = &sceneAsset{W: 320, H: 200, Index: make([]byte, 64000)}
+					page := uint32(test.Args[1]-0xa000) * 16
+					for off := 0; off < 16000; off++ {
+						for plane := 0; plane < 4; plane++ {
+							value := byte(off*37 + off/11 + plane*53)
+							o.SetPresentationPlane(plane, page+uint32(off), value)
+							sourceAsset.Index[off*4+plane] = value
+						}
+					}
+				}
 				var frames *[]oracle.RenderProbeFrame
 				if test.FrameAt > 0 {
 					frames = o.RenderProbeFrameAt(test.FrameAt)
@@ -270,7 +363,7 @@ func main() {
 				if test.Image != nil {
 					o.WriteBytes(test.Image.Source, test.Data)
 				}
-				if test.Pattern {
+				if test.Pattern || test.Upload && test.Data != nil {
 					o.WriteBytes(oracle.Addr{Seg: 0x7000, Off: 0x100}, test.Data)
 				}
 				before[side] = o.RenderProbeRAM()
@@ -282,6 +375,10 @@ func main() {
 				})
 				if side == 1 {
 					owner = &playerRenderOwner{Oracle: o, Counters: map[string]uint64{}, Assets: map[string]*sceneAsset{}}
+					if test.OwnedSource {
+						page := uint32(test.Args[1]-0xa000) * 16
+						owner.Scene.record(owner.Scene.page(page, o.PresentationPlane), sourceAsset, 0, 0)
+					}
 					tx := renderTransaction{Return: paintReturn{ret, 0x333e, 0xe004}, Origin: test.Entry}
 					if test.Image != nil {
 						tx.Image = &renderImageSource{Command: *test.Image}
@@ -318,6 +415,34 @@ func main() {
 					res.DirectSteps = o.Steps()
 					res.DirectWrites = writes
 					res.Counters = owner.Counters
+					if test.OwnedSource {
+						count, unit := int(test.Args[4]), 1
+						if test.Entry.Off == 0x8c2 {
+							unit = 2
+						}
+						start := 0
+						if test.Args[1] > test.Args[3] {
+							start = count % unit
+						}
+						model := owner.Scene.page(uint32(test.Args[3]-0xa000)*16, o.PresentationPlane)
+						for i := 0; i < count/unit*unit; i++ {
+							sourceOff := start + i
+							if test.VideoMode == 0x41 && unit == 2 {
+								sourceOff = start + i/2*2 + 1
+							}
+							for plane := 0; plane < 4; plane++ {
+								if test.Mask&(1<<uint(plane)) == 0 {
+									continue
+								}
+								readPlane := plane
+								if test.VideoMode == 0x40 {
+									readPlane = 2
+								}
+								cell := model.Cells[(start+i)*4+plane]
+								res.SourceOwnershipEqual = res.SourceOwnershipEqual && cell.Asset == sourceAsset && cell.Source == sourceOff*4+readPlane && cell.Visible
+							}
+						}
+					}
 					owner.releaseScene()
 				}
 			}
@@ -341,12 +466,18 @@ func main() {
 					}
 				}
 			}
-			res.VideoEqual = pair[0].PresentationVideoState() == pair[1].PresentationVideoState()
+			res.VideoEqual = pair[0].RenderProbeVideoRegisters() == pair[1].RenderProbeVideoRegisters()
 			fa, _ := json.Marshal(res.Frames[0])
 			fb, _ := json.Marshal(res.Frames[1])
-			res.Passed = res.Native == res.Direct && res.NativeSteps == res.DirectSteps && res.RAMDiff == 0 && res.VGAPlanesDiff == 0 && res.VideoEqual && bytes.Equal(fa, fb)
+			res.Passed = res.Native == res.Direct && res.NativeSteps == res.DirectSteps && res.RAMDiff == 0 && res.VGAPlanesDiff == 0 && res.VideoEqual && res.SourceOwnershipEqual && bytes.Equal(fa, fb)
 			if test.MemoryCopy {
 				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites == 0 && len(owner.Pending) == 0 && res.Counters["virtual_instructions"] == 0
+			} else if (test.Upload || test.VideoCopy) && test.FrameAt == 0 && !test.Reject {
+				prefix := 0
+				if test.Entry.Off == 0x8c2 {
+					prefix = int(test.Args[4] % 2)
+				}
+				res.Passed = res.Passed && res.DirectWrites == prefix && res.NativeWrites > res.DirectWrites && res.Counters["owned_ram_upload_rep"]+res.Counters["owned_video_copy_rep"] == 1
 			} else if test.FrameAt == 0 && !test.Reject {
 				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites > 0 && res.Counters["virtual_instructions"] > 0
 			}

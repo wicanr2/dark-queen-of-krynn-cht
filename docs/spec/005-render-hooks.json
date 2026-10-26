@@ -608,6 +608,50 @@
       "prefix": "f3ab5f4242e85efc",
       "file_prefix": "f3ab5f4242e85efc",
       "evidence_level": "IDA9.4原始匯出已證實REP STOSW與原列尾；新接管須通過函式對照"
+    },
+    {
+      "name": "loc_1167F",
+      "kind": "single-render-step",
+      "ida_linear": 71295,
+      "file_offset": 14975,
+      "segment": 487,
+      "offset": 2319,
+      "prefix": "f3a5fc5f5e8edb5d",
+      "file_prefix": "f3a5fc5f5e8edb5d",
+      "evidence_level": "IDA9.4已證實反向REP與原CLD／列尾；接管效果由獨立原版函式對照"
+    },
+    {
+      "name": "loc_116BD",
+      "kind": "single-render-step",
+      "ida_linear": 71357,
+      "file_offset": 15037,
+      "segment": 487,
+      "offset": 2381,
+      "prefix": "f3a4fc5f5e8edb5d",
+      "file_prefix": "f3a4fc5f5e8edb5d",
+      "evidence_level": "IDA9.4已證實反向REP與原CLD／列尾；接管效果由獨立原版函式對照"
+    },
+    {
+      "name": "loc_11664",
+      "kind": "single-render-step",
+      "ida_linear": 71268,
+      "file_offset": 14948,
+      "segment": 487,
+      "offset": 2292,
+      "prefix": "f3a5eb1a9003f14e",
+      "file_prefix": "f3a5eb1a9003f14e",
+      "evidence_level": "IDA9.4已證實前向REP與原列尾；接管效果由獨立原版函式對照"
+    },
+    {
+      "name": "loc_116B1",
+      "kind": "single-render-step",
+      "ida_linear": 71345,
+      "file_offset": 15025,
+      "segment": 487,
+      "offset": 2369,
+      "prefix": "f3a4eb0b9003f14e",
+      "file_prefix": "f3a4eb0b9003f14e",
+      "evidence_level": "IDA9.4已證實前向REP與原列尾；接管效果由獨立原版函式對照"
     }
   ]
 }

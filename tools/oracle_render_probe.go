@@ -55,6 +55,22 @@ func (o *Oracle) RenderProbePlaneMask(mask byte) {
 	o.m.Out8(0x3c5, mask)
 }
 
+func (o *Oracle) RenderProbeVideoMode(mode, readPlane byte) {
+	o.m.Out8(0x3ce, 5)
+	o.m.Out8(0x3cf, mode)
+	o.m.Out8(0x3ce, 4)
+	o.m.Out8(0x3cf, readPlane)
+}
+
+func (o *Oracle) RenderProbeVideoRegisters() [28]byte {
+	gc, seq, latch := o.m.VGA.Regs()
+	var result [28]byte
+	copy(result[:16], gc[:])
+	copy(result[16:24], seq[:])
+	copy(result[24:], latch[:])
+	return result
+}
+
 type RenderProbeFrame struct {
 	Step          uint64
 	IndicesSHA256 string

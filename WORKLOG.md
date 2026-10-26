@@ -3098,3 +3098,11 @@
 - 收尾補16位元位移環繞停止線，未知跨度維持原交易，沒有把環繞地址猜成純RAM。最終render-abi-pattern-scope-20261026-r2為92組加6項路由邊界全部通過；最後程式7226ac6992f8eb5c321e320898ebe2ae2249263ad75f4f18a26c5e344953bd4c。player-sample-scope-fixed-20261026-r2同樣五張代表畫面差異0、12鈕、控制及零未配對交易通過。r1是實際較早來源的收據，全部保留。
 - 新增持久player_sample_check.py，runner自動保存啟動建置來源並於結束後核參考雜湊、實際畫格、語言／HD／縮放、手冊控制、返回與Pending，再寫checks.json。最終r2的GUI來源先凍結，新增檢查器只補驗同一實測輸出，不用新runner冒充先前執行版本。必要建置、Go／C／Bash／Python語法及文件連結檢查通過；沒有新增圖像審查輪次。
 - 收尾再次回讀GitHub主分支README與本機20處圖片引用，全部指向docs中的既存展示圖。工作樹擁有權掃描無root-owned檔案或異常md目錄，沒有專案殘留容器；本批不新增image、不重跑遊戲，程式、規格與來源紀錄一併提交推送。
+## 2026-10-26：接續RAM上傳、跨頁搬移與來源歸屬
+
+- 回讀GitHub Issue7與目前CONTEXT，沿逆向技能、MM3直接繪圖方法及規格005接續。IDA技能入口為指向ida_94_official的連結，前兩次容器未掛入實體目標而讀取失敗；確認目標後唯讀載入技能與工具文件。沒有重建image或回主機分析。
+- 先補sub_11632／11688反向RAM上傳的REP接管及sub_110EB雙色word填滿。216組函式對照通過，候選cc1de5c0與正常player-sample-upload-20261026-r1五張代表畫面差異0。其他資料與HD保持。
+- 再補四個前後向REP的標準Mode X跨頁搬移，同時搬移索引色及來源資產位置。固定SDK模式0／1、byte／word與鎖存器次序以原版函式核對。360組先通過，加入實際REP前後的事件與拒絕邊界後，最終render-abi-pagecopy-20261026-r2為404組及6項路由檢查全部通過。
+- 最終正常player-sample-pagecopy-20261026-r1冷啟動、P、12鈕繁中、縮放、語言切換、手冊開關、截圖及關窗通過；五張代表畫面對r5逐byte差異0。實際接管一筆16000byte跨頁REP。沒有探索、戰鬥、存讀檔新驗收，不做額外HD審查。
+- 已將通過的2f282cba3d47d8f69dca0a6a377413e58ee71f2a456b8dd330f9f9e1b0ada699更新為player-current。57個定位、34份資料；除render-hooks.json及profile雜湊外，其餘輸入逐項保持。前版二進位、metadata及兩份變動資料保存player-prior-20261026-render，未覆寫舊收據或原始遊戲。
+- Docker皆離線、非root且--rm，SDK工作樹保持乾淨；收尾核擁有權、語法及專案容器，不新增image。尚有未知格式、裁切、同頁重疊與讀回，以及剩餘中文和HD待完成。

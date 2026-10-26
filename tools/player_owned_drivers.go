@@ -106,10 +106,13 @@ func (p *playerRenderOwner) pending(linear uint32, frame bool) *renderTransactio
 	return nil
 }
 func (p *playerRenderOwner) guard() bool {
+	return p.Oracle.Regs().Flags&0x400 == 0 && p.modeXGuard()
+}
+func (p *playerRenderOwner) modeXGuard() bool {
 	o := p.Oracle
 	r := o.Regs()
 	s := o.PresentationVideoState()
-	return r.SS == 0x333e && r.Flags&0x400 == 0 && nativePageLayout(o) &&
+	return r.SS == 0x333e && nativePageLayout(o) &&
 		o.Word(oracle.Addr{Seg: r.SS, Off: 0xca41}) == 15 && o.Word(oracle.Addr{Seg: r.SS, Off: 0xcb6c}) == 80 &&
 		s[0] == 0x40 && s[1] == 255 && s[2] == 0 && s[3] == 0
 }
@@ -239,6 +242,10 @@ func (p *playerRenderOwner) step(ea uint32) {
 		p.fill(ea == 0x110f8)
 	case 0x11187:
 		p.patternRow()
+	case 0x11664, 0x1167f, 0x116b1, 0x116bd:
+		if !p.videoCopy(ea) {
+			p.ramUpload(ea)
+		}
 	case 0x110d2, 0x11107:
 		origin, tail := uint32(0x110b8), uint32(0x110d8)
 		if ea == 0x11107 {
@@ -262,6 +269,137 @@ func (p *playerRenderOwner) step(ea uint32) {
 			p.jump(tail)
 		}
 	}
+}
+
+// 已證實的跨頁REP。來源歸屬與色號一起搬移，最後一次VGA讀取保留鎖存器。
+func (p *playerRenderOwner) videoCopy(ea uint32) bool {
+	o := p.Oracle
+	r := o.Regs()
+	origin, unit := uint32(0x11688), 1
+	if ea == 0x11664 || ea == 0x1167f {
+		origin, unit = 0x11632, 2
+	}
+	s := o.PresentationVideoState()
+	if p.pending(origin, true) == nil || p.inReadback() || r.SS != 0x333e || !nativePageLayout(o) ||
+		p.global(0xca41) != 15 || p.global(0xcb6c) != 80 ||
+		(s[0] != 0x40 && s[0] != 0x41) || s[1] != 255 || s[2] != 0 || s[3] != 0 || r.CX == 0 ||
+		r.DS < 0xa000 || r.DS > 0xac00 || (r.DS-0xa000)%0x400 != 0 ||
+		r.ES < 0xa000 || r.ES > 0xac00 || (r.ES-0xa000)%0x400 != 0 || r.DS == r.ES {
+		return false
+	}
+	n, direction := int(r.CX)*unit, 1
+	source, destination := int(r.SI), int(r.DI)
+	if r.Flags&0x400 != 0 {
+		direction = -1
+		source, destination = source-n+unit, destination-n+unit
+	}
+	mask := s[4] & 15
+	if source < 0 || source+n > 16000 || destination < 0 || destination+n > 16000 || mask == 0 || o.PresentationWorkBudget(2) != 2 {
+		return false
+	}
+	sourcePage, destinationPage := uint32(r.DS-0xa000)*16, uint32(r.ES-0xa000)*16
+	from := p.Scene.page(sourcePage, o.PresentationPlane)
+	to := p.Scene.page(destinationPage, o.PresentationPlane)
+	// MOVSW先讀完word再寫；模式1兩個寫入均使用第二byte讀取後的鎖存器。
+	last := source + n - 1
+	if direction < 0 {
+		last = source + unit - 1
+	}
+	o.Bytes(oracle.Addr{Seg: r.DS, Off: uint16(last)}, 1)
+	for i := 0; i < n; i++ {
+		sourceOff := source + i
+		if s[0] == 0x41 && unit == 2 {
+			sourceOff = source + i/2*2 + 1
+		}
+		for plane := 0; plane < 4; plane++ {
+			if mask&(1<<uint(plane)) == 0 {
+				continue
+			}
+			readPlane := plane
+			if s[0] == 0x40 {
+				readPlane = int(s[5] & 3)
+			}
+			src, dst := sourceOff*4+readPlane, (destination+i)*4+plane
+			value, cell := from.Index[src], from.Cells[src]
+			if cell.Asset == nil || !cell.Visible {
+				cell = sceneCell{Unsafe: cell.Unsafe}
+				o.SetPresentationPlane(plane, destinationPage+uint32(destination+i), value)
+			}
+			to.Index[dst], to.Cells[dst] = value, cell
+			o.EmitPresentationWrite(destinationPage+uint32(destination+i), value, 1<<uint(plane))
+			p.Counters["logical_writes"]++
+		}
+	}
+	p.Scene.Revision++
+	cycles := uint64(3 + 5*int(r.CX))
+	if o.PresentationDOSCost() {
+		cycles = uint64(1 + int(r.CX))
+	}
+	must(o.CommitPresentationWork(1, cycles))
+	p.Counters["virtual_instructions"]++
+	p.Counters["owned_video_copy_rep"]++
+	p.Counters["owned_video_copy_bytes"] += uint64(n)
+	o.SetRegs(oracle.CallRegs{SI: uint16(int(r.SI) + direction*n), DI: uint16(int(r.DI) + direction*n), CX: 0, SetSI: true, SetDI: true, SetCX: true})
+	p.jump(ea + 2)
+	return true
+}
+
+// 保留反向memmove的準備與返回，僅替換來源為RAM的單條REP。
+func (p *playerRenderOwner) ramUpload(ea uint32) {
+	if ea != 0x1167f && ea != 0x116bd {
+		return
+	}
+	o := p.Oracle
+	r := o.Regs()
+	origin, unit := uint32(0x11688), 1
+	if ea == 0x1167f {
+		origin, unit = 0x11632, 2
+	}
+	if p.pending(origin, true) == nil || !p.modeXGuard() || p.inReadback() || r.Flags&0x400 == 0 || r.CX == 0 ||
+		r.ES < 0xa000 || r.ES > 0xac00 || (r.ES-0xa000)%0x400 != 0 {
+		return
+	}
+	n := int(r.CX) * unit
+	source, destination := int(r.SI)-n+unit, int(r.DI)-n+unit
+	if source < 0 || source+n > 65536 || destination < 0 || destination+n > 16000 ||
+		uint32(r.DS)*16+uint32(source+n) > 0xa0000 {
+		return
+	}
+	mask := o.PresentationVideoState()[4] & 15
+	if mask == 0 || o.PresentationWorkBudget(2) != 2 {
+		return
+	}
+	data := o.Bytes(oracle.Addr{Seg: r.DS, Off: uint16(source)}, n)
+	page := uint32(r.ES-0xa000) * 16
+	for at := 0; at < n; {
+		off := destination + at
+		count := min(n-at, 80-off%80)
+		row := data[at : at+count]
+		key := fmt.Sprintf("upload:%d:%s", mask, digest(row))
+		a := p.Assets[key]
+		if a == nil {
+			a = &sceneAsset{W: count * 4, H: 1, Index: make([]byte, count*4), Alpha: make([]byte, count*4)}
+			for i := range a.Index {
+				a.Index[i] = row[i/4]
+				if mask&(1<<uint(i&3)) != 0 {
+					a.Alpha[i] = 255
+				}
+			}
+			a = p.cache(key, a)
+		}
+		p.record(a, off%80*4, off/80, page, "ram_upload")
+		at += count
+	}
+	cycles := uint64(3 + 5*int(r.CX))
+	if o.PresentationDOSCost() {
+		cycles = uint64(1 + int(r.CX))
+	}
+	must(o.CommitPresentationWork(1, cycles))
+	p.Counters["virtual_instructions"]++
+	p.Counters["owned_ram_upload_rep"]++
+	p.Counters["owned_ram_upload_bytes"] += uint64(n)
+	o.SetRegs(oracle.CallRegs{SI: r.SI - uint16(n), DI: r.DI - uint16(n), CX: 0, SetSI: true, SetDI: true, SetCX: true})
+	p.jump(ea + 2)
 }
 
 // sub_1115E 保留圖樣取值、行號、參數遞減與列尾，只替換當列 REP STOSW。
@@ -391,7 +529,7 @@ func (p *playerRenderOwner) fill(word bool) {
 	if h < 1 || width < 1 || x+width*4 > 320 || y+h > 200 || int(r.SI)+h*80 > int(p.global(0xcb83)) {
 		return
 	}
-	if word && (width%2 != 0 || byte(color) != byte(color>>8)) {
+	if word && width%2 != 0 {
 		return
 	}
 	mask := o.PresentationVideoState()[4] & 15
@@ -402,12 +540,15 @@ func (p *playerRenderOwner) fill(word bool) {
 		p.Counters["fill_budget_fallback"]++
 		return
 	}
-	key := fmt.Sprintf("fill:%d:%d:%d:%d", width, h, byte(color), mask)
+	key := fmt.Sprintf("fill:%d:%d:%04x:%d:%t", width, h, color, mask, word)
 	a := p.Assets[key]
 	if a == nil {
 		a = &sceneAsset{W: width * 4, H: h, Index: make([]byte, width*4*h), Alpha: make([]byte, width*4*h)}
 		for i := range a.Index {
 			a.Index[i] = byte(color)
+			if word {
+				a.Index[i] = byte(color >> uint((i%a.W/4%2)*8))
+			}
 			if mask&(1<<uint(i%a.W&3)) != 0 {
 				a.Alpha[i] = 255
 			}
