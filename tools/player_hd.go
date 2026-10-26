@@ -12,6 +12,7 @@ import (
 	"image/draw"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/wicanr2/dosgolem/oracle"
@@ -160,7 +161,7 @@ func loadHDLayer(root string) playerHDRenderer {
 			}
 		}
 		// 純色及過短的幾何邊緣保留原版，不將它們當作可辨識圖像。
-		if w < 8 || h < 8 || len(asset.Pixels) < 64 || len(colors) < 2 {
+		if w < 8 || h < 8 || (len(asset.Pixels) < 64 && !hdCompleteProjectile(record.Key, w, h, len(asset.Pixels))) || len(colors) < 2 {
 			return fail(record.Key, fmt.Errorf("來源缺乏可辨識的完整圖像資訊"))
 		}
 		asset.Image = &playerImageAsset{W: w, H: h, Index: indexed, Alpha: make([]byte, w*h), HD: painted.Pix, Reference: make([]byte, w*h*3)}
@@ -176,6 +177,15 @@ func loadHDLayer(root string) playerHDRenderer {
 		layer.BySourceHeader[record.SourceHeader] = append(layer.BySourceHeader[record.SourceHeader], asset)
 	}
 	return layer
+}
+
+func hdCompleteProjectile(key string, w, h, foreground int) bool {
+	// r3盤點已核COMSPR第2至47格。小箭與投射物是完整24×24來源。
+	if w != 24 || h != 24 || foreground < 12 || !strings.HasPrefix(key, "COMSPR..") {
+		return false
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(key, "COMSPR.."))
+	return err == nil && n >= 2 && n <= 47
 }
 
 func (h *hdLayer) Available() bool { return len(h.Assets) > 0 }

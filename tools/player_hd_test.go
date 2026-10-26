@@ -119,3 +119,25 @@ func TestHDPaletteIgnoresTransparentPixels(t *testing.T) {
 		t.Fatal("透明像素不得限制當前色盤")
 	}
 }
+
+func TestHDCompleteProjectileScope(t *testing.T) {
+	for _, tc := range []struct {
+		key              string
+		w, h, foreground int
+		want             bool
+	}{
+		{"COMSPR..2", 24, 24, 48, true},
+		{"COMSPR..47", 24, 24, 12, true},
+		{"COMSPR..2", 24, 24, 11, false},
+		{"COMSPR..1", 24, 24, 48, false},
+		{"COMSPR..48", 24, 24, 48, false},
+		{"PICA.6.2", 24, 24, 48, false},
+		{"COMSPR..2", 16, 24, 48, false},
+		{"COMSPR..2", 24, 16, 48, false},
+		{"COMSPR..bad", 24, 24, 48, false},
+	} {
+		if got := hdCompleteProjectile(tc.key, tc.w, tc.h, tc.foreground); got != tc.want {
+			t.Fatalf("完整投射物邊界 %v：得到%t", tc, got)
+		}
+	}
+}
