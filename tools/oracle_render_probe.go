@@ -50,6 +50,11 @@ func (o *Oracle) RenderProbeCPU() RenderProbeCPU {
 }
 func (o *Oracle) RenderProbeRAM() []byte { return append([]byte(nil), o.m.Mem...) }
 
+func (o *Oracle) RenderProbePlaneMask(mask byte) {
+	o.m.Out8(0x3c4, 2)
+	o.m.Out8(0x3c5, mask)
+}
+
 type RenderProbeFrame struct {
 	Step          uint64
 	IndicesSHA256 string

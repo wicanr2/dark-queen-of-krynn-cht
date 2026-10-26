@@ -1,6 +1,7 @@
 # 中文整合入口與頂端工具列
 
-狀態：READY，介面及既有證據範圍可接入；未宣稱新整合已通過遊戲抽驗。
+狀態：READY。介面已定稿，正常冷啟動、角色管理、縮放、語言切換及手冊開關已有代表抽驗；
+詳細範圍與有效程式見[CONTEXT](../../CONTEXT.md)。其餘項目不因入口可啟動就列為已驗。
 工作範圍沿 [#7](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7)，
 閱讀內容沿 [#5](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)、
 攻略沿 [#6](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)。

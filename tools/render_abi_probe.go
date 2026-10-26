@@ -82,14 +82,17 @@ func nativeVisiblePage(o *oracle.Oracle) (uint32, bool) {
 }
 
 type probeCase struct {
-	Name    string
-	Entry   oracle.Addr
-	Args    []uint16
-	Font    []byte
-	Image   *sourceTileCommand
-	Data    []byte
-	FrameAt uint64
-	Reject  bool
+	Name       string
+	Entry      oracle.Addr
+	Args       []uint16
+	Font       []byte
+	Image      *sourceTileCommand
+	Data       []byte
+	FrameAt    uint64
+	Reject     bool
+	Pattern    bool
+	Mask       byte
+	MemoryCopy bool
 }
 type probeResult struct {
 	Name                       string
@@ -114,6 +117,27 @@ func main() {
 	must(err)
 	must(json.Unmarshal(raw, &hooks))
 	base := filepath.Join(root, "workplace/input/dos/drkqueen")
+	gate, err := oracle.Load(filepath.Join(base, "DQK.EXE"), base)
+	must(err)
+	boundaryChecks := 0
+	for _, check := range []struct {
+		Args []uint16
+		Want bool
+	}{
+		{[]uint16{0x100, 0x7000, 0x200, 0x7100, 65}, false},
+		{[]uint16{0, 0xa000, 0x200, 0x7100, 1}, true},
+		{[]uint16{0x100, 0x7000, 0, 0xb800, 1}, true},
+		{[]uint16{0, 0xa000, 0, 0xb800, 0}, false},
+		{[]uint16{0xfff0, 0x9000, 0x200, 0x7100, 32}, true},
+		{[]uint16{0x100, 0x7000, 0xfff0, 0xbfff, 32}, true},
+	} {
+		gate.RenderProbePrepare(oracle.Addr{Seg: 0x1e7, Off: 0x8c2}, oracle.Addr{}, check.Args, false)
+		if renderTransactionTouchesVideo(gate, 0x11632) != check.Want {
+			panic("RAM／顯存跨度的交易邊界失配")
+		}
+		boundaryChecks++
+	}
+	gate.Close()
 	state := filepath.Join(root, "workplace/probe/battle-continuation-20261025/control-r1/final.state")
 	cases := []probeCase{}
 	for _, font := range [][]byte{{0, 0, 0, 0, 0, 0, 0, 0}, {255, 255, 255, 255, 255, 255, 255, 255}, {0x81, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x81}} {
@@ -130,6 +154,27 @@ func main() {
 			cases = append(cases, probeCase{Name: fmt.Sprintf("fill-%t-%d", word, h), Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: []uint16{h, 12, color}})
 		}
 	}
+	for _, h := range []uint16{1, 2, 17} {
+		for _, mask := range []byte{15, 5} {
+			for variant := 0; variant < 3; variant++ {
+				data := make([]byte, 32)
+				for i := range data {
+					if variant == 1 {
+						data[i] = byte(2 + i%2*5)
+					} else if variant == 2 {
+						data[i] = byte(3 + i*7)
+					}
+				}
+				c := probeCase{Name: fmt.Sprintf("pattern-%d-%02x-%d", h, mask, variant),
+					Entry: oracle.Addr{Seg: 0x1e7, Off: 0x3ee}, Args: []uint16{h, 12, 0x100, 0x7000, 3},
+					Data: data, Pattern: true, Mask: mask}
+				if h == 17 && variant == 2 {
+					c.FrameAt = 100
+				}
+				cases = append(cases, c)
+			}
+		}
+	}
 	var pack struct {
 		Assets []struct {
 			Key    string
@@ -137,6 +182,13 @@ func main() {
 			Offset int    `json:"source_offset"`
 			Count  int    `json:"source_block_bytes"`
 		}
+	}
+	for _, entry := range []uint16{0x8c2, 0x918, 0x956} {
+		args := []uint16{0x100, 0x7000, 0x200, 0x7100, 65}
+		if entry == 0x956 {
+			args = []uint16{0x7000, 0x7100}
+		}
+		cases = append(cases, probeCase{Name: fmt.Sprintf("RAM-copy-%04x", entry), Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: args, MemoryCopy: true})
 	}
 	raw, err = os.ReadFile(filepath.Join(root, "workplace/probe/player-current/hd/hd.json"))
 	must(err)
@@ -205,6 +257,9 @@ func main() {
 					}
 				}
 				o.RenderProbePrepare(test.Entry, ret, test.Args, dosCost)
+				if test.Mask != 0 {
+					o.RenderProbePlaneMask(test.Mask)
+				}
 				var frames *[]oracle.RenderProbeFrame
 				if test.FrameAt > 0 {
 					frames = o.RenderProbeFrameAt(test.FrameAt)
@@ -214,6 +269,9 @@ func main() {
 				}
 				if test.Image != nil {
 					o.WriteBytes(test.Image.Source, test.Data)
+				}
+				if test.Pattern {
+					o.WriteBytes(oracle.Addr{Seg: 0x7000, Off: 0x100}, test.Data)
 				}
 				before[side] = o.RenderProbeRAM()
 				writes := 0
@@ -228,7 +286,9 @@ func main() {
 					if test.Image != nil {
 						tx.Image = &renderImageSource{Command: *test.Image}
 					}
-					owner.Pending = append(owner.Pending, tx)
+					if renderTransactionTouchesVideo(o, test.Entry.Linear()+0xef00) {
+						owner.Pending = append(owner.Pending, tx)
+					}
 					owner.installOwnedDrivers(hooks.NativeSteps)
 				} else {
 					for _, ea := range []uint32{0x12ef8, 0x12f95, 0x110d2, 0x110d8, 0x11107, 0x1110d, 0x12ebf, 0x12ec7, 0x10fd6, 0x10fd8, 0x11017, 0x11019} {
@@ -251,7 +311,9 @@ func main() {
 					res.NativeSteps = o.Steps()
 					res.NativeWrites = writes
 				} else {
-					owner.finishDriver(owner.Pending[0].Owned)
+					if len(owner.Pending) > 0 {
+						owner.finishDriver(owner.Pending[0].Owned)
+					}
 					res.Direct = o.RenderProbeCPU()
 					res.DirectSteps = o.Steps()
 					res.DirectWrites = writes
@@ -283,7 +345,9 @@ func main() {
 			fa, _ := json.Marshal(res.Frames[0])
 			fb, _ := json.Marshal(res.Frames[1])
 			res.Passed = res.Native == res.Direct && res.NativeSteps == res.DirectSteps && res.RAMDiff == 0 && res.VGAPlanesDiff == 0 && res.VideoEqual && bytes.Equal(fa, fb)
-			if test.FrameAt == 0 && !test.Reject {
+			if test.MemoryCopy {
+				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites == 0 && len(owner.Pending) == 0 && res.Counters["virtual_instructions"] == 0
+			} else if test.FrameAt == 0 && !test.Reject {
 				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites > 0 && res.Counters["virtual_instructions"] > 0
 			}
 			if test.Reject {
@@ -319,6 +383,7 @@ func main() {
 		inputs[key] = digest(raw)
 	}
 	evidence := map[string]any{"version": 1, "mode": "isolated-original-function", "passed": passed, "cases": len(results), "sources": sources, "inputs": inputs, "go": runtime.Version(), "sdk_commit": "f79eab6db8c64a524a06535e53e5d32b0bbcf7c8", "machine_effects_verified": passed, "virtual_time_verified": passed, "normal_player_path_verified": false, "receipt_sha256": digest(append(append([]byte(nil), raw...), '\n'))}
+	evidence["routing_boundary_checks"] = boundaryChecks
 	raw, err = json.MarshalIndent(evidence, "", "  ")
 	must(err)
 	must(os.WriteFile(filepath.Join(out, "evidence.json"), append(raw, '\n'), 0644))

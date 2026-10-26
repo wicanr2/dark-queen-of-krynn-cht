@@ -9,8 +9,8 @@ if [[ ! "$name" =~ ^readme-gallery-[a-zA-Z0-9-]+$ ]]; then
 fi
 test -d "$ROOT/workplace/input/dos/drkqueen"
 test -d "$ROOT/workplace/probe"
-test -f "$ROOT/workplace/probe/readme-gallery-20261024/hd-blue-dragon-r2.png"
-test -f "$ROOT/workplace/probe/readme-gallery-20261024/hd-portrait-r1.png"
+test -f "$ROOT/workplace/probe/player-current/hd/hd.json"
+test -f "$ROOT/workplace/probe/player-sample-20261026-r5/checks.json"
 test -f "$ROOT/tools/tlb_gallery.py"
 test -f "$ROOT/tools/readme_preview.py"
 test ! -e "$ROOT/workplace/probe/$name"

@@ -67,7 +67,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		ImagePositionCallers []oracle.Addr
 	}
 	must(json.Unmarshal(raw, &bindings))
-	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 31 || len(bindings.NativeSteps) != 18 {
+	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 31 || len(bindings.NativeSteps) != 19 {
 		panic("繪圖掛勾資料與原版版本不符")
 	}
 	owner := &playerRenderOwner{Oracle: o, ShadowRGB: make([]byte, 320*200*3),
@@ -127,6 +127,10 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 	for _, hook := range bindings.Hooks {
 		entry := oracle.Addr{Seg: hook.Segment, Off: hook.Offset}
 		o.OnCall(entry, func(_ *oracle.Oracle) {
+			if !renderTransactionTouchesVideo(o, entry.Linear()+0xef00) {
+				owner.Counters["nonvideo_copy"]++
+				return
+			}
 			if len(owner.Pending) >= 256 {
 				panic("繪圖交易超過有界容量，停止提交半成品")
 			}
@@ -199,6 +203,14 @@ func nativeTextRegion(o *oracle.Oracle, page uint32, w listWord) []byte {
 }
 
 func (p *playerRenderOwner) Busy() bool { return len(p.Pending) != 0 }
+
+func (p *playerRenderOwner) Diagnostics() any {
+	pending := make([]map[string]any, 0, len(p.Pending))
+	for _, v := range p.Pending {
+		pending = append(pending, map[string]any{"origin": v.Origin, "return": v.Return, "kind": v.Kind, "step": v.Step})
+	}
+	return map[string]any{"pending": pending, "registers": p.Oracle.Regs()}
+}
 
 func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 	if !p.Busy() {

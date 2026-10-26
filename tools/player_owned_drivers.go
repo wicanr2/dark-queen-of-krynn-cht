@@ -24,6 +24,27 @@ type ownedDriver struct {
 
 var renderOwners = map[*oracle.Oracle]*playerRenderOwner{}
 
+// 已證實的三支記憶體搬移也服務純RAM；純RAM操作不形成畫面交易。
+func renderTransactionTouchesVideo(o *oracle.Oracle, origin uint32) bool {
+	touches := func(seg, off uint16, count uint32) bool {
+		// SI／DI 跨越16位元段落時保留原交易，不把未知的環繞跨度判成純RAM。
+		if uint32(off)+count > 0x10000 {
+			return true
+		}
+		base := (uint32(seg)*16 + uint32(off)) & 0xfffff
+		return count != 0 && base < 0xc0000 && base+count > 0xa0000
+	}
+	switch origin {
+	case 0x11632, 0x11688:
+		count := uint32(o.Arg(4))
+		return touches(o.Arg(1), o.Arg(0), count) || touches(o.Arg(3), o.Arg(2), count)
+	case 0x116c6:
+		return touches(o.Arg(0), 0, 0x4000) || touches(o.Arg(1), 0, 0x4000)
+	default:
+		return true
+	}
+}
+
 func (p *playerRenderOwner) indexAt(page uint32, i int) byte {
 	return p.Scene.page(page, p.Oracle.PresentationPlane).Index[i]
 }
@@ -216,6 +237,8 @@ func (p *playerRenderOwner) step(ea uint32) {
 		}
 	case 0x110c5, 0x110f8:
 		p.fill(ea == 0x110f8)
+	case 0x11187:
+		p.patternRow()
 	case 0x110d2, 0x11107:
 		origin, tail := uint32(0x110b8), uint32(0x110d8)
 		if ea == 0x11107 {
@@ -239,6 +262,43 @@ func (p *playerRenderOwner) step(ea uint32) {
 			p.jump(tail)
 		}
 	}
+}
+
+// sub_1115E 保留圖樣取值、行號、參數遞減與列尾，只替換當列 REP STOSW。
+func (p *playerRenderOwner) patternRow() {
+	o := p.Oracle
+	r := o.Regs()
+	if p.pending(0x1115e, true) == nil || !p.guard() || p.inReadback() ||
+		r.ES < 0xa000 || r.ES > 0xac00 || (r.ES-0xa000)%0x400 != 0 || r.CX == 0 {
+		return
+	}
+	x, y, width := int(r.DI%80)*4, int(r.DI/80), int(r.CX)*8
+	mask := o.PresentationVideoState()[4] & 15
+	if mask == 0 || x+width > 320 || y >= 200 || o.PresentationWorkBudget(2) != 2 {
+		return
+	}
+	key := fmt.Sprintf("pattern:%d:%04x:%d", width, r.AX, mask)
+	a := p.Assets[key]
+	if a == nil {
+		a = &sceneAsset{W: width, H: 1, Index: make([]byte, width), Alpha: make([]byte, width)}
+		for i := range a.Index {
+			a.Index[i] = byte(r.AX >> uint((i/4%2)*8))
+			if mask&(1<<uint(i&3)) != 0 {
+				a.Alpha[i] = 255
+			}
+		}
+		a = p.cache(key, a)
+	}
+	p.record(a, x, y, uint32(r.ES-0xa000)*16, "fill")
+	cycles := uint64(3 + 5*int(r.CX))
+	if o.PresentationDOSCost() {
+		cycles = uint64(1 + int(r.CX))
+	}
+	must(o.CommitPresentationWork(1, cycles))
+	p.Counters["virtual_instructions"]++
+	p.Counters["owned_pattern_rows"]++
+	o.SetRegs(oracle.CallRegs{DI: r.DI + r.CX*2, CX: 0, SetDI: true, SetCX: true})
+	p.jump(0x11189)
 }
 
 func (p *playerRenderOwner) glyph() {

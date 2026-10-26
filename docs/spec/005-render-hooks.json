@@ -597,6 +597,17 @@
       "prefix": "5f03f3e8cefd4a75",
       "file_prefix": "5f03f3e8cefd4a75",
       "evidence_level": "IDA 9.4 已證實：像素搬移與原始列尾；替換效果另由獨立函式對照"
+    },
+    {
+      "name": "loc_11187",
+      "kind": "single-render-step",
+      "ida_linear": 70023,
+      "file_offset": 13703,
+      "segment": 487,
+      "offset": 1047,
+      "prefix": "f3ab5f4242e85efc",
+      "file_prefix": "f3ab5f4242e85efc",
+      "evidence_level": "IDA9.4原始匯出已證實REP STOSW與原列尾；新接管須通過函式對照"
     }
   ]
 }

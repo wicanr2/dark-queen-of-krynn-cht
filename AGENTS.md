@@ -213,6 +213,7 @@
 | [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD 待接入 |
 | [規格 004](docs/spec/004-hd-layer.md)、[player_hd.go](tools/player_hd.go) | HD 素材契約、完整可見來源比對與獨立開關；主題放 `workplace/probe/player-current/hd/`，視窗大小不控制 HD |
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | 繪圖來源、交易及完整畫格提交；實作入口 `tools/player_render_owner.go`、`tools/player_text_owner.go`，來源掛勾在規格目錄，不回寫原版 |
+| [player-sample.sh](tools/player-sample.sh)、[視窗驅動](tools/player_gui_probe.c)、[XTEST按鍵](tools/player_xtest_key.go)、[檢查器](tools/player_sample_check.py) | Docker內的正常介面代表抽驗；使用既有XGB／XTEST產生伺服器鍵盤事件，第二參數可選本機對照程式，來源與影像參考唯讀；結束後核畫格、控制與未完成交易，產生checks.json |
 | [render-abi.sh](tools/render-abi.sh)、[player-sample.sh](tools/player-sample.sh) | 限定繪圖函式與正常玩家介面抽驗；前者可加 `gpu` 對照真實素材的 GPU／CPU 輸出，後者只送正常 X11 輸入。新目錄與收據皆留 `workplace/probe/`，範圍見規格 005 |
 | `workplace/` | 唯一研究工作區，含隔離副本、解壓、掃描轉錄、快取與 HD 批次；不入 Git |
 | `dist-all/` | 唯一正式交付根，建立前讀第 4 節交付契約；本機含原版產物不入 Git |

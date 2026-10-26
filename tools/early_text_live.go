@@ -1432,6 +1432,21 @@ func runPlayer(profile, original, saves string) {
 	controlLog, err := json.MarshalIndent(p.Controls, "", "  ")
 	must(err)
 	must(os.WriteFile(filepath.Join(saves, "controls.json"), append(controlLog, '\n'), 0644))
+	if os.Getenv("DQK_TRACE_PLAYER_UI") == "1" {
+		state := map[string]any{
+			"words": g.list.snapshot(), "list_events": g.list.events, "reader_events": g.reader.UIEvents,
+			"reader_stable": g.readerStable(), "clear_pending": g.list.clearPending,
+			"page_flip": g.list.awaitPageFlip, "footer_transition": g.list.footerTransition,
+			"header_transition": g.list.headerTransition, "reader_mode": g.reader.Mode,
+			"manual_events": g.reader.Manual.Events,
+		}
+		if renderer, ok := p.Renderer.(interface{ Diagnostics() any }); ok {
+			state["renderer"] = renderer.Diagnostics()
+		}
+		diagnostic, err := json.MarshalIndent(state, "", "  ")
+		must(err)
+		must(os.WriteFile(filepath.Join(saves, "ui-diagnostics.json"), append(diagnostic, '\n'), 0644))
+	}
 	preferences.Scale = p.Scale
 	preferences.HD = &p.HDEnabled
 	raw, err = json.MarshalIndent(preferences, "", "  ")
@@ -1481,7 +1496,8 @@ func (g *liveGame) playerButtons() []playerButton {
 func (g *liveGame) playerAction(action string) {
 	p := g.player
 	defer func() {
-		p.Controls = append(p.Controls, map[string]any{"action": action, "step": g.o.Steps(), "chinese": g.translate, "scale": p.Scale, "hd": p.HDEnabled})
+		p.Controls = append(p.Controls, map[string]any{"action": action, "step": g.o.Steps(), "chinese": g.translate, "scale": p.Scale, "hd": p.HDEnabled,
+			"words": len(g.list.words), "reader_stable": g.readerStable()})
 	}()
 	if p.HD != nil && (action == "scale2" || action == "scale3" || action == "language" || action == "hd") {
 		p.HD.Invalidate()

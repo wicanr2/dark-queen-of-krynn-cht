@@ -7,6 +7,15 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/wait.h>
+
+static char key_helper[4096];
+static void fake_key(unsigned code,const char *state) {
+    char text[16];snprintf(text,sizeof(text),"%u",code);
+    pid_t child=fork();if(child<0)exit(12);
+    if(child==0){execl(key_helper,key_helper,text,state,(char*)NULL);_exit(12);}
+    int status;if(waitpid(child,&status,0)<0||!WIFEXITED(status)||WEXITSTATUS(status))exit(12);
+}
 
 static Window find_window(Display *d, Window root) {
     Window parent,actual,*children=NULL,result=0;unsigned n=0;
@@ -31,13 +40,9 @@ static Window find_window(Display *d, Window root) {
     return result;
 }
 static void key(Display *d,Window w,KeySym sym) {
-    XKeyEvent e;memset(&e,0,sizeof(e));e.display=d;e.window=w;e.root=DefaultRootWindow(d);
-    struct timespec stamp;clock_gettime(CLOCK_MONOTONIC,&stamp);
-    e.time=(Time)(stamp.tv_sec*1000+stamp.tv_nsec/1000000);e.same_screen=True;e.keycode=XKeysymToKeycode(d,sym);e.x=e.y=20;
     XSetInputFocus(d,w,RevertToParent,CurrentTime);
-    e.type=KeyPress;XSendEvent(d,w,True,KeyPressMask,(XEvent*)&e);XFlush(d);usleep(1000000);
-    clock_gettime(CLOCK_MONOTONIC,&stamp);e.time=(Time)(stamp.tv_sec*1000+stamp.tv_nsec/1000000);
-    e.type=KeyRelease;XSendEvent(d,w,True,KeyReleaseMask,(XEvent*)&e);XFlush(d);
+    XSync(d,False);unsigned code=XKeysymToKeycode(d,sym);
+    fake_key(code,"down");usleep(3000000);fake_key(code,"up");
 }
 static unsigned component(unsigned long pixel,unsigned long mask) {
     if(!mask)return 0;
@@ -54,12 +59,40 @@ static void capture(Display *d,Window w,const char *directory,const char *name) 
     }
     fclose(f);XDestroyImage(im);
 }
+/* 等實際完整介面，避免固定秒數在較忙的容器裡提前送出下一個按鍵。 */
+static int wait_reference(Display *d,Window w,const char *directory,const char *name) {
+    char path[4096],magic[3];int width,height,max;
+    snprintf(path,sizeof(path),"%s/%s.ppm",directory,name);
+    FILE *f=fopen(path,"rb");if(!f)return 0;
+    if(fscanf(f,"%2s\n%d %d\n%d\n",magic,&width,&height,&max)!=4||strcmp(magic,"P6")||max!=255||width!=640||height!=400){fclose(f);return 0;}
+    size_t bytes=(size_t)width*height*3;unsigned char *rgb=malloc(bytes);if(!rgb){fclose(f);return 0;}
+    if(fread(rgb,1,bytes,f)!=bytes){fclose(f);free(rgb);return 0;}fclose(f);
+    for(int trial=0;trial<150;trial++){
+        XWindowAttributes a;if(!XGetWindowAttributes(d,w,&a))break;
+        if(a.width==width&&a.height==height){
+            XImage *im=XGetImage(d,w,0,0,width,height,AllPlanes,ZPixmap);if(!im)break;
+            int equal=1;
+            for(int y=0;y<height&&equal;y++)for(int x=0;x<width&&equal;x++){
+                if(x<32&&y<32)continue;
+                unsigned long p=XGetPixel(im,x,y);size_t at=((size_t)y*width+x)*3;
+                equal=component(p,im->red_mask)==rgb[at]&&component(p,im->green_mask)==rgb[at+1]&&component(p,im->blue_mask)==rgb[at+2];
+            }
+            XDestroyImage(im);if(equal){free(rgb);return 1;}
+        }
+        usleep(100000);
+    }
+    free(rgb);return 0;
+}
 int main(int argc,char **argv) {
-    if(argc!=2)return 2;
+    if(argc!=3)return 2;
+    snprintf(key_helper,sizeof(key_helper),"%s/xtest-key",argv[1]);
     Display *d=XOpenDisplay(NULL);if(!d)return 6;Window w=0;
     for(int i=0;i<200&&!w;i++){w=find_window(d,DefaultRootWindow(d));usleep(100000);}if(!w)return 7;
-    sleep(3);capture(d,w,argv[1],"01-start");key(d,w,XK_Return);sleep(3);
-    capture(d,w,argv[1],"02-return");key(d,w,XK_p);sleep(2);capture(d,w,argv[1],"02a-player");
+    sleep(3);capture(d,w,argv[1],"01-start");key(d,w,XK_Return);
+    if(!wait_reference(d,w,argv[2],"02-return"))return 10;
+    capture(d,w,argv[1],"02-return");key(d,w,XK_p);
+    if(!wait_reference(d,w,argv[2],"02a-player")){capture(d,w,argv[1],"failure-role");return 11;}
+    capture(d,w,argv[1],"02a-player");
     key(d,w,XK_F2);sleep(1);capture(d,w,argv[1],"03-scale");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"04-original");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"05-chinese");

@@ -16,7 +16,7 @@ exe = root / "workplace/input/dos/drkqueen/DQK.EXE"
 bindings = root / "docs/spec/005-render-hooks.json"
 j = json.loads(bindings.read_text())
 assert sha(exe) == j["ExecutableSHA256"] == "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58"
-assert j["Version"] == 2 and len(j["Hooks"]) == 31 and len(j["NativeSteps"]) == 18
+assert j["Version"] == 2 and len(j["Hooks"]) == 31 and len(j["NativeSteps"]) == 19
 b = exe.read_bytes()
 header = struct.unpack_from("<H", b, 8)[0] * 16
 reloc = []
@@ -46,20 +46,20 @@ for name, want in manifest["Files"].items():
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
 sources += [root / "tools" / n for n in ["early_text_live.go", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
-abi_root = root / "workplace/probe/render-abi-20261026-r8"
+abi_root = root / "workplace/probe/render-abi-pattern-scope-20261026-r2"
 abi_path = abi_root / "evidence.json"
 verified = False
 if abi_path.is_file():
     abi = json.loads(abi_path.read_text())
     verified = (abi.get("passed") is True and abi.get("machine_effects_verified") is True
-                and abi.get("virtual_time_verified") is True and abi.get("cases") == 50
+                and abi.get("virtual_time_verified") is True and abi.get("cases") == 92
                 and abi.get("inputs", {}).get("original_exe") == sha(exe)
                 and abi.get("inputs", {}).get("bindings") == sha(bindings)
                 and abi.get("receipt_sha256") == sha(abi_root / "abi-initial.json")
                 and all(sha(root / "tools" / name) == abi.get("sources", {}).get(name) for name in [
                     "player_owned_drivers.go", "render_scene_state.go", "player_video_overlay.py",
                     "machine_presentation_video.go", "oracle_presentation_video.go", "oracle_video_observer.go"]))
-player_sample = root / "workplace/probe/player-sample-20261026-r5/checks.json"
+player_sample = root / "workplace/probe/player-sample-scope-fixed-20261026-r2/checks.json"
 sample = json.loads(player_sample.read_text()) if player_sample.is_file() else {}
 sample_verified = sample.get("passed") is True and sample.get("build_sha256") == sha(output / "dqk-player")
 info = {

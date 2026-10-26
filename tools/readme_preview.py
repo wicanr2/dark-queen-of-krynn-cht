@@ -40,7 +40,7 @@ def prose_html(markdown):
         heading = re.fullmatch(r'(#{1,3}) (.+)', block)
         if heading:
             level, title = len(heading[1]), heading[2]
-            anchor = re.sub(r'[^\w\-\u3400-\u9fff ]', '', title).replace(' ', '-')
+            anchor = re.sub(r'[^\w\-\u3400-\u9fff ]', '', title).replace(' ', '-').lower()
             blocks.append(f'<h{level} id="{anchor}">' + inline(title) + f'</h{level}>')
         elif block.startswith('```'):
             lines = block.splitlines()
@@ -195,15 +195,29 @@ def build(root, output):
             atlas.paste(image, (x + (cell - image.width) // 2, y + 8), image)
         draw.text((x + 8, y + cell - 20), record['key'], fill='white')
     atlas.save(output / 'portraits-original.png')
+    hd_atlas = Image.new('RGB', atlas.size, '#23232c')
+    draw = ImageDraw.Draw(hd_atlas)
+    by_key = {item['Key']: item for item in assets}
+    for i, record in enumerate(portraits):
+        item = by_key.get(record['key'])
+        if item is None:
+            continue
+        with Image.open(theme_root / item['Image']) as source:
+            picture = source.convert('RGBA')
+            picture.thumbnail((cell-16, cell-32), Image.Resampling.LANCZOS)
+            x, y = (i % columns)*cell, (i // columns)*cell
+            hd_atlas.paste(picture, (x+(cell-picture.width)//2, y+8), picture)
+        draw.text((x+8, y+cell-20), record['key'], fill='white')
+    hd_atlas.save(output / 'portraits-hd.png')
 
     readme = (root / 'README.md').read_text()
     story, mechanics = [section(readme, title) for title in ('故事背景', '遊戲機制')]
     # 兩種閱讀格式都從根README建立，避免另維護一份過時的功能與風格說明。
     def local_link(match):
         label, destination = match.groups()
-        prefix = 'workplace/probe/readme-gallery-current/'
-        if destination.startswith(prefix):
-            destination = destination[len(prefix):]
+        gallery = re.match(r'^workplace/probe/readme-gallery-[a-zA-Z0-9-]+/(.+)$', destination)
+        if gallery:
+            destination = gallery[1]
         elif not re.match(r'^(?:https?://|#)', destination):
             destination = '../../../' + destination
         return label + '(' + destination + ')'
@@ -231,7 +245,9 @@ def build(root, output):
         sections={title: hashlib.sha256(text.encode()).hexdigest()
                   for title, text in [('故事背景', story), ('遊戲機制', mechanics)]},
         portrait_atlas=dict(file='portraits-original.png', sha256=digest(output / 'portraits-original.png'),
-                            size=list(atlas.size), keys=[r['key'] for r in portraits]))
+                            size=list(atlas.size), keys=[r['key'] for r in portraits]),
+        portrait_hd_atlas=dict(file='portraits-hd.png', sha256=digest(output / 'portraits-hd.png'),
+                              keys=[r['key'] for r in portraits if r['key'] in by_key]))
     (output / 'preview-index.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({k: result[k] for k in ('original_frames', 'hd_samples', 'hd_in_game')}))
 
