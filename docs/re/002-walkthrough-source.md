@@ -151,3 +151,51 @@ python3 tools/reader_preview.py <本機節錄 JSON> <已授權字型 TTF> <輸�
 
 JSON 欄位為 `title`、`source` 及字串陣列 `paragraphs`。本輪唯讀使用前作的
 `font/jf-openhuninn-2.1.ttf`，來源與授權沿用規格 001 的字型記錄，沒有複製進 Git。
+
+## 2026-10-27：從GEO原始資料重繪的DRAFT
+
+圖片中文與介面材質已接入20dae32後，攻略工作接續於本機`workplace/probe/guide-20261027/`。目前只做唯讀資料擷取及向量草稿，沒有啟用攻略按鈕，也沒有把掃描圖嵌入閱讀頁。
+
+GEO.GLB SHA-256為`fd8435610b936bdbce997182ddef9ff0bc9e662a760bac2542d4cad8c697a2d1`。HLIB有一筆目錄及二十筆地圖資料，每筆均滿足八位元組標頭加四份高乘寬的byte平面；首byte為高、次byte為寬，尺寸10×10至39×20等，不能固定為16×16。來源偏移、完整區塊與平面起點保存`geo-inventory.json`。尺寸與位元組範圍已證實，牆方向及門／事件語意仍須來源對照，不因長度正確即稱原版引擎語意已驗。
+
+外部入口為[Gold Box Companion作者的DQK格式說明](https://forums.goldbox.games/index.php?topic=981.105)及[Gold Box Explorer原始碼](https://github.com/bsimser/Gold-Box-Explorer/tree/eac30abaa6ee66aea6f5d65ebe6d676b10015a8f/src/Common/Plugins/GeoDax)。後者固定commit`eac30abaa6ee66aea6f5d65ebe6d676b10015a8f`，完整相關原始碼與MIT授權保存在本機upstream-format，逐檔雜湊見upstream-format-source.json。舊DAX解碼器固定16×16及兩byte標頭，不能直接當成本作GLB解碼器。只參考欄位格式，未把第三方實作或來源資料加入Git。
+
+原生目錄標籤46／47與62／63分別指向不同區塊。首版草稿將標籤右移一bit後發生重名，被既有檔守衛阻擋；保留首版輸出，後版以完整raw tag作定位，不推定低bit或遊戲地圖ID語意。二十張SVG／PNG草稿與保留的逐方向資料在geo-decoded-draft.json，SVG由線段與矩形建立，無image元素；目前未加完整繁中名稱及事件標記。
+
+紙本的五十一個圖區含樓層及分圖，與二十筆原生資料的對應仍在校讀。初版將所有非零門旗標畫成門符號，包含沒有可見壁面的邊界，不能當成已校對攻略圖。門／開口圖符與實際壁面、樓層、出入口及紙本標記對齊前維持DRAFT，不進正式閱讀頁；不修改原始地圖、存檔或遊戲通行判定。
+
+可重現入口為[guide_geo.py](../../tools/guide_geo.py)及`bash tools/guide-map.sh geometry guide-新的名稱`。
+輸出位於`workplace/probe/`，包含二十張SVG、原始四平面欄位及收據；SVG線段只表示非零美術欄位，
+不把任何旗標直接畫成門。二十筆、47,768個方向欄位可無損重編回原位元組；零高度、尺寸不符、
+重複raw tag及重複區塊四項變造皆拒絕。`guide-geo-fields-20261027/receipt.json` SHA-256
+`8ada13f933c6870d06d55261e15157b0e04457bf7051c9a4044e540de892c1f7`。這是資料及研究圖驗證，沒有遊戲通行語意或原版逐格對拍聲明。
+
+## 2026-10-27：冒險手冊世界地圖接入
+
+手冊第2頁來源`workplace/manual-ocr/Image047-right.png`，SHA-256
+`dd3c9c5a956a1850755b0631444db982a9ff3e7f7aa07555eaa662299fba3587`。
+此頁與攻略泰勒達斯大陸圖同為地形及地名參照，與GEO逐格地圖分開。
+已將原生`BIGPIC.1.1`及`BIGPIC.2.1`的兩張304×120地形接合，縮為24色輪廓後重新繪製，
+加上13地名、8區域、引線及來源說明。地形與標籤都只作閱讀示意，不表示通行、任務或角色位置。
+一般地名沿前作術語及本作正式譯表；新名稱的來源及採用理由留在`world-map-layout.json`，不改前作。
+
+- 工具：[manual_world_map.py](../../tools/manual_world_map.py)的`geometry`／`render`，
+  與`bash tools/guide-map.sh world-map guide-新的名稱`。來源、字型及人工標籤唯讀，輸出留本機。
+  既有OCR image內的OpenCV 4.10.0／NumPy 1.26.4產生輪廓，Pillow 11.3.0容器排版；沒有新增image或套件。
+- 現行私有資料：`guide-20261027/world-map-layout.json`、`world-map.zh-TW.tsv`、`world-terrain.json`及`world-map-r2/`。
+  第一張結果出現輪廓中心取樣造成的紙色細縫，第二張補足邊界後接受，不做第三輪美化。
+  SVG含獨立路徑與已授權字型，不含image元素；PNG為閱讀器取樣資源，沒有掃描或PDF像素。
+- 接入：[manual_map_inputs.py](../../tools/manual_map_inputs.py)只換冒險手冊第2頁，189個其他項目、舊譯文及字模保持。
+  [ui_manual_reader.go](../../tools/ui_manual_reader.go)核對檔名、雜湊、尺寸、內容框與不透明度，
+  共用[圖文取樣元件](../../tools/ui_journal_illustrations.go)，圖稿與正文只留本機。
+- 967e2445正常冷啟動後進入角色管理、F6換冊開圖，完成全圖、原尺寸、兩倍、平移、Home復位、Esc回目錄及遊戲。
+  十一次閱讀事件保持同一原版步數；五張圖區由獨立座標抽驗，復位與初始全圖相同。
+  五張既有介面基準差異0、guest寫入0。入口`player-sample.sh`新增可選第三參數`manual-map`，原抽驗模式保持。
+  本輪沒有冒險、結局或逐一圖片引用驗收。
+- `guide-world-map-rebuild-20261027/`由公開工具入口獨立重建，SVG與PNG皆逐位元組相同。
+  正式1487項HD保持，新增兩份閱讀輸入，共38份profile資料；49個其他非HD檔案保持。
+  正式程式與原資料備份在`player-prior-20261027-manual-map/`，安裝與總證據在`guide-20261027/`。
+
+世界地圖PNG SHA-256為`d64ecbeff7ce6a94aac5dade5ea5e27cea4cf5fde90399bca119068074192d51`；
+總證據`manual-map-final-evidence.json` SHA-256為`624a0d1ed152cb6b4b86989961d4fca224e3e5e15eef85e3988070ffc3de05e9`。
+這完成說明書的世界地圖缺圖，攻略全文、GEO分圖與事件標記仍待校讀，攻略工具列保持停用。

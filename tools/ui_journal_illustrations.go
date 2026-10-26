@@ -112,8 +112,22 @@ func (r *journalReader) pageCount(id int) int {
 }
 
 // 固定有理數最近鄰取樣。全圖居中，原尺寸及兩倍模式保持可見來源範圍有界。
+func (r *journalReader) imageFor(p *readerPage) readerIllustration {
+	if p.Mode == "manual-map" {
+		if r.Manual == nil || !r.Manual.Reading {
+			panic("說明地圖不在閱讀中")
+		}
+		doc := r.Manual.Books[r.Manual.Book].Documents[r.Manual.Cursor]
+		if doc.Image == nil || p.SourceKey != doc.ID {
+			panic("說明地圖來源不符")
+		}
+		return *doc.Image
+	}
+	return r.Images[p.Entry]
+}
+
 func (r *journalReader) imageGeometry(p *readerPage) (width, height, num, den, x, y int) {
-	item := r.Images[p.Entry]
+	item := r.imageFor(p)
 	width, height = item.Pixels.Bounds().Dx(), item.Pixels.Bounds().Dy()
 	num, den = 1, 1
 	if p.Image.Zoom == 0 {
@@ -137,13 +151,17 @@ func (r *journalReader) clampImage(p *readerPage) {
 
 func (g *liveGame) readerImageKey(key string) {
 	r := g.reader
-	if r.Page == nil || r.Page.Image == nil {
+	target := &r.Page
+	if r.Mode == "manual" && r.Manual != nil {
+		target = &r.Manual.Page
+	}
+	if *target == nil || (*target).Image == nil {
 		panic("圖文控制沒有圖文頁")
 	}
-	pageCopy, viewCopy := *r.Page, *r.Page.Image
+	pageCopy, viewCopy := **target, *(*target).Image
 	pageCopy.Image = &viewCopy
-	r.Page = &pageCopy // 已提交的畫格與操作紀錄保留當時視圖。
-	p := r.Page
+	*target = &pageCopy // 已提交的畫格與操作紀錄保留當時視圖。
+	p := *target
 	if key == "Home" {
 		*p.Image = readerImageView{}
 		return
@@ -178,7 +196,7 @@ func (g *liveGame) readerImageKey(key string) {
 func (g *liveGame) composeReaderImage(px []byte, p *readerPage) {
 	r := g.reader
 	w, h, n, d, left, top := r.imageGeometry(p)
-	item := r.Images[p.Entry]
+	item := r.imageFor(p)
 	for y := top; y < min(208, top+h*n/d); y++ {
 		for x := left; x < min(608, left+w*n/d); x++ {
 			sx, sy := p.Image.X+(x-left)*d/n, p.Image.Y+(y-top)*d/n

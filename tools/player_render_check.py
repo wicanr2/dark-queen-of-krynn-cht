@@ -45,7 +45,7 @@ for name, want in manifest["Files"].items():
     assert sha(output / "inputs" / name) == want, name
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
-sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
+sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "manual_world_map.py", "manual_map_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
 abi_root = root / "workplace/probe/render-abi-picture-text-20261027-r1"
 abi_path = abi_root / "evidence.json"
 verified = False

@@ -194,6 +194,17 @@
       ],
       "bytes": 92169,
       "scope": "正常冷啟動的繁中製作名單畫格，HD關閉；只展示此時刻，後段自訂主選單比對未通過，不當作整段驗收"
+    },
+    {
+      "file": "manual-world-map-zh.png",
+      "source": "workplace/probe/player-sample-manual-map-20261027-r1/09-map-native.png",
+      "sha256": "eacbecd463ebd911d01f76402af1d0efd935ff919340bb2583bc1fa6563969bc",
+      "size": [
+        960,
+        600
+      ],
+      "bytes": 118685,
+      "scope": "正常冷啟動後開啟冒險手冊第2頁的原尺寸查閱，地形示意，非逐格通行或全程冒險驗收"
     }
   ]
 }

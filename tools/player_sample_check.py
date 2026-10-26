@@ -17,10 +17,12 @@ def read(path):
     return json.loads(path.read_text())
 
 
-assert len(sys.argv) in (3, 4)
-assert len(sys.argv) == 3 or sys.argv[3] == '--hd-off'
+assert len(sys.argv) in (3, 4, 5)
+flags = sys.argv[3:]
+assert len(flags) == len(set(flags)) and set(flags) <= {'--hd-off', '--manual-map'}
 root, out = map(Path, sys.argv[1:3])
-expected_hd = len(sys.argv) == 3
+expected_hd = '--hd-off' not in flags
+manual_map = '--manual-map' in flags
 assert out.is_dir() and out.stat().st_uid == os.getuid()
 reference = root / 'workplace/probe/player-sample-20261026-r5'
 reference_proof = read(reference / 'checks.json')
@@ -43,7 +45,39 @@ diagnostics_path = out / 'session/ui-diagnostics.json'
 diagnostics = read(diagnostics_path)
 assert not diagnostics['renderer']['pending'] and diagnostics['reader_stable']
 assert len(diagnostics['words']) == 12
-assert [event['key'] for event in diagnostics['manual_events']] == ['F6', 'Esc']
+events = diagnostics['manual_events']
+if manual_map:
+    assert [event['key'] for event in events] == ['F6', 'Right', 'Down', 'Return', 'ZoomIn', 'ZoomIn', 'PanRight', 'PanDown', 'Home', 'Esc', 'Esc']
+    assert len({e['step'] for e in events}) == 1, '手動查閱期間原版不應前進'
+    views = [events[n]['page']['Image'] for n in [3,4,5,7,8]]
+    assert views == [dict(zoom=0,x=0,y=0),dict(zoom=1,x=296,y=416),dict(zoom=2,x=448,y=468),dict(zoom=2,x=512,y=532),dict(zoom=0,x=0,y=0)]
+    assert sha(out/'08-map-fit.png') == sha(out/'12-map-reset.png')
+    player = read(out/'build-info-at-start.json')
+    profiles = [p for p in sorted((root/'workplace/probe').glob('player-*/inputs/player-profile.json'))
+                if sha(p) == player['profile_sha256']]
+    assert profiles, '缺少與啟動時雜湊相同的閱讀資料'
+    profile = read(profiles[0])
+    map_file = profiles[0].parent/'manual-world-map.png'
+    assert sha(map_file) == profile['Files']['manual-world-map.png']
+    with Image.open(map_file) as source:
+        source = source.convert('RGB')
+        for name, view in zip(['08-map-fit','09-map-native','10-map-double','11-map-pan','12-map-reset'], views):
+            with Image.open(out/(name+'.png')) as screenshot:
+                # 960×600視窗，640×400邏輯框；獨立以來源座標核對圖區。
+                for sy in range(48,360,3):
+                    ly = sy*2//3-32
+                    for sx in range(24,936,3):
+                        lx = sx*2//3-16
+                        if view['zoom'] == 0:
+                            if not 184 <= lx < 424: continue
+                            px,py=(lx-184)*5,ly*5
+                        else:
+                            div = view['zoom']
+                            px,py=view['x']+lx//div,view['y']+ly//div
+                        assert screenshot.getpixel((sx,sy))[:3] == source.getpixel((px,py)),(name,sx,sy,px,py)
+    assert sha(map_file) == json.loads((map_file.parent/'manual-map-provenance.json').read_text())['map_sha256']
+else:
+    assert [event['key'] for event in events] == ['F6', 'Esc']
 assert [event['chinese'] for event in controls if event['action'] == 'language'] == [False, True]
 assert controls[0]['action'] == 'scale3' and all(event['hd'] is expected_hd for event in controls)
 assert controls[-1]['action'] == 'screenshot'
@@ -74,6 +108,9 @@ result = dict(
     native_input='XTEST server events; XGB v1.1.1 in fixed offline container',
     diagnostics_sha256=sha(diagnostics_path), reference_receipt_sha256=sha(reference / 'checks.json'),
     checker_sha256=sha(root / 'tools/player_sample_check.py'))
+if manual_map:
+    result['scope'] += ['manual world map fit/native/double', 'manual map pan/reset', 'reader CPU pause', 'manual index and game return']
+    result['manual_map_source_sha256'] = sha(map_file)
 (out / 'checks.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
 print(json.dumps({'passed': True, 'frames': len(differences), 'byte_differences': 0,
                   'open_render_transactions': 0, 'role_buttons': 12}))

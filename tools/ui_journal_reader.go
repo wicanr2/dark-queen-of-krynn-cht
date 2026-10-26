@@ -529,6 +529,21 @@ func (g *liveGame) tickReader() bool {
 			return true
 		}
 		if r.Mode == "manual" {
+			if r.Manual != nil && r.Manual.Page != nil && r.Manual.Page.Image != nil {
+				for _, k := range []struct {
+					code ebiten.Key
+					name string
+				}{
+					{ebiten.KeyEqual, "ZoomIn"}, {ebiten.KeyMinus, "ZoomOut"}, {ebiten.KeyA, "PanLeft"}, {ebiten.KeyD, "PanRight"},
+					{ebiten.KeyW, "PanUp"}, {ebiten.KeyS, "PanDown"}, {ebiten.KeyHome, "Home"},
+				} {
+					if inpututil.IsKeyJustPressed(k.code) {
+						g.readerKey(k.name, "keyboard", 0)
+						r.WaitDraw = true
+						return true
+					}
+				}
+			}
 			for _, k := range []struct {
 				code ebiten.Key
 				name string

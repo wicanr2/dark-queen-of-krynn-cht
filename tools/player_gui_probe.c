@@ -90,7 +90,8 @@ static void close_window(Display *d,Window w) {
     XSendEvent(d,w,False,NoEventMask,&close);XFlush(d);
 }
 int main(int argc,char **argv) {
-    if(argc!=3)return 2;
+    if(argc!=3&&argc!=4)return 2;
+    if(argc==4&&strcmp(argv[3],"manual-map"))return 2;
     snprintf(key_helper,sizeof(key_helper),"%s/xtest-key",argv[1]);
     Display *d=XOpenDisplay(NULL);if(!d)return 6;Window w=0;
     for(int i=0;i<200&&!w;i++){w=find_window(d,DefaultRootWindow(d));usleep(100000);}if(!w)return 7;
@@ -103,6 +104,15 @@ int main(int argc,char **argv) {
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"04-original");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"05-chinese");
     key(d,w,XK_F6);sleep(1);capture(d,w,argv[1],"06-manual");
+    if(argc==4){
+        key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);
+        capture(d,w,argv[1],"08-map-fit");
+        key(d,w,XK_equal);capture(d,w,argv[1],"09-map-native");
+        key(d,w,XK_equal);capture(d,w,argv[1],"10-map-double");
+        key(d,w,XK_d);key(d,w,XK_s);capture(d,w,argv[1],"11-map-pan");
+        key(d,w,XK_Home);capture(d,w,argv[1],"12-map-reset");
+        key(d,w,XK_Escape);capture(d,w,argv[1],"13-map-index");
+    }
     key(d,w,XK_Escape);sleep(1);capture(d,w,argv[1],"07-return");
     key(d,w,XK_F10);sleep(1);
     close_window(d,w);XCloseDisplay(d);return 0;

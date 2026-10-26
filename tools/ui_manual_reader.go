@@ -2,9 +2,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/draw"
+	"image/png"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,12 +17,13 @@ import (
 )
 
 type manualDocument struct {
-	ID         string   `json:"id"`
-	SourcePage int      `json:"source_page"`
-	TitleKey   string   `json:"title_key"`
-	BodyKey    string   `json:"body_key"`
-	Kind       string   `json:"kind"`
-	Lines      []string `json:"-"`
+	ID         string              `json:"id"`
+	SourcePage int                 `json:"source_page"`
+	TitleKey   string              `json:"title_key"`
+	BodyKey    string              `json:"body_key"`
+	Kind       string              `json:"kind"`
+	Image      *readerIllustration `json:"image,omitempty"`
+	Lines      []string            `json:"-"`
 }
 
 type manualBook struct {
@@ -40,6 +46,35 @@ type manualReader struct {
 }
 
 var manualTokens = regexp.MustCompile(`-?\d+|[A-Za-z]+(?:[-'][A-Za-z]+)*|.`)
+
+func loadManualPicture(base string, item *readerIllustration) {
+	if item.Entry != 0 || !regexp.MustCompile(`^[a-z0-9][a-z0-9-]*\.png$`).MatchString(item.File) {
+		panic("說明圖稿檔名或手札編號不符")
+	}
+	encoded, err := os.ReadFile(filepath.Join(base, item.File))
+	must(err)
+	if len(encoded) > 16<<20 || digest(encoded) != item.SHA256 {
+		panic("說明圖稿雜湊或容量不符")
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(encoded))
+	must(err)
+	if config.Width < 1 || config.Height < 1 || config.Width > 4096 || config.Height > 4096 {
+		panic("說明圖稿尺寸不符")
+	}
+	decoded, err := png.Decode(bytes.NewReader(encoded))
+	must(err)
+	crop := image.Rect(item.Crop[0], item.Crop[1], item.Crop[2], item.Crop[3])
+	if crop.Empty() || !crop.In(decoded.Bounds()) {
+		panic("說明圖稿內容框不符")
+	}
+	item.Pixels = image.NewRGBA(image.Rect(0, 0, crop.Dx(), crop.Dy()))
+	draw.Draw(item.Pixels, item.Pixels.Bounds(), decoded, crop.Min, draw.Src)
+	for i := 3; i < len(item.Pixels.Pix); i += 4 {
+		if item.Pixels.Pix[i] != 255 {
+			panic("說明圖稿有未定義透明度")
+		}
+	}
+}
 
 func manualLines(body string) []string {
 	var lines []string
@@ -116,6 +151,10 @@ func (g *liveGame) installManual(path, index string) {
 		expected[key] = true
 	}
 	ids := map[string]bool{}
+	if m.UI["manual.map_hint"] != "" {
+		g.validateManualText(m.UI["manual.map_hint"], 38)
+		expected["manual.map_hint"] = true
+	}
 	for i := range m.Books {
 		book := &m.Books[i]
 		if book.ID != []string{"operation", "adventurer", "appendix"}[i] || book.TitleKey != "manual.book."+book.ID ||
@@ -128,12 +167,24 @@ func (g *liveGame) installManual(path, index string) {
 			doc := &book.Documents[j]
 			if doc.ID == "" || ids[doc.ID] || doc.SourcePage < 1 || doc.SourcePage > 999 ||
 				m.UI[doc.TitleKey] == "" || m.UI[doc.BodyKey] == "" ||
-				(doc.Kind != "body" && doc.Kind != "table" && doc.Kind != "illustration-pending") {
+				(doc.Kind != "body" && doc.Kind != "table" && doc.Kind != "illustration-pending" && doc.Kind != "illustration") {
 				panic("手冊文章或來源頁不符")
 			}
 			ids[doc.ID], expected[doc.TitleKey], expected[doc.BodyKey] = true, true, true
 			if (doc.Kind == "illustration-pending") != (doc.BodyKey == "manual.image_pending") {
 				panic("手冊圖稿狀態不符")
+			}
+			if (doc.Kind == "illustration") != (doc.Image != nil) {
+				panic("說明圖稿種類與資源不符")
+			}
+			if doc.Image != nil {
+				if m.UI["manual.map_hint"] == "" {
+					panic("說明地圖缺少操作提示")
+				}
+				if book.ID != "adventurer" || doc.ID != "manual.adventurer.page2" || doc.SourcePage != 2 {
+					panic("未授權的說明圖稿文章")
+				}
+				loadManualPicture(filepath.Dir(index), doc.Image)
 			}
 			doc.Lines = manualLines(m.UI[doc.BodyKey])
 			for _, line := range doc.Lines {
@@ -166,6 +217,16 @@ func (m *manualReader) refresh(step uint64) {
 		p.Lines = doc.Lines[m.Part*13 : min((m.Part+1)*13, len(doc.Lines))]
 		p.Number, p.Count = m.Part+1, count
 		p.Footer = fmt.Sprintf(m.UI["manual.document_hint"], strconv.Itoa(m.Part+1), strconv.Itoa(count))
+		if doc.Image != nil {
+			p.Mode, p.SourceKey, p.Lines = "manual-map", doc.ID, nil
+			p.Image = &readerImageView{}
+			if m.Page != nil && m.Page.SourceKey == doc.ID && m.Page.Image != nil {
+				view := *m.Page.Image
+				p.Image = &view
+			}
+			p.Number, p.Count = 1, 1
+			p.Footer = m.UI["manual.map_hint"]
+		}
 	} else {
 		p.Heading, p.Mode, p.Footer = fmt.Sprintf(m.UI["manual.index_heading"], m.UI[book.TitleKey]), "manual-index", m.UI["manual.index_hint"]
 		first := m.Cursor / 13 * 13
@@ -196,6 +257,9 @@ func (g *liveGame) manualKey(key, source string) {
 			r.Mode, m.Reading, m.Part = "manual", false, 0
 			m.refresh(step)
 		}
+	} else if r.Mode == "manual" && m.Page != nil && m.Page.Image != nil &&
+		(key == "ZoomIn" || key == "ZoomOut" || key == "PanLeft" || key == "PanRight" || key == "PanUp" || key == "PanDown" || key == "Home") {
+		g.readerImageKey(key)
 	} else if r.Mode == "manual" {
 		book := &m.Books[m.Book]
 		if m.Reading {

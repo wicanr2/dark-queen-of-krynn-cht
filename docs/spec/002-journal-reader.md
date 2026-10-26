@@ -6,7 +6,7 @@
 工作：[手札與說明面板 #5](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5)。
 2026-10-25 使用者確認目前整合版的原框閱讀與 16 像素文字，並取消後續遊戲抽驗。
 目前入口與手札／說明工具列見 [003](003-player-toolbar.md)。沿既有正文、圖文及正常引用收據，
-新整合不另宣稱 CONFORMED；歷史 DRAFT 紀錄保留，世界地圖重繪等缺項另列。
+新整合不另宣稱 CONFORMED；歷史 DRAFT 紀錄保留。說明世界地圖已依[規格003](003-player-toolbar.md#說明書世界地圖接入)補入，來源及驗證見[研究002](../re/002-walkthrough-source.md#2026-10-27冒險手冊世界地圖接入)。
 
 ## 證據與範圍
 
