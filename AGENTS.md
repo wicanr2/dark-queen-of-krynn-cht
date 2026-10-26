@@ -208,7 +208,7 @@
 | `docs/images/`、[展示圖清單](docs/images/manifest.json) | README在GitHub直接顯示的選定截圖及原版／HD總覽；清單記錄來源、雜湊與使用者授權範圍 |
 | `docs/re/README.md`、`docs/re/` | 研究索引與可公開的最小證據；私人原始輸出留 `workplace/` |
 | `docs/spec/README.md`、`docs/spec/` | 規格索引、狀態、依賴、驗收條件與 Issue 回鏈 |
-| `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，書籍正文仍留本機 |
+| `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，圖片內嵌文字由 [image-text.en.tsv](text/image-text.en.tsv) 與 [image-text.zh-TW.tsv](text/image-text.zh-TW.tsv) 成對保存。書籍正文仍留本機 |
 | `tools/` | 可重現的 Docker、盤點、驗證與打包入口 |
 | [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD 待接入 |
 | [規格 004](docs/spec/004-hd-layer.md)、[player_hd.go](tools/player_hd.go) | HD 素材契約、完整可見來源比對與獨立開關；主題放 `workplace/probe/player-current/hd/`，視窗大小不控制 HD |
