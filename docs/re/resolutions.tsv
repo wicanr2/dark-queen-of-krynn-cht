@@ -1,2 +1,3 @@
 platform_module	address_key	semantic	level	evidence	older	marker
 DOS:DQK.EXE:3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58:resident	0x0CD31	首段完整劇情在逐字輸出前的入口	已證實	docs/re/004-story-text.md	docs/spec/001-early-text.md	RESOLVED-DQK-resident-0CD31
+DOS:DQK.EXE:3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58:resident	0x2744C	方法25逐筆遞迴組圖，來源索引及ModeX對齊已核對	已證實	docs/re/007-render-ownership.md	docs/spec/004-hd-layer.md	RESOLVED-DQK-resident-2744C

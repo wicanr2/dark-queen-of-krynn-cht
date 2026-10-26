@@ -342,3 +342,15 @@ CBODY98張全數完成第一輪，另新增CPIC50至65共16張。57組生成主�
 新程式SHA-256 `54ee455afba8ccaef7b192a9503ee47d27eea7b52d2a3cb400a6202a4a6388d0`，104定位、36份資料。正常 `player-sample-localized-20261026-r5/` 角色管理、縮放、語言切換、手冊開關與返回五張畫格差異0，guest寫入0。r2的F6被既有不穩定畫格防護忽略，r3同版及r4、r5新程式通過，輸入時序失敗不列產品缺陷。
 
 安裝收據 `localization-hd-20261026/install-check.json` SHA-256 `ff8878bd1e8e1af61a40039a279a11753aa6acc15757f7e5ff1969883b95ccea` 核對原78項素材雜湊與存檔保持，前版73e925e0保留 `player-prior-20261026-localization/`。未辨識文字、未知插值、全量怪物／場景／地形／動畫HD及攻略地圖仍待補齊。
+
+## 2026-10-26追加勘誤：0x2744C組圖與FRAME解析
+
+前節「方法25七筆及FRAME後續區塊仍未知」由本批證據解出。原版仍為DQK.EXE，SHA-256 `3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58`。IDA9.4、位址空間同前；既有非root `ida-pro-9.4-idapython:py312-v1`、image `4ac62de8…`，輸入與正式DB唯讀，查詢使用一次性副本。工具契約由 `/home/anr2/ida_94_official/README.md` 及 `knowledge-base/ida-94-tools.md` 載入，locked-v1本機未安裝，不建立重複image。
+
+已證實：IDA線性0x2744C的2749Ah至2750Dh，把低四位9解為組圖。每筆六bytes是子圖索引、總筆數、有號dy、有號dx，迴圈每筆重讀總數。0x295ED的2964Ah至29689h以原offset table的16+index*4定位，沒有經ID目錄。原版遞迴呼叫同一入口，像素由子圖命令產生，沒有另一張組圖需要再畫一次。原始名稱、bytes與操作數在 `localization-hd-20261026/method25-ida/` 及 `method25-lookup-ida/` 保存。
+
+FRAME41至44的寬度欄為0，資料符合色盤頭及色盤內容，分類為色盤資源形狀的強推論；切換時機未知。它們先前讓圖片解析在FRAME41中止，尾端45至47其實是三張有效子圖。解析器保存色盤資源、略過圖片解碼，沒有將四份色盤依序套到後續圖片。
+
+首次離線組圖有一例64個色號不同。既有IDA證據 `sub_2416C` 的24298h至242AEh確認CA41=15以y*80+(x>>2)定址，FRAME21子圖dx=3仍在同一四像素欄。離線參考修正為ModeX四像素對齊原點，保留原logical_x與實際欄位置。其他原點phase及顯示模式不由此離線圖外推，正式執行仍由原版逐子圖定址。失敗的r2盤點及原函式收據保留，沒有改原版規則或玩家繪製程式。
+
+新 `hd-assets-20261026-r3/inventory.json` 的十九份TLB沒有解析失敗或unsupported：1820張原生圖片、七張組圖參考，共1827張、去重1617張，另保存四個色盤資源。1820張原生圖片與Go解碼器的色號／透明度核對通過。七筆實際原版組圖入口的離線前景色號全相同，CPU、RAM、四平面、控制器、步數與時間一致，Go側guest寫入0。四個自製測例另驗順序、透明、ModeX欄位、循環與越界。來源與收據在 `localization-hd-20261026/method25-final-evidence.json`，這是獨立函式及離線資料證據，不是正常冒險或全量HD完成。

@@ -217,11 +217,13 @@ func TestDecodedInventoryCorpus(t *testing.T) {
 		t.Skip("未提供本機唯讀原版資料")
 	}
 	base := filepath.Join(root, "workplace/probe/hd-assets-20261026-r1")
+	if selected := os.Getenv("DQK_DECODED_INVENTORY"); selected != "" { base = selected }
 	raw, err := os.ReadFile(filepath.Join(base, "inventory.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var inv struct {
+		DecodedImages int `json:"decoded_images"`
 		Records []struct {
 			Key, Source, Image    string
 			Offset, Bytes, Method int
@@ -230,11 +232,12 @@ func TestDecodedInventoryCorpus(t *testing.T) {
 	if err = json.Unmarshal(raw, &inv); err != nil {
 		t.Fatal(err)
 	}
-	count := 0
+	count, composites := 0, 0
 	for _, r := range inv.Records {
 		if r.Image == "" {
 			continue
 		}
+		if r.Method == 25 { composites++; continue } // 原版遞迴子圖，另有七筆原函式對照。
 		count++
 		t.Run(r.Key, func(t *testing.T) {
 			paths, err := filepath.Glob(filepath.Join(root, "workplace/input/dos/drkqueen/*", r.Source+".TLB"))
@@ -277,8 +280,8 @@ func TestDecodedInventoryCorpus(t *testing.T) {
 			}
 		})
 	}
-	if count != 1817 {
-		t.Fatalf("盤點範圍不同：%d", count)
+	if count == 0 || count+composites != inv.DecodedImages {
+		t.Fatalf("盤點範圍不同：primitive=%d composite=%d declared=%d", count, composites, inv.DecodedImages)
 	}
 }
 

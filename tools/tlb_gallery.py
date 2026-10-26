@@ -139,19 +139,35 @@ def extract_bank(data,base,context,palette,records,output,source_name):
     mapping={}
     for key,index in ids:
         assert palette_index<index<len(blocks);mapping.setdefault(index,[]).append(key)
+    bank_records=[]
     for i,(start,end) in enumerate(blocks[palette_index+1:],palette_index+1):
         assert end-start>=8
         height,dy,dx,quarter,method=struct.unpack_from('<HhhBB',data,start);width=quarter*4
-        assert 0<width<=640 and 0<height<=400
         key=source_name+'.'+'.'.join(str(x[0]) for x in context)+'.'+str(i)
         record=dict(key=key,source=source_name,offset=base+start,bytes=end-start,sha256=sha(data[start:end]),
             context=context,block=i,ids=mapping.get(i,[]),width=width,height=height,x=dx,y=dy,method=method,
             palette_range=[first,count],palette_cycling=cycling,palette_cycles=ranges,header_magic=magic)
+        records.append(record);bank_records.append(record)
+        if width==0 and method==24:
+            resource=struct.unpack_from('<HHHBB',data,start)
+            assert resource[1]+resource[2]<=256 and 8+3*resource[2]<=end-start
+            record.update(palette_only=True,palette_resource_header=list(resource),
+                          classification='強推論：色盤資料形狀；切換時機未知')
+            continue
+        assert 0<width<=640 and 0<height<=400
+        if method==25:
+            parts=[];at=0;total=1
+            while len(parts)<total:
+                if start+8+at+6>end:raise ValueError('組圖子記錄不足')
+                child,total,py,px=struct.unpack_from('<BBhh',data,start+8+at)
+                parts.append(dict(block=child,dy=py,dx=px,total=total));at+=6
+            record.update(composite_parts=parts,consumed_bytes=at)
+            continue
         opacity=None
         try:
             if method==23:raw,used,opacity=packet_pixels(data[start+8:end],width,height)
             else:raw,used=pixels(data[start+8:end],width,height,method)
-        except ValueError as error:record['unsupported']=str(error);records.append(record);continue
+        except ValueError as error:record['unsupported']=str(error);continue
         assert len(raw)==width*height and used<=end-start-8
         rgba=bytearray()
         for index,value in enumerate(raw):
@@ -163,7 +179,47 @@ def extract_bank(data,base,context,palette,records,output,source_name):
         (output/(key+'.idx')).write_bytes(raw)
         record.update(image=name,image_sha256=sha((output/name).read_bytes()),indexed_sha256=sha(raw),consumed_bytes=used,
             palette=[list(dac_color(c)) if c is not None else None for c in palette])
-        records.append(record)
+    compose_bank_records(bank_records,output)
+
+
+def compose_bank_records(records,output):
+    """sub_2744C 的逐筆遞迴參照；只重建離線圖，不增加執行期繪製。"""
+    by_block={r['block']:r for r in records}
+    def resolve(record,active):
+        if 'image' in record:return
+        if 'composite_parts' not in record:raise ValueError('組圖參照非圖片或未知來源')
+        if record['block'] in active:raise ValueError('組圖循環參照')
+        active=active|{record['block']}
+        w,h=record['width'],record['height']
+        result=Image.new('RGBA',(w,h));raw=bytearray([255])*(w*h);children=[]
+        for part in record['composite_parts']:
+            child=by_block.get(part['block'])
+            if child is None:raise ValueError('組圖子索引不存在')
+            resolve(child,active)
+            logical_x=part['dx']-child['x']
+            # sub_2416C 的CA41=15分支以x>>2定址；離線原點採四像素對齊。
+            x,y=logical_x//4*4,part['dy']-child['y']
+            if x<0 or y<0 or x+child['width']>w or y+child['height']>h:
+                raise ValueError('組圖子圖超出宣告邊界')
+            image=Image.open(output/child['image']).convert('RGBA')
+            indexes=(output/Path(child['image']).with_suffix('.idx')).read_bytes()
+            assert len(indexes)==image.width*image.height
+            for yy in range(image.height):
+                for xx in range(image.width):
+                    color=image.getpixel((xx,yy))
+                    if color[3]:
+                        raw[(y+yy)*w+x+xx]=indexes[yy*image.width+xx]
+                        result.putpixel((x+xx,y+yy),color)
+            children.append(dict(key=child['key'],sha256=child['sha256'],x=x,y=y,logical_x=logical_x))
+        name=record['key']+'.png';result.save(output/name)
+        (output/Path(name).with_suffix('.idx')).write_bytes(raw)
+        record.update(image=name,image_sha256=sha((output/name).read_bytes()),indexed_sha256=sha(raw),
+                      composite_children=children,mode_x_origin_phase=0,
+                      render_policy='原版遞迴分派既有子圖；不再繪製整張組圖')
+    for record in records:
+        if 'composite_parts' in record:
+            try:resolve(record,set())
+            except ValueError as error:record['unsupported']=str(error)
 
 
 def run(original,output):

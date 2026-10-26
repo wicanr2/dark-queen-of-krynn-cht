@@ -76,6 +76,7 @@ def add(root, output, key, generated, round_number, inventory=None):
     inventory = inventory or root / 'workplace/probe/hd-assets-20261025'
     index = json.loads((inventory / 'inventory.json').read_text())
     record, = [r for r in index['records'] if r['key'] == key and 'image' in r]
+    assert not record.get('composite_parts'), '組圖沿用子圖HD，不另生成或繪製整張組圖'
     source_file, = [r for r in index['input_files'] if Path(r['path']).stem == record['source']]
     original = inventory / record['image']
     assert original.is_file() and generated.is_file()
