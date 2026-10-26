@@ -272,3 +272,41 @@ F6／Esc、F10及正常關窗通過。五張代表畫面對r5逐byte差異0，�
 現行程式`2f282cba3d47d8f69dca0a6a377413e58ee71f2a456b8dd330f9f9e1b0ada699`，
 57個定位、34份資料。前版7226ac69與兩份變動資料備份於`player-prior-20261026-render/`。
 本批不新增冒險、戰鬥、存讀檔或HD審查，完整接管及剩餘中文／HD範圍仍未完成。
+
+## 2026-10-26：Go 命令畫布、暫存還原與事件邊界
+
+本節仍以同一 DQK.EXE SHA-256 `3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58`、dosgolem `f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`、Go 1.24.13 為基準。既有 IDA 匯出入口與雜湊沿前節。追加查詢使用現有 `ida-pro-9.4-idapython:py312-v1`，image ID `4ac62de83339c215bab10e455cee3a22d9c6efed9fd0d8ed0f068327b83a06ab`。私有查詢、最小探針與證據保存在 `render-native-complete-20261026/`，沒有更名覆蓋原始符號。
+
+| 原始定位與位址空間 | 已證實的原因或效果 | 實作 |
+|---|---|---|
+| 執行期 `17AB:0A23`、`17AB:0A93` | PUSH CS 後 NEAR call 的返回位置，分別與 `162E:21F3`、`162E:2263` 實體線性位址相同。舊版只比段落／位移，實際遊戲圖片被拒絕，孤立函式測試使用另一組別名而未揭露。 | 圖片資格核線性位址，交易返回仍用實際 CS:IP、SS:SP 配對。 |
+| IDA `sub_2717A` 參數 `[bp+18h]`、`[bp+1Ah]` | 原指令讀 byte，高 byte 是未使用的堆疊內容。 | 比 byte，保留原始 word，不改遊戲參數。 |
+| IDA 線性 `1104Ch`，檔案 `344Ch`，執行期 `01E7:02DC` | word AND／XOR 遮罩合成。不同讀寫平面時，FF／00 也可能複製來源，不能當透明。 | 純 Go 場景命令合成，保留最後 VGA 讀取的鎖存器。 |
+| IDA 線性 `11944h`，檔案 `3D44h`，執行期 `01E7:0BD4` | 位移遮罩、左右邊緣及相鄰 word 重疊。 | 純 Go 場景合成與邊界命令，原版只保留外層控制／機器效果。 |
+| IDA 線性 `119CFh`，檔案 `3DCFh`，執行期 `01E7:0C5F` | `sub_119B6` 的 RAM 還原 REP MOVSB。 | Go 區塊命令；暫存繪製保留底圖資產與來源座標，色號恢復時重新顯示原資產。 |
+| IDA 線性 `11B51h`，檔案 `3F51h`，執行期 `01E7:0DE1` | `sub_11B26` 已解碼 RLE 的不透明區塊。 | Go 區塊命令，保留原資源解碼與返回值。 |
+| IDA 線性 `1162Ch`，檔案 `3A2Ch`，執行期 `01E7:08BC` | 未命名區間 `11612h..11631h` 的 REP STOSW，啟動實測清 A000／A400 各 16000 byte。 | Go 填色命令，在原 Machine.Step 事件派送後替換單道指令。 |
+
+單指令橋接只替換原 Machine.Step 內的 CPU.Step 呼叫，沿用原有事件派送、Steps 加一與後續 watch。一次性回呼再核 CS:IP、SS:SP；IRQ 改變位置時不接管。接管僅補該指令 cycles。批次命令仍受事件預算限制，事件附近改用相同 Go 字形／區塊資料，沒有先執行 guest 像素寫入。IRQ 與垂直刷新測試另核事件當下 CPU、完整 VGA 控制器及畫面雜湊。
+
+角色選單的新命令曾揭露中文字緣被背景覆蓋。`player-sample-native-audit-20261026-r3/`保留失敗畫格，原因是既有保護框只有八列，20px 字模高 24。改用實際字模範圍，保留字級與位置，字緣按原背景合成。r4、r5、r6 均通過既有五張正常操作畫格比對，未放寬參考圖。r5 冷啟動仍有 5418 次 guest 寫入，r6 降為 768，不能把這些中間收據說成全程零寫入。
+
+函式證據依序為 image-alias 410、source-blit-r2 482、masked-command-r2 568、temporary-command 578、canvas-restore 604、shifted-mask 752、clear-instruction 860、boundary-canvas 860、complete-span 884、event-owner 916 組，研究根皆為 `workplace/probe/render-abi-<名稱>-20261026-r1/`，明列 r2 者除外。各批原始碼雜湊獨立保存。masked-command-r1 因不同讀寫平面的透明判斷失敗，r2 修正後通過；不覆寫失敗收據。
+
+`player-render-audit-20261026/continuation-check-r2.json`沿已驗證的 `weapon-hud-20261025/control-r5/final.state`，SHA-256 `63d13f57df7289418e61f000ba085a82ee23044c249bf61382ccfa8b34ec6d0a`，保留相同序列化亂數狀態，先續行一百萬步、正常送 q，再續行九千九百萬步。CPU、完整 RAM、四平面、控制器與鎖存器一致，guest 寫入為原版 627326、候選 0。這是既有正常路徑快照的續行，沒有座標注入，也不取代完整冷啟動戰鬥／存讀檔驗收。r1 尚有 5137 次寫入，原始收據保留。
+
+r6 最後 768 次寫入的執行期診斷為滑鼠中斷 `SS=011Ch`、原資料段 `DS=333Eh`。舊防護用當前 SS 讀全域 CA41h／CB6Ch，因而拒絕游標繪製與還原。全域基址與函式參數分開處理：前者沿已證實的 333Eh，後者仍用實際 SS:BP。追加替代堆疊的獨立函式與 IRQ 對照，正式更新前仍須通過候選檢查。
+
+### 正式接入與範圍收尾
+
+替代堆疊的 `render-abi-mouse-stack-20261026-r1/` 1092組通過，r7正常介面的guest寫入降為0。接著補byte遮罩、背景遮罩矩形、圖樣直條、word奇數byte、同頁重疊及REP事件邊界。`canvas-primitives-r1`與`canvas-final-r1`各1324組通過；`canvas-final-r2`的1380組揭露奇數前綴在來源無資產身分時，目的色號已更新但最小讀回資料未補，造成2或4個平面byte差異。修正目的相容資料，r3的1380組全部通過。32個失敗案例及原批次保留。
+
+追加IDA查詢 `render-native-complete-20261026/bitmap-dispatch/result.json`，SHA-256 `f2db940fc5168878174d0c0cfe67da2757d34b9217fb0ffd0513a9dea655d010`，沿同一原版與IDA9.4工具鏈，確認 `sub_2717A` 的 method3 在IDA線性 `27390h` 呼叫 `sub_112EE`，method7在 `273FCh` 呼叫 `sub_26D6A`。method3的literal、遮罩、repeat、透明skip及裁切，分別對應已解碼Go區塊、遮罩合成與區塊填色。原封包控制與資源解析保留。字形分派 `sub_23806` 的CA41=0Fh分支明確走 `sub_12EE1`，其他顯示模式的RAM轉換helper未擴大研究。
+
+最終 `workplace/probe/render-abi-canvas-complete-20261026-r1/` 有1452組及6項路由檢查，全部通過。有效命令的guest像素寫入均為0；16組明確越界／環繞拒絕案例保留原版一次。刷新、IRQ、替代堆疊、原控制器及機器效果比較範圍同前。這是函式層級證據，沒有把人工封包測試當作正常遊戲場景。
+
+正式玩家移除 `player_render_owner.Source` 的ScreenRGB退路。Go建立畫布，Ebitengine提交紋理／矩形；初始化模式交界留黑。正常 `player-sample-canvas-complete-20261026-r1/` 五張畫格差異0，12鈕繁中、語言／縮放／HD偏好、手冊開關、截圖及關窗通過，Pending為空，guest寫入0。現有Go場景測試的素材數量仍停在48，依既有78項主題修正後，全部來源色號／透明範圍及矩形測試通過，沒有新增美術審查。
+
+最後同版本戰鬥續行在 `player-render-audit-20261026/continuation-final/`，保存輸入與來源雜湊、探針原始碼及二進位。固定同一序列化亂數狀態，先一百萬步、正常q、再九千九百萬步。CPU、RAM、四平面、控制器及鎖存器一致，原版627326次guest寫入，候選0，Pending為空。這仍是既有正常路徑快照續行，沒有新冷啟動全流程或通關聲明。
+
+正式程式 SHA-256 `73e925e01e58ee91def1aa5c2431659eaf637368dee8a9c416f6328668bd739b`，102定位、34份資料。僅更新掛勾及profile，其餘譯文、字模與78項HD保持。前版在 `player-prior-20261026-canvas/`，安裝核對在 `player-canvas-20261026/install-check.json`。正常命令的Go接管與代表路徑已接入；全遊戲場景、未知圖像身分、剩餘中文與全量HD分別追蹤。

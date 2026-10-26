@@ -67,7 +67,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 		ImagePositionCallers []oracle.Addr
 	}
 	must(json.Unmarshal(raw, &bindings))
-	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 31 || len(bindings.NativeSteps) != 23 {
+	if bindings.Version != 2 || bindings.ExecutableSHA256 != "3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58" || len(bindings.Hooks) != 35 || len(bindings.NativeSteps) != 64 {
 		panic("繪圖掛勾資料與原版版本不符")
 	}
 	owner := &playerRenderOwner{Oracle: o, ShadowRGB: make([]byte, 320*200*3),
@@ -217,16 +217,22 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 		page, ok := nativeVisiblePage(p.Oracle)
 		if !ok {
 			p.releaseScene()
-			w, h, rgb := p.Oracle.ScreenRGB()
-			if w != 320 || h != 200 || len(rgb) != len(p.ShadowRGB) {
-				panic("繪圖來源尺寸不符")
-			}
-			copy(p.ShadowRGB, rgb)
+			// 啟動／模式交界由自有畫布留黑，不讀取原版整張 RGB 畫面。
+			clear(p.ShadowRGB)
+			p.Counters["non_canvas_layout_frames"]++
 		} else {
 			model := p.Scene.page(page, p.Oracle.PresentationPlane)
 			pal := p.Oracle.Palette()
 			blocked := [64000]bool{}
+			textBlend := [64000]bool{}
 			if g.translate {
+				for _, r := range g.playerTextInkRectangles() {
+					for y := r[1]; y < r[3]; y++ {
+						for x := r[0]; x < r[2]; x++ {
+							textBlend[y*320+x] = true
+						}
+					}
+				}
 				p.Text.prune()
 				for _, r := range append(g.playerProtectedRectangles(), p.Text.Rectangles()...) {
 					if r[0] < 0 || r[1] < 0 || r[2] > 320 || r[3] > 200 {
@@ -242,7 +248,7 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 			omitted := uint64(0)
 			for i, c := range model.Cells {
 				d := i * 3
-				if blocked[i] || c.Asset != nil && c.Visible {
+				if blocked[i] || c.Asset != nil && c.Visible && !textBlend[i] {
 					clear(p.ShadowRGB[d : d+3])
 					omitted++
 				} else {
@@ -272,6 +278,7 @@ func (p *playerRenderOwner) Present(screen *ebiten.Image, g *liveGame, rgb []byt
 			protected := [][4]int(nil)
 			if g.translate {
 				protected = append(g.playerProtectedRectangles(), p.Text.Rectangles()...)
+				protected = append(protected, g.playerTextInkRectangles()...)
 			}
 			model := p.Scene.page(page, p.Oracle.PresentationPlane)
 			pal := p.Oracle.Palette()

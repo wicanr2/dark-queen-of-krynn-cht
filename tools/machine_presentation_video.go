@@ -5,6 +5,27 @@ import "fmt"
 
 func (m *Machine) SetPresentationVideoAccess(fn func(uint32, bool, bool)) {
 	m.presentationVideoAccess = fn
+	if fn == nil {
+		m.presentationInstruction = nil
+	}
+}
+
+// 單指令接管在原 Machine.Step 的事件派送之後執行。
+// 中斷若改變執行位置，回呼拒絕接管，仍由 CPU 執行原本的中斷指令。
+func (m *Machine) SetPresentationInstruction(fn func() bool) { m.presentationInstruction = fn }
+func (m *Machine) stepPresentationInstruction() error {
+	fn := m.presentationInstruction
+	m.presentationInstruction = nil
+	if fn != nil && fn() {
+		return nil
+	}
+	return m.CPU.Step()
+}
+func (m *Machine) CommitPresentationInstructionCycles(cycles uint64) {
+	if ^uint64(0)-m.CPU.Cycles < cycles {
+		panic("呈現指令週期溢位")
+	}
+	m.CPU.Cycles += cycles
 }
 func (m *Machine) PresentationVideoState() [6]byte {
 	return [6]byte{m.VGA.gc[5], m.VGA.gc[8], m.VGA.gc[1], m.VGA.gc[3], m.VGA.seq[2], m.VGA.gc[4]}

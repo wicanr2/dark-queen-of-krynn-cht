@@ -24,7 +24,10 @@ for name, sha in hashes.items():
         raise ValueError(f"SDK 原始碼雜湊失配：{name}")
     text = raw.decode()
     if name.startswith("internal"):
-        text = change(text, "type Machine struct {", "type Machine struct {\n\tpresentationVideoAccess func(uint32, bool, bool)")
+        text = change(text, "type Machine struct {", "type Machine struct {\n\tpresentationInstruction func() bool\n\tpresentationVideoAccess func(uint32, bool, bool)")
+        if text.count("err := m.CPU.Step()") != 2:
+            raise ValueError("SDK 單指令呈現橋接位置失配")
+        text = text.replace("err := m.CPU.Step()", "err := m.stepPresentationInstruction()")
         text = change(text, "return m.VGA.Read(a - vgaLo)", "if m.presentationVideoAccess != nil { m.presentationVideoAccess(a-vgaLo, false, false) }; return m.VGA.Read(a - vgaLo)")
         text = change(text, "if m.onVideoWrite != nil && a >= vgaLo && a < vgaHi {", "if m.presentationVideoAccess != nil && m.planarOn && a >= vgaLo && a < vgaHi { m.presentationVideoAccess(a-vgaLo, true, false) }; if m.onVideoWrite != nil && a >= vgaLo && a < vgaHi {")
         text = change(text, "m.VGA.Write(a-vgaLo, v)", "m.VGA.Write(a-vgaLo, v); if m.presentationVideoAccess != nil { m.presentationVideoAccess(a-vgaLo, true, true) }")

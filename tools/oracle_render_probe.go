@@ -48,6 +48,13 @@ func (o *Oracle) RenderProbeCPU() RenderProbeCPU {
 	c := o.m.CPU
 	return RenderProbeCPU{o.Regs(), c.Hi, c.FSeg, c.GSeg, c.FPUCW, c.Halted, c.Cycles}
 }
+
+func (o *Oracle) RenderProbeStackSS(seg uint16) {
+	r := o.Regs()
+	data := o.Bytes(Addr{Seg: r.SS, Off: r.SP}, 64)
+	o.WriteBytes(Addr{Seg: seg, Off: r.SP}, data)
+	o.m.CPU.Seg[cpu.SS] = seg
+}
 func (o *Oracle) RenderProbeRAM() []byte { return append([]byte(nil), o.m.Mem...) }
 
 func (o *Oracle) RenderProbePlaneMask(mask byte) {
@@ -74,6 +81,8 @@ func (o *Oracle) RenderProbeVideoRegisters() [28]byte {
 type RenderProbeFrame struct {
 	Step          uint64
 	IndicesSHA256 string
+	CPU           RenderProbeCPU
+	Video         [28]byte
 }
 
 func (o *Oracle) RenderProbeFrameAt(step uint64) *[]RenderProbeFrame {
@@ -82,7 +91,18 @@ func (o *Oracle) RenderProbeFrameAt(step uint64) *[]RenderProbeFrame {
 	o.m.SetOnFrame(func() {
 		_, _, px := o.Screen()
 		sum := sha256.Sum256(px)
-		*events = append(*events, RenderProbeFrame{o.Steps(), fmt.Sprintf("%x", sum)})
+		*events = append(*events, RenderProbeFrame{o.Steps(), fmt.Sprintf("%x", sum), o.RenderProbeCPU(), o.RenderProbeVideoRegisters()})
+	})
+	return events
+}
+
+func (o *Oracle) RenderProbeIRQAt(step uint64) *[]RenderProbeFrame {
+	o.m.RenderProbeIRQAt(step)
+	events := new([]RenderProbeFrame)
+	o.m.SetOnTick(func() {
+		_, _, px := o.Screen()
+		sum := sha256.Sum256(px)
+		*events = append(*events, RenderProbeFrame{o.Steps(), fmt.Sprintf("%x", sum), o.RenderProbeCPU(), o.RenderProbeVideoRegisters()})
 	})
 	return events
 }

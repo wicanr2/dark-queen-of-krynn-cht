@@ -38,3 +38,24 @@ func (o *Oracle) CommitPresentationWork(steps, cycles uint64) error {
 	return o.m.CommitPresentationWork(steps, cycles)
 }
 func (o *Oracle) PresentationDOSCost() bool { return o.m.CPU.DOSBoxCost }
+
+// 不在 OnCall 提前派送事件，也不變更原版的 Step／stub 順序。
+func (o *Oracle) QueuePresentationInstruction(fn func() bool) {
+	r := o.Regs()
+	o.m.SetPresentationInstruction(func() bool {
+		now := o.Regs()
+		if now.CS != r.CS || now.IP != r.IP || now.SS != r.SS || now.SP != r.SP || o.m.CPU.Halted || now.Flags&0x100 != 0 {
+			return false
+		}
+		return fn()
+	})
+}
+func (o *Oracle) CommitPresentationInstructionCycles(cycles uint64) {
+	o.m.CommitPresentationInstructionCycles(cycles)
+}
+
+// 已驗證呈現效果只可更新六個算術旗標，不改中斷、方向或追蹤旗標。
+func (o *Oracle) SetPresentationArithmeticFlags(flags uint16) {
+	const arithmetic = uint16(0x8d5)
+	o.m.CPU.SetFlags((o.m.CPU.Flags &^ arithmetic) | (flags & arithmetic))
+}

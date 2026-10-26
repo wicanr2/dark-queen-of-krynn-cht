@@ -89,6 +89,7 @@ type probeCase struct {
 	Image       *sourceTileCommand
 	Data        []byte
 	FrameAt     uint64
+	IRQAt       uint64
 	Reject      bool
 	Pattern     bool
 	Mask        byte
@@ -97,6 +98,18 @@ type probeCase struct {
 	VideoCopy   bool
 	VideoMode   byte
 	OwnedSource bool
+	AliasReturn bool
+	RawTransfer bool
+	RawMasked   bool
+	MaskData    []byte
+	Temporary   bool
+	ShiftMasked bool
+	Clear       bool
+	RawRLE      bool
+	StackSS     uint16
+	MaskColumn  bool
+	SamePage    bool
+	MaskedRLE   bool
 }
 type probeResult struct {
 	Name                       string
@@ -145,6 +158,97 @@ func main() {
 	gate.Close()
 	state := filepath.Join(root, "workplace/probe/battle-continuation-20261025/control-r1/final.state")
 	cases := []probeCase{}
+	for _, height := range []uint16{1, 3} {
+		for _, width := range []uint16{2, 5, 10} {
+			for _, plane := range []byte{1, 15} {
+				data, colors := []byte{}, []byte{}
+				for y := 0; y < int(height); y++ {
+					data = append(data, 0xc3, 0x43, 0xf0, 0x0f, 0xaa, 0x82, 0x02, 0)
+					for x := 0; x < 7; x++ {
+						colors = append(colors, byte(x*31+y*7))
+					}
+				}
+				c := probeCase{Name: fmt.Sprintf("masked-rle-%d-%d-%02x", height, width, plane), Entry: oracle.Addr{Seg: 0x1e7, Off: 0x57e}, Args: []uint16{0, height, 0, width, 0x100, 0x7000, 0x300}, Data: data, MaskData: colors, Mask: plane, MaskedRLE: true}
+				cases = append(cases, c)
+				c.Name += "-frame"
+				c.FrameAt = 60
+				cases = append(cases, c)
+				c.Name += "-IRQ"
+				c.IRQAt = 60
+				c.FrameAt = 0
+				cases = append(cases, c)
+			}
+		}
+	}
+	for _, entry := range []uint16{0x8c2, 0x918} {
+		for _, mode := range []byte{0x40, 0x41} {
+			for _, from := range []uint16{0, 7} {
+				for _, mask := range []byte{5, 15} {
+					to := uint16(7)
+					if from != 0 {
+						to = 0
+					}
+					c := probeCase{Name: fmt.Sprintf("overlap-%04x-%02x-%d-%02x", entry, mode, from, mask), Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: []uint16{from, 0xa000, to, 0xa000, 161}, VideoCopy: true, VideoMode: mode, Mask: mask, SamePage: true}
+					cases = append(cases, c)
+					c.Name += "-frame"
+					c.FrameAt = 300
+					cases = append(cases, c)
+				}
+			}
+		}
+	}
+	for _, height := range []uint16{1, 3, 17} {
+		for _, mask := range []uint16{0, 0xf0f0, 0xffff} {
+			for _, plane := range []byte{1, 15} {
+				c := probeCase{Name: fmt.Sprintf("mask-fill-%d-%04x-%02x", height, mask, plane), Entry: oracle.Addr{Seg: 0x1e7, Off: 0x3b0}, Args: []uint16{0x3509, mask, height, 12}, Mask: plane}
+				cases = append(cases, c)
+				c.Name += "-frame"
+				c.FrameAt = 40
+				cases = append(cases, c)
+				data := make([]byte, 32)
+				for i := range data {
+					data[i] = byte(i * 37)
+				}
+				c = probeCase{Name: fmt.Sprintf("mask-column-%d-%04x-%02x", height, mask, plane), Entry: oracle.Addr{Seg: 0x1e7, Off: 0xd31}, Args: []uint16{height, mask, 0x100, 0x7000, 3}, Mask: plane, Data: data, MaskColumn: true}
+				cases = append(cases, c)
+				c.Name += "-frame"
+				c.FrameAt = 40
+				cases = append(cases, c)
+			}
+		}
+	}
+	for _, width := range []int{1, 17, 64} {
+		for _, height := range []uint16{1, 3} {
+			data := []byte{}
+			for y := 0; y < int(height); y++ {
+				data = append(data, byte(width))
+				for x := 0; x < width; x++ {
+					data = append(data, byte(x*11+y*31))
+				}
+				data = append(data, 0)
+			}
+			c := probeCase{Name: fmt.Sprintf("raw-rle-%d-%d", width, height), Entry: oracle.Addr{Seg: 0x1e7, Off: 0xdb6}, Args: []uint16{0, 0, height, 0, 0, 0x100, 0x7000}, RawRLE: true, Data: data, Mask: 5}
+			cases = append(cases, c)
+			c.Name += "-frame"
+			c.FrameAt = 31
+			cases = append(cases, c)
+		}
+	}
+	for _, page := range []uint16{0xa000, 0xa400, 0xac00} {
+		for _, count := range []uint16{0, 2, 18, 16000} {
+			for _, mode := range []byte{0, 0x40} {
+				for _, color := range []uint16{0, 0x3709} {
+					c := probeCase{Name: fmt.Sprintf("clear-%04x-%d-%02x-%04x", page, count, mode, color), Entry: oracle.Addr{Seg: 0x1e7, Off: 0x8a2}, Args: []uint16{0, page, count, color}, Clear: true, VideoMode: mode, Mask: 5}
+					cases = append(cases, c)
+					if count == 18 && mode == 0 {
+						c.Name += "-frame"
+						c.FrameAt = 12
+						cases = append(cases, c)
+					}
+				}
+			}
+		}
+	}
 	for _, font := range [][]byte{{0, 0, 0, 0, 0, 0, 0, 0}, {255, 255, 255, 255, 255, 255, 255, 255}, {0x81, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x81}} {
 		cases = append(cases, probeCase{Name: fmt.Sprintf("glyph-%x", font), Entry: oracle.Addr{Seg: 0x1e7, Off: 0x2171}, Args: []uint16{15, 0, 0x100, 0x7000}, Font: font})
 	}
@@ -187,7 +291,6 @@ func main() {
 		}
 		for _, args := range [][]uint16{
 			{0x100, 0x7000, 15999, 0xa000, 64},
-			{0x100, 0xa000, 0x200, 0xa000, 64},
 			{0xfff0, 0x7000, 0, 0xa000, 64},
 		} {
 			cases = append(cases, probeCase{Name: fmt.Sprintf("upload-%04x-reject-%04x-%04x-%04x", entry, args[0], args[1], args[2]),
@@ -217,7 +320,7 @@ func main() {
 							for _, delta := range []uint64{1, 2} {
 								c.Name = fmt.Sprintf("pagecopy-event-%04x-%04x-%02x-%d", entry, pages[0], mode, delta)
 								c.FrameAt = step + delta
-								c.Reject = delta == 1
+								c.Reject = false
 								cases = append(cases, c)
 							}
 						}
@@ -226,7 +329,6 @@ func main() {
 			}
 		}
 		for _, args := range [][]uint16{
-			{0, 0xa000, 0x200, 0xa000, 64},
 			{15999, 0xa000, 0, 0xac00, 64},
 			{0, 0xa000, 15999, 0xac00, 64},
 		} {
@@ -261,6 +363,86 @@ func main() {
 			File   string `json:"source_file"`
 			Offset int    `json:"source_offset"`
 			Count  int    `json:"source_block_bytes"`
+		}
+	}
+	for _, height := range []uint16{1, 3} {
+		for _, width := range []uint16{1, 2, 8} {
+			for _, shift := range []uint16{0, 3, 7} {
+				for _, planeMask := range []byte{1, 15} {
+					for edge := 0; edge < 2; edge++ {
+						data, mask := make([]byte, int(height)*int(width)), make([]byte, int(height)*int(width))
+						for i := range data {
+							data[i], mask[i] = byte(i*29+3), byte(i*51)
+						}
+						left, right := uint16(255), uint16(255)
+						if edge == 1 {
+							left, right = 0xf0, 0x0f
+						}
+						c := probeCase{Name: fmt.Sprintf("shifted-mask-%d-%d-%d-%02x-%d", height, width, shift, planeMask, edge),
+							Entry: oracle.Addr{Seg: 0x1e7, Off: 0xbbc}, Args: []uint16{0x100, 0x7000, 0x300, 0, height, width, 0, left, right, shift},
+							Data: data, MaskData: mask, Mask: planeMask, ShiftMasked: true}
+						cases = append(cases, c)
+						if height == 3 && width == 8 && shift == 7 && planeMask == 15 && edge == 1 {
+							c.Name += "-frame"
+							c.FrameAt = 333
+							cases = append(cases, c)
+						}
+						if height == 3 && width == 8 && shift == 3 && planeMask == 15 && edge == 0 {
+							c.Name += "-temporary"
+							c.Temporary = true
+							cases = append(cases, c)
+						}
+					}
+				}
+			}
+		}
+	}
+	for _, height := range []uint16{1, 7} {
+		for _, width := range []uint16{2, 14} {
+			for _, planeMask := range []byte{1, 5, 15} {
+				for variant := 0; variant < 3; variant++ {
+					data, mask := make([]byte, int(height)*int(width)), make([]byte, int(height)*int(width))
+					for i := range data {
+						data[i] = byte(i * 37)
+						mask[i] = byte(variant * 0x7f)
+						if variant == 2 && i%3 == 0 {
+							mask[i], data[i] = 255, 0
+						}
+					}
+					c := probeCase{Name: fmt.Sprintf("masked-blit-%d-%d-%02x-%d", height, width, planeMask, variant),
+						Entry: oracle.Addr{Seg: 0x1e7, Off: 0x2ba}, Args: []uint16{0x100, 0x7000, 0x300, 0, height, width, 0},
+						Data: data, MaskData: mask, Mask: planeMask, RawMasked: true}
+					cases = append(cases, c)
+					if height == 7 && variant == 2 {
+						c.Name += "-frame"
+						c.FrameAt = 333
+						cases = append(cases, c)
+					}
+				}
+			}
+		}
+	}
+	cases = append(cases, probeCase{Name: "masked-blit-BX-overflow", Entry: oracle.Addr{Seg: 0x1e7, Off: 0x2ba},
+		Args: []uint16{0x7ff0, 0x7000, 0x300, 0, 1, 16, 0}, Data: make([]byte, 16), MaskData: make([]byte, 16), RawMasked: true, Mask: 15})
+	for _, entry := range []uint16{0x241, 0x286, 0x212e, 0xc46} {
+		for _, height := range []uint16{1, 7} {
+			for _, width := range []uint16{8, 12} {
+				for _, mask := range []byte{1, 5, 15} {
+					data := make([]byte, int(height)*int(width))
+					for i := range data {
+						data[i] = byte(i * 37)
+						if i%3 == 2 {
+							data[i] = 255
+						}
+					}
+					args := []uint16{0x100, 0x7000, height, width, 0}
+					if entry == 0x212e {
+						args = append(args, 255)
+					}
+					cases = append(cases, probeCase{Name: fmt.Sprintf("source-blit-%04x-%d-%d-%02x", entry, height, width, mask),
+						Entry: oracle.Addr{Seg: 0x1e7, Off: entry}, Args: args, Data: data, Mask: mask, RawTransfer: true})
+				}
+			}
 		}
 	}
 	for _, entry := range []uint16{0x8c2, 0x918, 0x956} {
@@ -301,6 +483,14 @@ func main() {
 		}
 	}
 	for _, test := range append([]probeCase(nil), cases...) {
+		if test.RawTransfer && test.Args[2] == 7 && test.Args[3] == 12 && test.Mask == 15 ||
+			test.RawMasked && test.Args[4] == 7 && test.Args[5] == 14 && test.Mask == 15 && test.FrameAt == 0 && test.Name == "masked-blit-7-14-0f-2" ||
+			test.Name == "glyph-8142241818244281" {
+			c := test
+			c.Name += "-temporary"
+			c.Temporary = true
+			cases = append(cases, c)
+		}
 		if test.Font != nil || test.Image != nil || test.Args[0] == 48 {
 			c := test
 			c.Name += "-frame"
@@ -312,9 +502,37 @@ func main() {
 		}
 		if test.Image != nil {
 			c := test
+			c.Name += "-alias-byte-high"
+			c.AliasReturn = true
+			c.Args = append([]uint16(nil), test.Args...)
+			c.Args[len(c.Args)-1] |= 0x6800
+			cases = append(cases, c)
+			c = test
 			c.Name += "-reject-return"
 			c.Reject = true
 			cases = append(cases, c)
+		}
+	}
+	for _, test := range append([]probeCase(nil), cases...) {
+		if test.RawMasked {
+			test.Name += "-byte"
+			test.Entry = oracle.Addr{Seg: 0x1e7, Off: 0x30a}
+			cases = append(cases, test)
+		}
+	}
+	for _, test := range append([]probeCase(nil), cases...) {
+		if test.FrameAt > 0 && (test.Clear || test.RawRLE || test.Font != nil || test.ShiftMasked) {
+			test.Name += "-IRQ"
+			test.IRQAt = test.FrameAt
+			test.FrameAt = 0
+			cases = append(cases, test)
+		}
+	}
+	for _, test := range append([]probeCase(nil), cases...) {
+		if test.ShiftMasked || test.RawTransfer && test.Entry.Off == 0xc46 {
+			test.Name += "-mouse-stack"
+			test.StackSS = 0x11c
+			cases = append(cases, test)
 		}
 	}
 	results := []probeResult{}
@@ -335,10 +553,29 @@ func main() {
 					if test.Image.Header[7] == 18 {
 						ret.Off = 0x21f3
 					}
+					if test.AliasReturn {
+						ret = oracle.Addr{Seg: 0x17ab, Off: uint16(ret.Linear() - 0x17ab0)}
+					}
 				}
 				o.RenderProbePrepare(test.Entry, ret, test.Args, dosCost)
+				if test.StackSS != 0 {
+					o.RenderProbeStackSS(test.StackSS)
+				}
+				if test.Clear {
+					o.RenderProbeVideoMode(test.VideoMode, 2)
+				}
 				if test.Mask != 0 {
 					o.RenderProbePlaneMask(test.Mask)
+				}
+				if test.RawMasked || test.ShiftMasked {
+					o.RenderProbeVideoMode(0x40, 2)
+					o.WriteBytes(oracle.Addr{Seg: test.Args[1], Off: test.Args[0]}, test.Data)
+					o.WriteBytes(oracle.Addr{Seg: test.Args[1], Off: test.Args[2]}, test.MaskData)
+				}
+				if test.MaskedRLE {
+					o.RenderProbeVideoMode(0x40, 2)
+					o.WriteBytes(oracle.Addr{Seg: 0x7000, Off: 0x100}, test.Data)
+					o.WriteBytes(oracle.Addr{Seg: 0x7000, Off: 0x300}, test.MaskData)
 				}
 				var sourceAsset *sceneAsset
 				if test.VideoCopy {
@@ -357,13 +594,16 @@ func main() {
 				if test.FrameAt > 0 {
 					frames = o.RenderProbeFrameAt(test.FrameAt)
 				}
+				if test.IRQAt > 0 {
+					frames = o.RenderProbeIRQAt(test.IRQAt)
+				}
 				if test.Font != nil {
 					o.WriteBytes(oracle.Addr{Seg: 0x7000, Off: 0x100}, test.Font)
 				}
 				if test.Image != nil {
 					o.WriteBytes(test.Image.Source, test.Data)
 				}
-				if test.Pattern || test.Upload && test.Data != nil {
+				if test.Pattern || test.MaskColumn || test.RawTransfer || test.RawRLE || test.Upload && test.Data != nil {
 					o.WriteBytes(oracle.Addr{Seg: 0x7000, Off: 0x100}, test.Data)
 				}
 				before[side] = o.RenderProbeRAM()
@@ -375,16 +615,31 @@ func main() {
 				})
 				if side == 1 {
 					owner = &playerRenderOwner{Oracle: o, Counters: map[string]uint64{}, Assets: map[string]*sceneAsset{}}
+					if test.Temporary {
+						sourceAsset = &sceneAsset{W: 320, H: 200, Index: make([]byte, 64000)}
+						for off := 0; off < 16000; off++ {
+							for plane := 0; plane < 4; plane++ {
+								sourceAsset.Index[off*4+plane] = o.PresentationPlane(plane, uint32(off))
+							}
+						}
+						owner.Scene.record(owner.Scene.page(0, o.PresentationPlane), sourceAsset, 0, 0)
+					}
 					if test.OwnedSource {
 						page := uint32(test.Args[1]-0xa000) * 16
 						owner.Scene.record(owner.Scene.page(page, o.PresentationPlane), sourceAsset, 0, 0)
 					}
 					tx := renderTransaction{Return: paintReturn{ret, 0x333e, 0xe004}, Origin: test.Entry}
+					if test.StackSS != 0 {
+						tx.Return.SS = test.StackSS
+					}
 					if test.Image != nil {
 						tx.Image = &renderImageSource{Command: *test.Image}
 					}
 					if renderTransactionTouchesVideo(o, test.Entry.Linear()+0xef00) {
 						owner.Pending = append(owner.Pending, tx)
+					}
+					if test.Temporary {
+						owner.Pending = append(owner.Pending, renderTransaction{Kind: "readback-scope"})
 					}
 					owner.installOwnedDrivers(hooks.NativeSteps)
 				} else {
@@ -415,6 +670,11 @@ func main() {
 					res.DirectSteps = o.Steps()
 					res.DirectWrites = writes
 					res.Counters = owner.Counters
+					if test.Temporary {
+						for i, cell := range owner.Scene.page(0, o.PresentationPlane).Cells {
+							res.SourceOwnershipEqual = res.SourceOwnershipEqual && cell.Asset == sourceAsset && cell.Source == i
+						}
+					}
 					if test.OwnedSource {
 						count, unit := int(test.Args[4]), 1
 						if test.Entry.Off == 0x8c2 {
@@ -477,12 +737,18 @@ func main() {
 				if test.Entry.Off == 0x8c2 {
 					prefix = int(test.Args[4] % 2)
 				}
-				res.Passed = res.Passed && res.DirectWrites == prefix && res.NativeWrites > res.DirectWrites && res.Counters["owned_ram_upload_rep"]+res.Counters["owned_video_copy_rep"] == 1
-			} else if test.FrameAt == 0 && !test.Reject {
+				res.Passed = res.Passed && res.DirectWrites == 0 && int(res.Counters["owned_copy_prefix"]) == prefix && res.NativeWrites > res.DirectWrites && res.Counters["owned_ram_upload_rep"]+res.Counters["owned_video_copy_rep"] == 1
+			} else if test.Clear && test.Args[2] == 0 {
+				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites == 0
+			} else if test.FrameAt == 0 && test.IRQAt == 0 && !test.Reject {
 				res.Passed = res.Passed && res.DirectWrites == 0 && res.NativeWrites > 0 && res.Counters["virtual_instructions"] > 0
 			}
 			if test.Reject {
-				res.Passed = res.Passed && res.DirectWrites == res.NativeWrites && res.Counters["virtual_instructions"] == 0
+				if test.Image != nil {
+					res.Passed = res.Passed && res.DirectWrites == 0 && res.Counters["owned_image_transfers"] == 0 && res.Counters["owned_source_blit_bytes"] > 0
+				} else {
+					res.Passed = res.Passed && res.DirectWrites == res.NativeWrites && res.Counters["virtual_instructions"] == 0
+				}
 			}
 			results = append(results, res)
 			for _, o := range pair {

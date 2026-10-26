@@ -140,7 +140,7 @@ func TestNativeAssetCorpus(t *testing.T) {
 			Offset                           int
 		}{r.Key, r.Indexed, r.File, r.Header, r.Offset})
 	}
-	if len(corpus.Assets) != 48 {
+	if len(corpus.Assets) != 78 {
 		t.Fatalf("目前素材數量改變：%d", len(corpus.Assets))
 	}
 	for _, r := range corpus.Assets {

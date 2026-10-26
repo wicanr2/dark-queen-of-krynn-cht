@@ -8,3 +8,9 @@ func (m *Machine) RenderProbeFrameAt(step uint64) *[]uint64 {
 	m.SetOnFrame(func() { *events = append(*events, m.Steps) })
 	return events
 }
+
+func (m *Machine) RenderProbeIRQAt(step uint64) {
+	m.IRQ0Every = 1_000_000
+	m.nextIRQ0 = step
+	m.irq0Pending = false
+}

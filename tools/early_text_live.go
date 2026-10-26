@@ -1779,6 +1779,23 @@ func (g *liveGame) playerProtectedRectangles() [][4]int {
 	return protected
 }
 
+// 20px角色字模比原英文列高，邊緣仍需背景色作反鋸齒合成。
+func (g *liveGame) playerTextInkRectangles() [][4]int {
+	var result [][4]int
+	if g.list == nil {
+		return result
+	}
+	for _, w := range g.list.snapshot() {
+		if w.FontSize != 20 || !g.canTranslate([4]int{w.X, w.Y, w.X + w.Width, w.Y + w.height()}) {
+			continue
+		}
+		top := w.Y*2 - 2
+		bottom := top + g.list.roleGlyphs.Height
+		result = append(result, [4]int{w.X, max(0, top/2), w.X + w.Width, min(200, (bottom+1)/2)})
+	}
+	return result
+}
+
 func (g *liveGame) canTranslate(r [4]int) bool {
 	return g.player == nil || g.player.Renderer.CanTranslate(r)
 }

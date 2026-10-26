@@ -1,7 +1,10 @@
 // 命令所有權與最小顯存相容資料。這裡不執行原版，也不依賴 GUI。
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"math/bits"
+)
 
 type sceneAsset struct {
 	W, H          int
@@ -27,6 +30,61 @@ type sceneRect struct {
 	Asset              *sceneAsset
 	HD                 bool
 	SX, SY, X, Y, W, H int
+}
+
+// Go畫布的遮罩合成命令。來源為色號／遮罩資料，不包含CPU或繪圖指令。
+func (p *scenePage) maskedBlit(mask, color []byte, off, readPlane int, writeMask byte) *sceneAsset {
+	if len(mask) == 0 || len(mask) != len(color) || off < 0 || off+len(mask) > 16000 || off%80+len(mask) > 80 || readPlane < 0 || readPlane > 3 {
+		panic("遮罩區塊命令越界")
+	}
+	a := &sceneAsset{W: len(mask) * 4, H: 1, Index: make([]byte, len(mask)*4), Alpha: make([]byte, len(mask)*4)}
+	for i, bits := range mask {
+		value := (p.Index[(off+i)*4+readPlane] & bits) ^ color[i]
+		for plane := 0; plane < 4; plane++ {
+			at := i*4 + plane
+			a.Index[at] = value
+			if writeMask&(1<<uint(plane)) != 0 && (bits != 255 || color[i] != 0 || plane != readPlane) {
+				a.Alpha[at] = 255
+			}
+		}
+	}
+	return a
+}
+
+// 帶位移與邊緣遮罩的Go畫布合成。相鄰byte共用的目的區域按來源順序合成。
+func (p *scenePage) shiftedMaskedBlit(mask, color []byte, off, readPlane int, writeMask, left, right, shift byte) (*sceneAsset, uint16, uint16) {
+	if len(mask) == 0 || len(mask) != len(color) || off < 0 || off+len(mask)+1 > 16000 || readPlane < 0 || readPlane > 3 {
+		panic("位移遮罩命令越界")
+	}
+	w := (len(mask) + 1) * 4
+	a := &sceneAsset{W: w, H: 1, Index: append([]byte(nil), p.Index[off*4:off*4+w]...), Alpha: make([]byte, w)}
+	var last, preserved uint16
+	for i, source := range color {
+		edge := byte(255)
+		if i == 0 {
+			edge &= left
+		}
+		if i == len(color)-1 {
+			edge &= right
+		}
+		ink := bits.ReverseBytes16((uint16(source&edge) << 8) >> (shift & 31))
+		keep := bits.ReverseBytes16(^((uint16((^mask[i])&edge) << 8) >> (shift & 31)))
+		background := uint16(a.Index[i*4+readPlane]) | uint16(a.Index[(i+1)*4+readPlane])<<8
+		preserved, last = background&keep, background&keep^ink
+		for plane := 0; plane < 4; plane++ {
+			if writeMask&(1<<uint(plane)) == 0 {
+				continue
+			}
+			for b := 0; b < 2; b++ {
+				at := (i+b)*4 + plane
+				a.Index[at] = byte(last >> uint(b*8))
+				if byte(keep>>uint(b*8)) != 255 || byte(ink>>uint(b*8)) != 0 || plane != readPlane {
+					a.Alpha[at] = 255
+				}
+			}
+		}
+	}
+	return a, last, preserved
 }
 
 func (p *scenePage) rectangles(hd bool, pal [256][3]byte, protected [][4]int) []sceneRect {
@@ -134,6 +192,31 @@ func (s *renderScene) record(p *scenePage, a *sceneAsset, x, y int) {
 			i := (y+yy)*320 + x + xx
 			p.Cells[i] = sceneCell{Asset: a, Source: n, Visible: true}
 			p.Index[i] = a.Index[n]
+		}
+	}
+	s.Revision++
+}
+
+// 暫存畫面以色號更新畫布，保留可還原的底圖來源。put只維持遊戲讀回所需資料。
+func (s *renderScene) temporaryRecord(p *scenePage, a *sceneAsset, x, y int, page uint32, put func(int, uint32, byte)) {
+	if a.W < 1 || a.H < 1 || x < 0 || y < 0 || x+a.W > 320 || y+a.H > 200 || len(a.Index) != a.W*a.H || (len(a.Alpha) != 0 && len(a.Alpha) != len(a.Index)) {
+		panic("暫存畫布命令越界")
+	}
+	for yy := 0; yy < a.H; yy++ {
+		for xx := 0; xx < a.W; xx++ {
+			n := yy*a.W + xx
+			if len(a.Alpha) != 0 && a.Alpha[n] == 0 {
+				continue
+			}
+			i := (y+yy)*320 + x + xx
+			cell := &p.Cells[i]
+			if cell.Asset != nil {
+				cell.Visible = a.Index[n] == cell.Asset.Index[cell.Source]
+			} else {
+				*cell = sceneCell{}
+			}
+			p.Index[i] = a.Index[n]
+			put((x+xx)&3, page+uint32((y+yy)*80+(x+xx)/4), a.Index[n])
 		}
 	}
 	s.Revision++

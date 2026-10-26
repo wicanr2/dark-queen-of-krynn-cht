@@ -319,6 +319,48 @@
       "prefix": "833e57cb007e0cff",
       "file_prefix": "833e57cb007e0cff",
       "evidence_level": "靜態已證實：IDA 9.4 原始指令、控制流及 MZ relocation；未新增遊戲抽驗"
+    },
+    {
+      "name": "sub_1102A",
+      "kind": "masked-blit",
+      "ida_linear": 69674,
+      "file_offset": 13354,
+      "segment": 487,
+      "offset": 698,
+      "prefix": "558bec56578e0633",
+      "file_prefix": "558bec56578e0633",
+      "evidence_level": "IDA9.4已證實AND／XOR遮罩合成與原列尾；Go命令效果另做原版對照"
+    },
+    {
+      "name": "sub_119B6",
+      "kind": "temporary-blit",
+      "ida_linear": 72118,
+      "file_offset": 15798,
+      "segment": 487,
+      "offset": 3142,
+      "prefix": "558bec56578e0633",
+      "file_prefix": "558bec56578e0633",
+      "evidence_level": "IDA9.4新匯出已證實sub_119B6為逐列byte還原；Go區塊效果另做原版對照"
+    },
+    {
+      "name": "sub_1107A",
+      "kind": "masked-canvas-command",
+      "ida_linear": 69754,
+      "file_offset": 13434,
+      "segment": 487,
+      "offset": 778,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：IDA 9.4 原始控制流與遮罩來源；Go 命令待本批函式對照"
+    },
+    {
+      "name": "sub_112EE",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70382,
+      "file_offset": 14062,
+      "segment": 487,
+      "offset": 1406,
+      "prefix": "558bec56578e0633",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
     }
   ],
   "Coverage": "已列primitive；不是全部TLB與動畫來源",
@@ -652,6 +694,419 @@
       "prefix": "f3a4eb0b9003f14e",
       "file_prefix": "f3a4eb0b9003f14e",
       "evidence_level": "IDA9.4已證實前向REP與原列尾；接管效果由獨立原版函式對照"
+    },
+    {
+      "name": "loc_1104C",
+      "kind": "single-render-step",
+      "ida_linear": 69708,
+      "file_offset": 13388,
+      "segment": 487,
+      "offset": 732,
+      "prefix": "ad26230533074343",
+      "file_prefix": "ad26230533074343",
+      "evidence_level": "IDA9.4已證實AND／XOR遮罩合成與原列尾；Go命令效果另做原版對照"
+    },
+    {
+      "name": "loc_119CF",
+      "kind": "single-render-step",
+      "ida_linear": 72143,
+      "file_offset": 15823,
+      "segment": 487,
+      "offset": 3167,
+      "prefix": "f3a48bfb8cd81f03",
+      "file_prefix": "f3a48bfb8cd81f03",
+      "evidence_level": "IDA9.4新匯出已證實sub_119B6為逐列byte還原；Go區塊效果另做原版對照"
+    },
+    {
+      "name": "loc_11944",
+      "kind": "single-render-step",
+      "ida_linear": 72004,
+      "file_offset": 15684,
+      "segment": 487,
+      "offset": 3028,
+      "prefix": "8a6e10ac2246148a",
+      "file_prefix": "8a6e10ac2246148a",
+      "evidence_level": "IDA9.4及24組原版列收據已證實帶位移遮罩的來源與效果；Go畫布另作對照"
+    },
+    {
+      "name": "loc_1162C",
+      "kind": "page-clear-instruction",
+      "ida_linear": 71212,
+      "file_offset": 14892,
+      "segment": 487,
+      "offset": 2236,
+      "prefix": "f3ab8bfb5dcb558b",
+      "evidence_level": "靜態已證實：IDA 9.4 REP STOSW、啟動兩頁清除；單指令效果待本批收據"
+    },
+    {
+      "name": "loc_12F0D",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77581,
+      "file_offset": 21261,
+      "segment": 487,
+      "offset": 8605,
+      "prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F13",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77587,
+      "file_offset": 21267,
+      "segment": 487,
+      "offset": 8611,
+      "prefix": "26883db002ee42b0",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F22",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77602,
+      "file_offset": 21282,
+      "segment": 487,
+      "offset": 8626,
+      "prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F28",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77608,
+      "file_offset": 21288,
+      "segment": 487,
+      "offset": 8632,
+      "prefix": "26883db002ee42b0",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F37",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77623,
+      "file_offset": 21303,
+      "segment": 487,
+      "offset": 8647,
+      "prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F3D",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77629,
+      "file_offset": 21309,
+      "segment": 487,
+      "offset": 8653,
+      "prefix": "26883db002ee42b0",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F4C",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77644,
+      "file_offset": 21324,
+      "segment": 487,
+      "offset": 8668,
+      "prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F52",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77650,
+      "file_offset": 21330,
+      "segment": 487,
+      "offset": 8674,
+      "prefix": "26883d47b002ee42",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F62",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77666,
+      "file_offset": 21346,
+      "segment": 487,
+      "offset": 8690,
+      "prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F68",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77672,
+      "file_offset": 21352,
+      "segment": 487,
+      "offset": 8696,
+      "prefix": "26883db002ee42b0",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F77",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77687,
+      "file_offset": 21367,
+      "segment": 487,
+      "offset": 8711,
+      "prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F7D",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77693,
+      "file_offset": 21373,
+      "segment": 487,
+      "offset": 8717,
+      "prefix": "26883db002ee42b0",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F8C",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77708,
+      "file_offset": 21388,
+      "segment": 487,
+      "offset": 8732,
+      "prefix": "26881deb04902688",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12F92",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77714,
+      "file_offset": 21394,
+      "segment": 487,
+      "offset": 8738,
+      "prefix": "26883db002ee42b0",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_12FA7",
+      "kind": "glyph-boundary-store",
+      "ida_linear": 77735,
+      "file_offset": 21415,
+      "segment": 487,
+      "offset": 8759,
+      "prefix": "26883d4f36033e6c",
+      "evidence_level": "靜態已證實：sub_12EE1 的 ES:DI 字形寫入；事件附近改取已解碼 Go 字形"
+    },
+    {
+      "name": "loc_11B51",
+      "kind": "canvas-boundary-span",
+      "ida_linear": 72529,
+      "file_offset": 16209,
+      "segment": 487,
+      "offset": 3553,
+      "prefix": "f3a4ebf3f6d803f8",
+      "evidence_level": "靜態已證實：IDA 匯出原寫入及副作用，事件附近 Go span／已解碼 RLE 區塊"
+    },
+    {
+      "name": "loc_11054",
+      "kind": "canvas-boundary-span",
+      "ida_linear": 69716,
+      "file_offset": 13396,
+      "segment": 487,
+      "offset": 740,
+      "prefix": "abe2f55f03f203da",
+      "evidence_level": "靜態已證實：IDA 匯出原寫入及副作用，事件附近 Go span／已解碼 RLE 區塊"
+    },
+    {
+      "name": "loc_1197B",
+      "kind": "canvas-boundary-span",
+      "ida_linear": 72059,
+      "file_offset": 15739,
+      "segment": 487,
+      "offset": 3083,
+      "prefix": "ab4ffecd7fdf750e",
+      "evidence_level": "靜態已證實：IDA 匯出原寫入及副作用，事件附近 Go span／已解碼 RLE 區塊"
+    },
+    {
+      "name": "loc_12EC4",
+      "kind": "canvas-boundary-span",
+      "ida_linear": 77508,
+      "file_offset": 21188,
+      "segment": 487,
+      "offset": 8532,
+      "prefix": "aae2f85f03f33603",
+      "evidence_level": "靜態已證實：IDA 匯出原寫入及副作用，事件附近 Go span／已解碼 RLE 區塊"
+    },
+    {
+      "name": "loc_110D6",
+      "kind": "canvas-boundary-span",
+      "ida_linear": 69846,
+      "file_offset": 13526,
+      "segment": 487,
+      "offset": 870,
+      "prefix": "f3aa03f53b3683cb",
+      "evidence_level": "靜態已證實：IDA 匯出原寫入及副作用，事件附近 Go span／已解碼 RLE 區塊"
+    },
+    {
+      "name": "loc_1110B",
+      "kind": "canvas-boundary-span",
+      "ida_linear": 69899,
+      "file_offset": 13579,
+      "segment": 487,
+      "offset": 923,
+      "prefix": "f3ab03f53b3683cb",
+      "evidence_level": "靜態已證實：IDA 匯出原寫入及副作用，事件附近 Go span／已解碼 RLE 區塊"
+    },
+    {
+      "name": "loc_11099",
+      "kind": "masked-canvas-command",
+      "ida_linear": 69785,
+      "file_offset": 13465,
+      "segment": 487,
+      "offset": 809,
+      "prefix": "ac262205320743aa",
+      "evidence_level": "靜態已證實：IDA 9.4 原始控制流與遮罩來源；Go 命令待本批函式對照"
+    },
+    {
+      "name": "loc_110A0",
+      "kind": "masked-canvas-command",
+      "ida_linear": 69792,
+      "file_offset": 13472,
+      "segment": 487,
+      "offset": 816,
+      "prefix": "aae2f65f03f203da",
+      "evidence_level": "靜態已證實：IDA 9.4 原始控制流與遮罩來源；Go 命令待本批函式對照"
+    },
+    {
+      "name": "loc_1113E",
+      "kind": "masked-canvas-command",
+      "ida_linear": 69950,
+      "file_offset": 13630,
+      "segment": 487,
+      "offset": 974,
+      "prefix": "268b0523c333c2ab",
+      "evidence_level": "靜態已證實：IDA 9.4 原始控制流與遮罩來源；Go 命令待本批函式對照"
+    },
+    {
+      "name": "loc_11145",
+      "kind": "masked-canvas-command",
+      "ida_linear": 69957,
+      "file_offset": 13637,
+      "segment": 487,
+      "offset": 981,
+      "prefix": "abe2f65f033e6ccb",
+      "evidence_level": "靜態已證實：IDA 9.4 原始控制流與遮罩來源；Go 命令待本批函式對照"
+    },
+    {
+      "name": "loc_11ABD",
+      "kind": "masked-canvas-command",
+      "ida_linear": 72381,
+      "file_offset": 16061,
+      "segment": 487,
+      "offset": 3405,
+      "prefix": "8bc2f7d02623058b",
+      "evidence_level": "靜態已證實：IDA 9.4 原始控制流與遮罩來源；Go 命令待本批函式對照"
+    },
+    {
+      "name": "loc_11ACA",
+      "kind": "masked-canvas-command",
+      "ida_linear": 72394,
+      "file_offset": 16074,
+      "segment": 487,
+      "offset": 3418,
+      "prefix": "268905434380e31e",
+      "evidence_level": "靜態已證實：IDA 9.4 原始控制流與遮罩來源；Go 命令待本批函式對照"
+    },
+    {
+      "name": "loc_1165F",
+      "kind": "copy-byte-prefix",
+      "ida_linear": 71263,
+      "file_offset": 14943,
+      "segment": 487,
+      "offset": 2287,
+      "prefix": "a40bc9741ef3a5eb",
+      "evidence_level": "靜態已證實：sub_11632 奇數 byte MOVSB 前綴，Go 搬移保留來源歸屬"
+    },
+    {
+      "name": "loc_11678",
+      "kind": "copy-byte-prefix",
+      "ida_linear": 71288,
+      "file_offset": 14968,
+      "segment": 487,
+      "offset": 2312,
+      "prefix": "a40bc974044e4ff3",
+      "evidence_level": "靜態已證實：sub_11632 奇數 byte MOVSB 前綴，Go 搬移保留來源歸屬"
+    },
+    {
+      "name": "loc_113C2",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70594,
+      "file_offset": 14274,
+      "segment": 487,
+      "offset": 1618,
+      "prefix": "f3a487de03daeb77",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_113CF",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70607,
+      "file_offset": 14287,
+      "segment": 487,
+      "offset": 1631,
+      "prefix": "f3a487deebcea840",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_113E5",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70629,
+      "file_offset": 14309,
+      "segment": 487,
+      "offset": 1653,
+      "prefix": "ac8ae0f6d0222743",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_11400",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70656,
+      "file_offset": 14336,
+      "segment": 487,
+      "offset": 1680,
+      "prefix": "ac8ae0f6d0222743",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_113F2",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70642,
+      "file_offset": 14322,
+      "segment": 487,
+      "offset": 1666,
+      "prefix": "aae2f032e403da03",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_1140D",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70669,
+      "file_offset": 14349,
+      "segment": 487,
+      "offset": 1693,
+      "prefix": "aae2f032e4eb8f8a",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_11421",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70689,
+      "file_offset": 14369,
+      "segment": 487,
+      "offset": 1713,
+      "prefix": "f3aaeb1c902bd1f3",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
+    },
+    {
+      "name": "loc_11428",
+      "kind": "masked-rle-canvas",
+      "ida_linear": 70696,
+      "file_offset": 14376,
+      "segment": 487,
+      "offset": 1720,
+      "prefix": "f3aae976ff0ac074",
+      "evidence_level": "靜態已證實：sub_2717A method3 至 sub_112EE；Go 封包命令及事件邊界"
     }
   ]
 }

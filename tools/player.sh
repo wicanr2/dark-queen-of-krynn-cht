@@ -96,11 +96,14 @@ find /out -user root -o -type d -name "*.md"
   timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
     --memory 256m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
     -v "$BASE:/player:ro" --entrypoint python3 "$PIL" -c '
-import json,sys
+import hashlib,json,sys
 from pathlib import Path
 build=json.loads(Path("/player/build-info.json").read_text())
 if build.get("state")!="READY" or not build.get("native_effects_verified") or not build.get("virtual_time_accounting_verified"):
     sys.exit("繪圖迴圈替換仍為 DRAFT，尚未完成機器副作用與虛擬時間契約；本研究建置不進正式玩家路徑。")
+for path,key in [("dqk-player","binary_sha256"),("inputs/player-profile.json","profile_sha256")]:
+    if hashlib.sha256(Path("/player",path).read_bytes()).hexdigest()!=build.get(key):
+        sys.exit("玩家程式或資料與已驗證建置不符，請重新建置並完成檢查。")
 '
   test -f "$BASE/inputs/player-profile.json"
   test -d "$BASE/session"

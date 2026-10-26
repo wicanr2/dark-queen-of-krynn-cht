@@ -83,6 +83,12 @@ static int wait_reference(Display *d,Window w,const char *directory,const char *
     }
     free(rgb);return 0;
 }
+static void close_window(Display *d,Window w) {
+    XEvent close;memset(&close,0,sizeof(close));close.xclient.type=ClientMessage;close.xclient.window=w;
+    close.xclient.message_type=XInternAtom(d,"WM_PROTOCOLS",False);close.xclient.format=32;
+    close.xclient.data.l[0]=XInternAtom(d,"WM_DELETE_WINDOW",False);close.xclient.data.l[1]=CurrentTime;
+    XSendEvent(d,w,False,NoEventMask,&close);XFlush(d);
+}
 int main(int argc,char **argv) {
     if(argc!=3)return 2;
     snprintf(key_helper,sizeof(key_helper),"%s/xtest-key",argv[1]);
@@ -91,7 +97,7 @@ int main(int argc,char **argv) {
     sleep(3);capture(d,w,argv[1],"01-start");key(d,w,XK_Return);
     if(!wait_reference(d,w,argv[2],"02-return"))return 10;
     capture(d,w,argv[1],"02-return");key(d,w,XK_p);
-    if(!wait_reference(d,w,argv[2],"02a-player")){capture(d,w,argv[1],"failure-role");return 11;}
+    if(!wait_reference(d,w,argv[2],"02a-player")){capture(d,w,argv[1],"failure-role");close_window(d,w);sleep(2);XCloseDisplay(d);return 11;}
     capture(d,w,argv[1],"02a-player");
     key(d,w,XK_F2);sleep(1);capture(d,w,argv[1],"03-scale");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"04-original");
@@ -99,8 +105,5 @@ int main(int argc,char **argv) {
     key(d,w,XK_F6);sleep(1);capture(d,w,argv[1],"06-manual");
     key(d,w,XK_Escape);sleep(1);capture(d,w,argv[1],"07-return");
     key(d,w,XK_F10);sleep(1);
-    XEvent close;memset(&close,0,sizeof(close));close.xclient.type=ClientMessage;close.xclient.window=w;
-    close.xclient.message_type=XInternAtom(d,"WM_PROTOCOLS",False);close.xclient.format=32;
-    close.xclient.data.l[0]=XInternAtom(d,"WM_DELETE_WINDOW",False);close.xclient.data.l[1]=CurrentTime;
-    XSendEvent(d,w,False,NoEventMask,&close);XFlush(d);XCloseDisplay(d);return 0;
+    close_window(d,w);XCloseDisplay(d);return 0;
 }
