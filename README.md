@@ -6,15 +6,15 @@
 本專案以 dosgolem 執行 DOS 原版，在呈現層加入繁體中文、內建閱讀面板與 HD 美術。
 武器、怪物及跨代人物譯名與《幽靈騎士》對齊；遊戲規則、條件判定與存檔語意沿用原版。
 
-玩家須自備合法原版。遊戲檔案、原版及衍生美術、手冊與掃描只留本機，不隨儲存庫提供。
+玩家須自備合法原版。本儲存庫提供程式、文件與下列展示圖；遊戲執行檔、資料檔、完整 HD 素材包、手冊與掃描不隨附。
 目前為開發中的整合版，完整繪圖接管、剩餘中文、全量 HD 及攻略地圖仍在製作。
 
-[本機完整圖文版](workplace/probe/readme-gallery-current/README.html) ·
+[遊戲截圖](#遊戲截圖) · [原版與 HD 圖庫](#原版與-hd-圖庫) ·
 [如何啟動](#如何啟動) · [目前狀態](#目前狀態) · [文件入口](#文件與授權)
 
-下方圖片只在備有素材的本機工作區顯示。GitHub 保存文字介紹與重建工具。
+下方圖片隨儲存庫提供，可直接在 GitHub 閱讀。圖片來源與雜湊見[展示圖清單](docs/images/manifest.json)。
 
-![現行繁中角色管理選單，正常冷啟動後進入](workplace/probe/readme-gallery-current/player-chinese.png)
+![現行繁中角色管理選單，正常冷啟動後進入](docs/images/character-management-zh.png)
 
 上圖取自現行整合程式的正常冷啟動與角色管理操作，十二個按鈕使用 20 像素圓體。
 這張介面截圖不代表已走遍所有冒險場景。
@@ -164,7 +164,7 @@ HD 保留原版配色、構圖及前景範圍。人物沿細緻油畫方向，�
 HD 開關與視窗大小獨立，2 倍、3 倍及自由縮放都可使用。
 下圖是已編譯素材的對照圖，不是遊戲執行截圖。
 
-![已編譯戰鬥圖格的原版與 HD 總覽，每格左為原版、右為 HD](workplace/probe/readme-gallery-current/combat-hd-comparison.png)
+![已編譯戰鬥圖格的原版與 HD 總覽，每格左為原版、右為 HD](docs/images/combat-sprites-hd.png)
 
 戰鬥圖格包含一般與攻擊姿態，不能把每格當作一種怪物。
 已有素材會在來源及遮擋條件匹配時使用；未完成或未匹配的圖像維持原版。
@@ -175,20 +175,24 @@ HD 開關與視窗大小獨立，2 倍、3 倍及自由縮放都可使用。
 原版 CPIC 圖庫已解出 190 格，包含怪物、動作及重複編號。CBODY 另有 98 格隊員戰鬥造型。
 尚未確認的身分保留來源編號，不依外觀補名。
 
-![原版怪物與戰鬥圖格總覽，190 格不等於190種怪物](workplace/probe/readme-gallery-current/CPIC-original.png)
+![原版怪物與戰鬥圖格總覽，190 格不等於190種怪物](docs/images/combat-sprites-original.png)
 
-![原版隊員戰鬥造型總覽](workplace/probe/readme-gallery-current/CBODY-original.png)
+![原版隊員戰鬥造型總覽](docs/images/party-sprites-original.png)
 
 ### 人物頭像
 
 31 張人物候選頭像保留各自的來源編號，身分仍待逐項核對。
 完整 PICA、PICB、PICC 圖庫另包含怪物及場景，可在本機圖文版放大查閱。
 
-![31 張原版人物候選頭像總覽](workplace/probe/readme-gallery-current/portraits-original.png)
+這批 31 張人物候選圖已有對應 HD 素材，包含少數雙人構圖；數量不等於獨立人物數。
+
+| 原版人物圖總覽 | HD 人物圖總覽 |
+|---|---|
+| ![31張原版人物候選圖](docs/images/portraits-original.png) | ![31張HD人物候選圖，素材展示](docs/images/portraits-hd.png) |
 
 | 已編譯頭像 | 原版 | HD |
 |---|---|---|
-| PICA.7.1，身分待核 | ![原版頭像](workplace/probe/readme-gallery-current/PICA.7.1.png) | ![現行HD頭像素材](workplace/probe/readme-gallery-current/hd-portrait-current.png) |
+| PICA.7.1，身分待核 | ![原版頭像](docs/images/portrait-example-original.png) | ![現行HD頭像素材](docs/images/portrait-example-hd.png) |
 
 ## 遊戲截圖
 
@@ -197,16 +201,16 @@ HD 開關與視窗大小獨立，2 倍、3 倍及自由縮放都可使用。
 
 | 角色管理 | 內建繁中說明 |
 |---|---|
-| ![現行繁中角色管理](workplace/probe/readme-gallery-current/player-chinese.png) | ![現行繁中說明面板](workplace/probe/readme-gallery-current/player-manual.png) |
+| ![現行繁中角色管理](docs/images/character-management-zh.png) | ![現行繁中說明面板](docs/images/manual-reader-zh.png) |
 
 下列三組來自既有原版／繁中對照收據，每組使用相同原版狀態與輸入。
 數量、魔法加值與戰鬥結果保持；這些歷史畫格沒有套用 HD，也不是現行版本的全程驗收。
 
 | 畫面 | 原版 | 繁中 |
 |---|---|---|
-| 單支箭矢與裝備清單 | ![原版箭矢](workplace/probe/readme-gallery-current/ammo-en.png) | ![繁中箭矢](workplace/probe/readme-gallery-current/ammo-zh.png) |
-| 首戰毒氣與傷害回報 | ![原版戰鬥](workplace/probe/readme-gallery-current/battle-en.png) | ![繁中戰鬥](workplace/probe/readme-gallery-current/battle-zh.png) |
-| 首戰敗北結語 | ![原版結語](workplace/probe/readme-gallery-current/defeat-en.png) | ![繁中結語](workplace/probe/readme-gallery-current/defeat-zh.png) |
+| 單支箭矢與裝備清單 | ![原版箭矢](docs/images/inventory-arrows-en.png) | ![繁中箭矢](docs/images/inventory-arrows-zh.png) |
+| 首戰毒氣與傷害回報 | ![原版戰鬥](docs/images/combat-poison-en.png) | ![繁中戰鬥](docs/images/combat-poison-zh.png) |
+| 首戰敗北結語 | ![原版結語](docs/images/combat-defeat-en.png) | ![繁中結語](docs/images/combat-defeat-zh.png) |
 
 來源與證據入口見[圖文研究](docs/re/006-readme-gallery.md)及本機圖庫的 `preview-index.json`。
 
@@ -218,9 +222,9 @@ HD 開關與視窗大小獨立，2 倍、3 倍及自由縮放都可使用。
 
 | 第一人稱探索 | 原版區域圖 |
 |---|---|
-| ![原版森林探索](workplace/probe/readme-gallery-current/forest.png) | ![原版遊戲內區域圖](workplace/probe/readme-gallery-current/area-map.png) |
+| ![原版森林探索](docs/images/exploration-forest.png) | ![原版遊戲內區域圖](docs/images/exploration-area-map.png) |
 
-![凱爾高斯繁中攻略地圖重繪原型，尚未接入遊戲](workplace/probe/readme-gallery-current/guide-caergoth.png)
+![凱爾高斯繁中攻略地圖重繪原型，尚未接入遊戲](docs/images/guide-caergoth.png)
 
 攻略正文將重新排版，地圖逐張重繪；PDF 與掃描只用於校對。
 完整攻略、其餘地圖及世界地圖尚未完成，見[攻略來源與重繪](docs/re/002-walkthrough-source.md)。
@@ -282,7 +286,7 @@ bash tools/readme-gallery.sh readme-gallery-my-preview
 
 輸出為 `workplace/probe/readme-gallery-my-preview/README.html` 及同目錄 `README.md`。
 每次使用新名稱，保留舊展示與來源記錄。
-本頁圖片對應已生成的 `readme-gallery-current/`；圖庫中的 `preview-index.json` 記錄來源、雜湊及展示界線。
+本頁展示圖保存於 `docs/images/`。本機圖文版另列完整素材查閱表，`preview-index.json` 記錄來源、雜湊及展示界線。
 重建只整理圖片與文件，不啟動遊戲，也不生成新的 HD 美術。
 
 ## 文件與授權

@@ -1,0 +1,188 @@
+{
+  "purpose": "README在GitHub直接顯示的指定截圖與素材總覽",
+  "authorization": "2026-10-26使用者明確要求README圖片加入儲存庫供GitHub網頁顯示",
+  "scope": "僅README展示圖；原版可執行檔、資料檔及完整HD來源仍留本機",
+  "source_gallery_sha256": "e0c55d72bfbfbb1b778a59c690510516ba840fe2436782c0d8b5d7323e5d2bdc",
+  "files": [
+    {
+      "file": "character-management-zh.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/player-chinese.png",
+      "sha256": "047ceaa5501fbd5b32e1eb1cbaa67496194dd9d15e5c9c0c02de459fa9f8bc6d",
+      "size": [
+        960,
+        600
+      ],
+      "bytes": 51510
+    },
+    {
+      "file": "manual-reader-zh.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/player-manual.png",
+      "sha256": "942f1df4e5259e2d60c6b876a19bac4648969eb93af6857892bc2d70f13a330d",
+      "size": [
+        960,
+        600
+      ],
+      "bytes": 106903
+    },
+    {
+      "file": "combat-sprites-original.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/CPIC-original.png",
+      "sha256": "311a0cca0a9d377dbb797abb624f97ae86a38a29246d874f897e6ee78d2ebf0c",
+      "size": [
+        1152,
+        3456
+      ],
+      "bytes": 318764
+    },
+    {
+      "file": "party-sprites-original.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/CBODY-original.png",
+      "sha256": "bfee31b3578845fb1a4450e406d63389b74c9ee10583db5155bec60c2874132a",
+      "size": [
+        1152,
+        1872
+      ],
+      "bytes": 97351
+    },
+    {
+      "file": "combat-sprites-hd.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/combat-hd-comparison.png",
+      "sha256": "1046be133bb2aae1de66655fa36bd5d905c3163a3eef0f028a8944f1b2509cf4",
+      "size": [
+        1280,
+        2160
+      ],
+      "bytes": 1059307
+    },
+    {
+      "file": "portraits-original.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/portraits-original.png",
+      "sha256": "c1fb89bb1b78ec563b55fed94692b40152c39b350e985f34aa286fb56908d498",
+      "size": [
+        1152,
+        1152
+      ],
+      "bytes": 359742
+    },
+    {
+      "file": "portraits-hd.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/portraits-hd.png",
+      "sha256": "d632cce58bf37d4240a8abe8ea58f13aeb2fdaa50f6d651509d1f48072854aef",
+      "size": [
+        1152,
+        1152
+      ],
+      "bytes": 1764726
+    },
+    {
+      "file": "portrait-example-original.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/PICA.7.1.png",
+      "sha256": "010bbc57919b1e7e9abfa8e2c38365adbb441bc24a6400d79f3acfc750fa5ef8",
+      "size": [
+        88,
+        88
+      ],
+      "bytes": 10116
+    },
+    {
+      "file": "portrait-example-hd.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/hd-portrait-current.png",
+      "sha256": "fd4290d2c389fa50697d315a192a8b6564da75b8bf3d2558b3d9037b65b523a6",
+      "size": [
+        264,
+        264
+      ],
+      "bytes": 163139
+    },
+    {
+      "file": "inventory-arrows-en.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/ammo-en.png",
+      "sha256": "1c4ec98ff62eb0d7494475e3e469e9cfd34cc32c41d941c9b48c22cf415a2571",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 15946
+    },
+    {
+      "file": "inventory-arrows-zh.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/ammo-zh.png",
+      "sha256": "f47b64adc5856c3cb6fab3208339d9f076fac6975d2c8542b8323694471670d0",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 33080
+    },
+    {
+      "file": "combat-poison-en.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/battle-en.png",
+      "sha256": "16eb79ee0ed206c26a922f70f366602ef6ec393036e1143f90c625f58533655e",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 32212
+    },
+    {
+      "file": "combat-poison-zh.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/battle-zh.png",
+      "sha256": "e3342ae30d5f15de65f26d09370e03a7f26a1812fc5008f6995375ceb9081888",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 37880
+    },
+    {
+      "file": "combat-defeat-en.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/defeat-en.png",
+      "sha256": "af3d913bbb516aece9a841ca5f3962b71bc47d90937f8ab35be35afb3aa0ff94",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 13902
+    },
+    {
+      "file": "combat-defeat-zh.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/defeat-zh.png",
+      "sha256": "e069bb3a11ffb65c351dd681356e7b497eabd2e1858cfd281923ed31f6c26ab1",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 28136
+    },
+    {
+      "file": "exploration-forest.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/forest.png",
+      "sha256": "9a710ea5644126472793e2cad97f1a943b2399c2444e74fb871d9f7effdd2752",
+      "size": [
+        320,
+        200
+      ],
+      "bytes": 15890
+    },
+    {
+      "file": "exploration-area-map.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/area-map.png",
+      "sha256": "e64f841e89b3d0dd34a2f93b1d437df6b88aefe3b4076e98f508eb8cf249ab14",
+      "size": [
+        320,
+        200
+      ],
+      "bytes": 10667
+    },
+    {
+      "file": "guide-caergoth.png",
+      "source": "workplace/probe/readme-gallery-portraits-20261026/guide-caergoth.png",
+      "sha256": "a4bc53c157343adadc684b9cf2ae9e15443c6b7946c97c949c87abc906e37cb0",
+      "size": [
+        1280,
+        1020
+      ],
+      "bytes": 123630
+    }
+  ]
+}

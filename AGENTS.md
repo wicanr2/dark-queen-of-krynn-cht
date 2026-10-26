@@ -77,6 +77,9 @@
   成員盤點後再補精確規則；提交前逐項檢查，不使用 `git add .`。
 - 原版 EXE、資料、美術、音樂、掃描、手冊與攻略全文及其大量轉錄預設只留本機。
   私人儲存庫不等於取得散布權；不沿用前作「全文先入 private、以後清歷史」的例外。
+- 使用者於2026-10-26明確要求README截圖直接在GitHub顯示，授權將README選定的展示圖
+  保存於`docs/images/`並提交私人儲存庫。來源及雜湊見[展示圖清單](docs/images/manifest.json)。
+  此範圍只涵蓋首頁展示，不擴張為上傳原版遊戲檔、完整素材包或轉公開。
 - 譯文與衍生素材逐批記錄來源及權利分類。未確認可提交的批次留在 `workplace/`。
 - 需要原版的測試缺檔時明確略過，不用自製替代資料冒充原版驗證。
 - 前作、dosgolem 與 `~/.claude/` 都是唯讀參考，不修改、不搬移、不清理其中的資料。
@@ -202,6 +205,7 @@
 | `CONTEXT.md` | 有日期的唯一現況表、有效決策、工具鏈、限制與證據入口 |
 | `WORKLOG.md` | 按時間追加操作、驗證、失敗分類、提交與 Docker 清理狀態 |
 | `README.md` | 遊戲與專案介紹、穩定操作入口、現況摘要，不放逐輪歷程 |
+| `docs/images/`、[展示圖清單](docs/images/manifest.json) | README在GitHub直接顯示的選定截圖及原版／HD總覽；清單記錄來源、雜湊與使用者授權範圍 |
 | `docs/re/README.md`、`docs/re/` | 研究索引與可公開的最小證據；私人原始輸出留 `workplace/` |
 | `docs/spec/README.md`、`docs/spec/` | 規格索引、狀態、依賴、驗收條件與 Issue 回鏈 |
 | `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，書籍正文仍留本機 |
