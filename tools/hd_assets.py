@@ -9,6 +9,20 @@ import shutil
 from PIL import Image
 
 
+_inventory_cache = {}
+
+
+def read_inventory(path):
+    # 同一批素材共用大型索引；以內容雜湊快取解析，改檔仍會重新讀取。
+    raw = path.read_bytes()
+    key = (str(path.resolve()), hashlib.sha256(raw).hexdigest())
+    if key not in _inventory_cache:
+        if len(_inventory_cache) >= 8:
+            _inventory_cache.clear()
+        _inventory_cache[key] = json.loads(raw)
+    return _inventory_cache[key]
+
+
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -74,7 +88,7 @@ def save_manifest(output, data):
 def add(root, output, key, generated, round_number, inventory=None):
     assert round_number in [1, 2], '同批最多兩輪，不建立第三輪美化'
     inventory = inventory or root / 'workplace/probe/hd-assets-20261025'
-    index = json.loads((inventory / 'inventory.json').read_text())
+    index = read_inventory(inventory / 'inventory.json')
     record, = [r for r in index['records'] if r['key'] == key and 'image' in r]
     assert not record.get('composite_parts'), '組圖沿用子圖HD，不另生成或繪製整張組圖'
     source_file, = [r for r in index['input_files'] if Path(r['path']).stem == record['source']]
@@ -138,7 +152,7 @@ def accept(root, output):
     for item in manifest['Assets']:
         inventory_path = root / item.get('inventory_path', 'workplace/probe/hd-assets-20261025')
         assert inventory_path.resolve().is_relative_to((root / 'workplace/probe').resolve())
-        inventory = json.loads((inventory_path / 'inventory.json').read_text())
+        inventory = read_inventory(inventory_path / 'inventory.json')
         if 'inventory_sha256' in item:
             assert sha(inventory_path / 'inventory.json') == item['inventory_sha256']
         for field, expected in [('Original', 'OriginalSHA256'), ('Image', 'SHA256'), ('master', 'master_sha256')]:

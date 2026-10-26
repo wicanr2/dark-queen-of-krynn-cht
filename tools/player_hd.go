@@ -38,6 +38,7 @@ type hdAsset struct {
 	Image        *playerImageAsset
 	SourceSHA256 string
 	SourceBytes  int
+	Colors       map[byte]uint32
 }
 
 type hdLayer struct {
@@ -121,7 +122,7 @@ func loadHDLayer(root string) playerHDRenderer {
 			int(binary.LittleEndian.Uint16(header[:2])) != h || int(header[6])*4 != w {
 			return fail(record.Key, fmt.Errorf("缺少完整的原版影像來源"))
 		}
-		asset := &hdAsset{Key: record.Key, W: w, H: h, SourceSHA256: record.SourceSHA256, SourceBytes: record.SourceBytes}
+		asset := &hdAsset{Key: record.Key, W: w, H: h, SourceSHA256: record.SourceSHA256, SourceBytes: record.SourceBytes, Colors: map[byte]uint32{}}
 		indexedPath, err := hdPath(root, record.Indexed)
 		if err != nil {
 			return fail(record.Key, err)
@@ -152,6 +153,10 @@ func loadHDLayer(root string) playerHDRenderer {
 				pixel := hdPixel{X: x, Y: y, Index: indexed[y*w+x], RGB: uint32(original.Pix[i])<<16 | uint32(original.Pix[i+1])<<8 | uint32(original.Pix[i+2])}
 				asset.Pixels = append(asset.Pixels, pixel)
 				colors[pixel.RGB] = true
+				if rgb, exists := asset.Colors[pixel.Index]; exists && rgb != pixel.RGB {
+					return fail(record.Key, fmt.Errorf("原版色號對應不一致"))
+				}
+				asset.Colors[pixel.Index] = pixel.RGB
 			}
 		}
 		// 純色及過短的幾何邊緣保留原版，不將它們當作可辨識圖像。
@@ -179,6 +184,8 @@ func (h *hdLayer) Invalidate()     {} // 視窗及偏好不撤除來源命令。
 func (h *hdLayer) Lookup(o *oracle.Oracle, command sourceTileCommand) *playerImageAsset {
 	group := h.BySourceHeader[hex.EncodeToString(command.Header[:])]
 	hashes := map[int]string{}
+	pal := o.Palette()
+	var fallback *playerImageAsset
 	for _, asset := range group {
 		if command.X < 0 || command.Y < 0 || command.X+asset.W > 320 || command.Y+asset.H > 200 || command.Source.Linear()+uint32(asset.SourceBytes-8) > 0xa0000 || uint32(command.Source.Off)+uint32(asset.SourceBytes-8) > 65536 {
 			continue
@@ -191,8 +198,22 @@ func (h *hdLayer) Lookup(o *oracle.Oracle, command sourceTileCommand) *playerIma
 			hashes[asset.SourceBytes] = sha
 		}
 		if sha == asset.SourceSHA256 {
-			return asset.Image
+			if fallback == nil {
+				fallback = asset.Image
+			}
+			matched := true
+			for index, rgb := range asset.Colors {
+				c := pal[index]
+				if rgb != uint32(c[0])<<16|uint32(c[1])<<8|uint32(c[2]) {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				return asset.Image
+			}
 		}
 	}
-	return nil
+	// 未匹配色盤時保留已核對來源；場景既有Reference檢查只繪原版色號。
+	return fallback
 }

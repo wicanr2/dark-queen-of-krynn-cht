@@ -866,8 +866,14 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				panic("未驗證的非鏈結視訊版面")
 			}
 			if !l.renderPageKnown {
-				if hit.MapMask != 15 || l.renderOrigin[0]%4 != 0 {
+				if l.renderOrigin[0]%4 != 0 {
 					panic("未驗證的整頁繪製起點")
+				}
+				// 滑鼠IRQ可在真正清框前先寫游標。沿列表頁同一契約，
+				// 只以全平面且位於已知原點的寫入定頁，不猜前置寫入的頁面。
+				originOffset := uint32(l.renderOrigin[1]*hit.Pitch + l.renderOrigin[0]/4)
+				if hit.MapMask != 15 || (hit.Offset != originOffset && hit.Offset != 0x4000+originOffset) {
+					return
 				}
 				l.renderPage = (hit.Offset - uint32(l.renderOrigin[1]*hit.Pitch+l.renderOrigin[0]/4)) & 0xffff
 				if l.renderPage != 0 && l.renderPage != 0x4000 {
