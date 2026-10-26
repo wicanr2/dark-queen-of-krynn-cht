@@ -183,6 +183,17 @@
         1020
       ],
       "bytes": 123630
+    },
+    {
+      "file": "credits-zh.png",
+      "source": "workplace/probe/player-pictures-20261027/native-long-intro-r3.png",
+      "sha256": "38041030c80e6e2c6a92b24f75de917f488a9205e42f4f2e31434d82780dfdc0",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 92169,
+      "scope": "正常冷啟動的繁中製作名單畫格，HD關閉；只展示此時刻，後段自訂主選單比對未通過，不當作整段驗收"
     }
   ]
 }

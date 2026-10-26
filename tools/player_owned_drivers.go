@@ -24,6 +24,9 @@ type ownedDriver struct {
 
 var renderOwners = map[*oracle.Oracle]*playerRenderOwner{}
 
+// 可選的唯讀呈現註記；函式對照工具不安裝此觀察器。
+var playerPictureCapture func(*playerRenderOwner, sourceTileCommand, *sceneAsset)
+
 // 已證實的三支記憶體搬移也服務純RAM；純RAM操作不形成畫面交易。
 func renderTransactionTouchesVideo(o *oracle.Oracle, origin uint32) bool {
 	touches := func(seg, off uint16, count uint32) bool {
@@ -1163,6 +1166,9 @@ func (p *playerRenderOwner) imagePacket() {
 		}
 		a = p.cache(fmt.Sprintf("image:%x:%s", c.Header, digest(body[:used])), decoded)
 	}
+	if playerPictureCapture != nil {
+		playerPictureCapture(p, c, a)
+	}
 	v.Owned = &ownedDriver{X: c.X, Y: c.Y, W: w, H: h, Kind: "image", Asset: a, Page: c.Page}
 	source.Bound = true
 }
@@ -1242,6 +1248,9 @@ func (p *playerRenderOwner) image(rle bool) {
 			return
 		}
 		a = p.cache(fmt.Sprintf("image:%x:%s", c.Header, digest(body[:used])), decoded)
+	}
+	if playerPictureCapture != nil {
+		playerPictureCapture(p, c, a)
 	}
 	v.Owned = &ownedDriver{X: c.X, Y: c.Y, W: w, H: h, Kind: "image", Asset: a, Page: c.Page}
 	for i := len(p.Pending) - 1; i >= 0; i-- {

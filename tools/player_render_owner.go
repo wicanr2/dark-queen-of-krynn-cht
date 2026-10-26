@@ -37,18 +37,22 @@ type renderImageSource struct {
 }
 
 type playerRenderOwner struct {
-	Oracle      *oracle.Oracle
-	Pending     []renderTransaction
-	ShadowRGB   []byte
-	Front, Back *ebiten.Image
-	Text        *playerTextOwner
-	Scene       renderScene
-	HD          playerHDRenderer
-	Backend     sceneBackend
-	Counters    map[string]uint64
-	Assets      map[string]*sceneAsset
-	LayerKey    string
-	Rects       []sceneRect
+	Oracle       *oracle.Oracle
+	Pending      []renderTransaction
+	ShadowRGB    []byte
+	Front, Back  *ebiten.Image
+	Text         *playerTextOwner
+	Scene        renderScene
+	HD           playerHDRenderer
+	Backend      sceneBackend
+	Counters     map[string]uint64
+	Assets       map[string]*sceneAsset
+	LayerKey     string
+	Rects        []sceneRect
+	PictureText  *pictureTextLayer
+	PictureRects []sceneRect
+	PictureBoxes [][4]int
+	PictureKey   string
 }
 
 func init() { playerRenderLoader = loadPlayerRenderOwner }
@@ -158,6 +162,7 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 	}
 	owner.installOwnedDrivers(bindings.NativeSteps)
 	owner.Text = loadPlayerTextOwner(o, profile, textGlyph)
+	owner.loadPictureText(profile)
 	return owner
 }
 
@@ -233,6 +238,7 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 		page, ok := nativeVisiblePage(p.Oracle)
 		if !ok {
 			p.releaseScene()
+			p.PictureRects, p.PictureBoxes, p.PictureKey = nil, nil, ""
 			// 啟動／模式交界由自有畫布留黑，不讀取原版整張 RGB 畫面。
 			clear(p.ShadowRGB)
 			p.Counters["non_canvas_layout_frames"]++
@@ -258,6 +264,19 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 						for x := r[0]; x < r[2]; x++ {
 							blocked[y*320+x] = true
 						}
+					}
+				}
+			}
+			pictureProtected := [][4]int(nil)
+			if g.translate {
+				pictureProtected = append(g.playerProtectedRectangles(), p.Text.Rectangles()...)
+				pictureProtected = append(pictureProtected, g.playerTextInkRectangles()...)
+			}
+			p.preparePictureText(g, page, pictureProtected)
+			for _, r := range p.PictureBoxes {
+				for y := r[1]; y < r[3]; y++ {
+					for x := r[0]; x < r[2]; x++ {
+						blocked[y*320+x] = true
 					}
 				}
 			}
@@ -295,6 +314,7 @@ func (p *playerRenderOwner) Present(screen *ebiten.Image, g *liveGame, rgb []byt
 			if g.translate {
 				protected = append(g.playerProtectedRectangles(), p.Text.Rectangles()...)
 				protected = append(protected, g.playerTextInkRectangles()...)
+				protected = append(protected, p.PictureBoxes...)
 			}
 			model := p.Scene.page(page, p.Oracle.PresentationPlane)
 			pal := p.Oracle.Palette()
@@ -305,6 +325,9 @@ func (p *playerRenderOwner) Present(screen *ebiten.Image, g *liveGame, rgb []byt
 				p.Counters["scene_batch_builds"]++
 			}
 			builds, draws := p.Backend.submit(p.Back, p.Rects, pal)
+			pictureBuilds, pictureDraws := p.Backend.submit(p.Back, p.PictureRects, pal)
+			builds += pictureBuilds
+			draws += pictureDraws
 			p.Counters["scene_texture_builds"] += uint64(builds)
 			p.Counters["scene_rectangle_draws"] += uint64(draws)
 			p.Counters["scene_submissions"]++

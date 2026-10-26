@@ -17,7 +17,10 @@ def read(path):
     return json.loads(path.read_text())
 
 
-root, out = map(Path, sys.argv[1:])
+assert len(sys.argv) in (3, 4)
+assert len(sys.argv) == 3 or sys.argv[3] == '--hd-off'
+root, out = map(Path, sys.argv[1:3])
+expected_hd = len(sys.argv) == 3
 assert out.is_dir() and out.stat().st_uid == os.getuid()
 reference = root / 'workplace/probe/player-sample-20261026-r5'
 reference_proof = read(reference / 'checks.json')
@@ -42,7 +45,7 @@ assert not diagnostics['renderer']['pending'] and diagnostics['reader_stable']
 assert len(diagnostics['words']) == 12
 assert [event['key'] for event in diagnostics['manual_events']] == ['F6', 'Esc']
 assert [event['chinese'] for event in controls if event['action'] == 'language'] == [False, True]
-assert controls[0]['action'] == 'scale3' and all(event['hd'] for event in controls)
+assert controls[0]['action'] == 'scale3' and all(event['hd'] is expected_hd for event in controls)
 assert controls[-1]['action'] == 'screenshot'
 assert not counts.get('unexpected_owned_native_writes', 0) and counts['nonvideo_copy'] > 0
 assert sha(out / '05-chinese.png') == sha(out / '07-return.png')
@@ -61,7 +64,7 @@ result = dict(
     mode='normal-cold-start-role-menu-and-manual-XTEST', passed=True,
     build_sha256=read(build)['binary_sha256'], controls=controls, counts=counts,
     static_menu_comparison_byte_differences=differences,
-    state_injection=False, new_assets=True,
+    state_injection=False, new_assets=True, expected_hd=expected_hd,
     screenshots={p.name: sha(p) for p in out.glob('*.png')},
     source={p.name: sha(p) for p in sources.iterdir()},
     scope=['cold startup', 'native P to character management', 'scale 2x to 3x',

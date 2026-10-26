@@ -30,6 +30,7 @@ python3 /project/tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "/output/$1/in
 python3 /project/tools/player_inputs.py fragments /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py display /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py finish /project "/output/$1/inputs"
+python3 /project/tools/picture_text_inputs.py /project "/output/$1/picture-text" --font /font/jf-openhuninn-2.1.ttf
 mkdir "/output/$1/session"
 find "/output/$1" -user root -o -type d -name "*.md"
 ' -- "$NAME"
@@ -63,7 +64,7 @@ find "/output/$1" -user root -o -type d -name "*.md"
     -w /src --entrypoint bash "$GO" -c '
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
-go build -overlay /out/build-overlay/overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_owned_drivers.go /tools/player_scene_backend.go /tools/render_scene_state.go /tools/player_text_owner.go /tools/player_text_format.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
+go build -overlay /out/build-overlay/overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_owned_drivers.go /tools/player_scene_backend.go /tools/player_picture_text.go /tools/picture_text.go /tools/render_scene_state.go /tools/player_text_owner.go /tools/player_text_format.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
 sha256sum /out/dqk-player >/out/binary.sha256
 find /out -user root -o -type d -name "*.md"
 '
@@ -104,6 +105,10 @@ if build.get("state")!="READY" or not build.get("native_effects_verified") or no
 for path,key in [("dqk-player","binary_sha256"),("inputs/player-profile.json","profile_sha256")]:
     if hashlib.sha256(Path("/player",path).read_bytes()).hexdigest()!=build.get(key):
         sys.exit("玩家程式或資料與已驗證建置不符，請重新建置並完成檢查。")
+if build.get("picture_text_manifest_sha256"):
+    caption=Path("/player/picture-text/manifest.json")
+    if not caption.is_file() or hashlib.sha256(caption.read_bytes()).hexdigest()!=build["picture_text_manifest_sha256"]:
+        sys.exit("圖片文字資料與已驗證建置不符，請重新準備並檢查。")
 '
   test -f "$BASE/inputs/player-profile.json"
   test -d "$BASE/session"

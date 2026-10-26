@@ -45,8 +45,8 @@ for name, want in manifest["Files"].items():
     assert sha(output / "inputs" / name) == want, name
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
-sources += [root / "tools" / n for n in ["early_text_live.go", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
-abi_root = root / "workplace/probe/render-abi-formats-20261026-r4"
+sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
+abi_root = root / "workplace/probe/render-abi-picture-text-20261027-r1"
 abi_path = abi_root / "evidence.json"
 verified = False
 if abi_path.is_file():
@@ -97,5 +97,17 @@ info = {
     "legacy_screen_rgb_fallback": False,
     "known_valid_command_native_writes": 0 if verified else None,
 }
+picture_manifest = output / "picture-text/manifest.json"
+if picture_manifest.is_file():
+    pictures = json.loads(picture_manifest.read_text())
+    assert pictures["Version"] == 1 and len(pictures["Bindings"]) == 24
+    for name, want in pictures["Files"].items():
+        assert name in {"en.tsv", "zh-TW.tsv", "glyphs.json"}
+        assert sha(output / "picture-text" / name) == want
+    for locale in ["en", "zh-TW"]:
+        assert sha(output / "picture-text" / (locale + ".tsv")) == sha(root / "text" / ("image-text." + locale + ".tsv"))
+    info["picture_text_manifest_sha256"] = sha(picture_manifest)
+    info["picture_text_bindings"] = len(pictures["Bindings"])
+    info["picture_text_captions"] = sum(len(b["Captions"]) for b in pictures["Bindings"])
 (output / "build-info.json").write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n")
 print(json.dumps({k: info[k] for k in ["binary_sha256", "verified_resident_points", "native_steps", "profile_files", "new_gameplay_verification"]}))
