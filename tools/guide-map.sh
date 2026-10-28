@@ -9,6 +9,29 @@ BROWSER_IMAGE=sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2
 test -d "$WORK"
 test -d "$ROOT/tools"
 case "${1:-}" in
+  atlas)
+    NAME="${2:-guide-atlas-20261028-r1}"
+    [[ "$NAME" =~ ^guide-[a-zA-Z0-9-]+$ ]] || { echo '輸出名稱必須以 guide- 開頭' >&2; exit 2; }
+    ANNOTATIONS="$WORK/probe/guide-20261028"
+    test -d "$WORK/probe"
+    test ! -e "$WORK/probe/$NAME"
+    test -d "$ROOT/walkthrough"
+    test -f "$ANNOTATIONS/atlas-annotations.json"
+    test -f "$FONT/jf-openhuninn-2.1.ttf"
+    test -f "$FONT/LICENSE-open-huninn.txt"
+    timeout 60s docker run --rm --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 768m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+      -e PYTHONDONTWRITEBYTECODE=1 --entrypoint bash \
+      -v "$ROOT/tools:/tools:ro" -v "$ROOT/walkthrough:/input:ro" \
+      -v "$ANNOTATIONS:/annotations:ro" -v "$FONT:/font:ro" \
+      -v "$WORK/probe:/out" "$PIL_IMAGE" -c '
+set -euo pipefail
+test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
+python3 /tools/guide_atlas.py /annotations/atlas-annotations.json /input \
+  /font/jf-openhuninn-2.1.ttf /font/LICENSE-open-huninn.txt "/out/$1"
+find "/out/$1" -user root -o -type d -name "*.md"
+' -- "$NAME"
+    ;;
   world-map)
     NAME="${2:-guide-world-map-20261027}"
     [[ "$NAME" =~ ^guide-[a-zA-Z0-9-]+$ ]] || { echo '輸出名稱必須以 guide- 開頭' >&2; exit 2; }
@@ -85,5 +108,5 @@ find "/out/$1" -user root -o -type d -name "*.md"
       --entrypoint node -v "$ROOT/tools:/tools:ro" -v "$WORK/caergoth-redraw:/out" \
       "$BROWSER_IMAGE" /tools/check_map_reader.mjs /out/reader.html /out
     ;;
-  *) echo '用法：bash tools/guide-map.sh index|redraw|check|geometry|world-map [guide-新名稱]' >&2; exit 2 ;;
+  *) echo '用法：bash tools/guide-map.sh index|redraw|check|geometry|world-map|atlas [guide-新名稱]' >&2; exit 2 ;;
 esac
