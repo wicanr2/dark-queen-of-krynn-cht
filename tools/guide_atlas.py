@@ -18,7 +18,7 @@ def sha(path):
 
 
 def validate_doors(record):
-    paths=record.get('walls',[])+[p+[p[0]] for p in record['floor']]
+    paths=record.get('walls',[])+[p+[p[0]] for p in record['floor']+record.get('voids',[])]
     for x0,y0,x1,y1 in record.get('pits',[])+record.get('blocked',[]):
         paths.append([[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]])
     segments=[(a,b) for path in paths for a,b in zip(path,path[1:])]
@@ -153,6 +153,9 @@ def render(record, font, output):
     for poly in record['floor']:
         assert len(poly)>=3
         p.polygon([point(v) for v in poly], '#eee3c9', '#34494c')
+    for poly in record.get('voids',[]):
+        assert len(poly)>=3
+        p.polygon([point(v) for v in poly], '#182329', '#34494c')
     for wall in record.get('walls',[]):
         assert len(wall)>=2
         p.line([point(v) for v in wall])

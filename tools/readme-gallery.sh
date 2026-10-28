@@ -14,7 +14,7 @@ test -f "$ROOT/workplace/probe/player-sample-20261026-r5/checks.json"
 test -f "$ROOT/tools/tlb_gallery.py"
 test -f "$ROOT/tools/readme_preview.py"
 test ! -e "$ROOT/workplace/probe/$name"
-image=sha256:44d0742ca1061bcd453440cdce925afa31c5324e115fca1334da0e364f0e2c48
+image=sha256:b050fc7c49003ea6eecbbe0fc93b465b6869daf550c3284d5039e5e87517e831
 docker image inspect "$image" >/dev/null
 timeout --kill-after=5s 120s docker run --rm --pull never --network none \
   --user "$(id -u):$(id -g)" --memory 2g --cpus 1 --pids-limit 64 \
