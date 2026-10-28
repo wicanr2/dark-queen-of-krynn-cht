@@ -219,7 +219,8 @@
 | [render-abi.sh](tools/render-abi.sh)、[player-sample.sh](tools/player-sample.sh) | 限定繪圖函式與正常玩家介面抽驗；前者可加 `gpu` 對照真實素材的 GPU／CPU 輸出，後者只送正常 X11 輸入。新目錄與收據皆留 `workplace/probe/`，範圍見規格 005 |
 | `workplace/` | 唯一研究工作區，含隔離副本、解壓、掃描轉錄、快取與 HD 批次；不入 Git |
 | `dist-all/` | 唯一正式交付根，建立前讀第 4 節交付契約；本機含原版產物不入 Git |
-| [guide_atlas.py](tools/guide_atlas.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28十八章正文與首批十五圖) | `bash tools/guide-map.sh atlas guide-新名稱`依本機人工幾何重生首批15圖，核來源與門線附著，不取掃描像素。輸入、正文及全部圖稿只留`workplace/`；這是紙本閱讀座標，未接正式攻略 |
+| [guide_atlas.py](tools/guide_atlas.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28海岸四圖與來源交叉核對) | `bash tools/guide-map.sh atlas guide-新名稱 [註記JSON檔名]`依本機人工幾何重生圖稿，核來源與門線附著，不取掃描像素。註記限`guide-20261028/`內檔名；首批15圖與海岸4圖分批保存，正文及全部圖稿只留`workplace/`。這是紙本閱讀座標，未接正式攻略 |
+| [guide_pdf_sources.py](tools/guide_pdf_sources.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28海岸四圖與來源交叉核對) | `bash tools/guide-map.sh source-images guide-新名稱`只接受固定SHA的本機SSI攻略PDF，無損取出32張JPEG供校圖。影像序號不是PDF頁碼，來源圖不得作為重繪成品或直接放入閱讀器 |
 | GitHub Issues | 唯一可執行工作清單；現況必須由遠端回讀 |
 
 不另建 `HANDOFF.md`、`REMAKE-PLAN.md` 或同義工作區。建立 `LICENSE` 前讀第 4 節授權入口，

@@ -4,7 +4,7 @@
 使用者提供的目錄實際名稱是 `walkthrough/`。不更名；`walkthrought/` 是對話中的拼法。
 兩個名稱均已加入 `.gitignore`，原始掃描及全文不入 Git。
 
-現行正文與重繪批次見[十八章正文與首批十五圖](#2026-10-28十八章正文與首批十五圖)。較早樣張保留為研究歷史，不作目前完成數。
+現行正文見[十八章正文與首批十五圖](#2026-10-28十八章正文與首批十五圖)，新增圖稿見[海岸四圖與來源交叉核對](#2026-10-28海岸四圖與來源交叉核對)。較早樣張保留為研究歷史，不作目前完成數。
 
 ## 已證實的來源與頁序
 
@@ -266,3 +266,41 @@ bash tools/guide-map.sh atlas guide-atlas-新的名稱
 中性位置符號，沒有猜上／下方向；原圖未附說明的標記只留編號。這些圖沒有自動定位、
 遊戲內疊層或任務判定。其餘圖集與正式閱讀器尚未接妥，攻略按鈕維持停用。
 下一批從希茲登、海底通道及遺跡接續，不重做已接受的燈塔畫風，也不深挖無關GEO欄位。
+
+## 2026-10-28：海岸四圖與來源交叉核對
+
+新增希茲登漁村、諾里迪斯海底通道、瑟拉諾斯特水下及空氣室，共4張與27標記。
+來源為第47期印刷64至66頁。遺跡掃描左側陰影以[SSI原版攻略](https://dlsaga.com/wp-content/uploads/2022/11/ks_darkqueen_cluebook_pdf.pdf)
+第10頁交叉核對，補正通道、13／23號與6個窗戶，並分開一般門、堅固門及爪痕門。
+SSI檔案SHA-256為`b866541812647947a34eed7a636d8d3c7ed50b5926f576258a3dc72bdb38170d`，
+32個PDF頁面；PDF第6個零起算頁含印刷9／10頁。頁碼、印刷頁碼及圖片序號分開保存。
+
+| 證據 | 本機位置與範圍 |
+|---|---|
+| 人工幾何 | `guide-20261028/atlas-coast-annotations.json`，SHA-256 `c23c3196bc2c81c7d7758030aa5625d83672dafea756bdedfafdd376633b5747`；保留中文主來源與SSI交叉來源 |
+| 圖稿 | `guide-atlas-coast-20261028-final/`；每張1100×1040 PNG、獨立SVG與字型授權 |
+| 校圖收據 | `guide-20261028/coast-review.json`，SHA-256 `f05a2303579507f8f732e3e6e76c20f286aa2525cfd73e0d3869a2fce22ffedf`；第二輪接受，不再美化 |
+| 原始參考 | `guide-20261028/ssi-cluebook-source.pdf`及來源JSON；完整PDF、擷取JPEG及校圖裁切均只留本機 |
+
+重生入口允許指定同一工作批次內的註記檔，缺少任何來源或SHA失配便停止：
+
+```sh
+bash tools/guide-map.sh atlas guide-atlas-新名稱 atlas-coast-annotations.json
+bash tools/guide-map.sh source-images guide-ssi-source-images-新名稱
+```
+
+[guide_pdf_sources.py](../../tools/guide_pdf_sources.py)只接受上述固定SHA的PDF及已盤點的
+直接JPEG串流。保存原始串流位元組、零起算檔案偏移、尺寸與SHA，不實作通用PDF解析器。
+32張JPEG共7,373,374 bytes，已逐張對回PDF原始區間。影像串流名稱重複，
+`image-00.jpg`等名稱只表示串流順序；沒有推定為PDF頁碼，manifest的PDF頁序欄保持空值。
+輸出只供人工校圖，禁止把這些來源圖當作重繪成品或閱讀器圖片。
+
+本輪發現舊Pillow r1已不存在，沿用主機既有r2，未新增image或OCR套件。
+使用Python3.13.15、Pillow11.3.0，image ID為
+`b050fc7c49003ea6eecbbe0fc93b465b6869daf550c3284d5039e5e87517e831`。
+新工具下首批15張PNG／SVG逐位元組保持；新4張來源、27標記、門線附著、
+文字邊界、PNG尺寸、SVG無image元素及輸出SHA均通過。空氣室6窗與13／23號另核對。
+
+目前共19張、119標記，不包含較早的凱爾高斯原型。這是紙本閱讀示意圖，
+沒有原生GEO通行或全場景聲明。攻略按鈕仍因其餘圖集及閱讀器未齊而停用；
+播放器、38份正式資料、1487項HD與已接受正文保持，不重跑舊遊戲父批。

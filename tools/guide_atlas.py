@@ -38,6 +38,7 @@ LABELS = {'wall': '牆', 'door': '門', 'arch': '拱門', 'secret': '密門',
           'one-way': '單向門', 'up': '上樓', 'down': '下樓',
           'blocked': '不可通行', 'pit': '坑洞', 'teleport': '傳送點',
           'magic': '魔法門', 'false': '假門', 'stairs': '樓梯',
+          'fort': '堅固門', 'clawed': '爪痕門', 'window': '窗戶',
           'forest': '密林', 'rubble': '瓦礫'}
 
 
@@ -78,21 +79,36 @@ class Painter:
             box = self.draw.textbbox((0,0), label, font=font)
             x -= self.draw.textlength(label, font=font)/2
             y -= (box[3]+box[1])/2
+        bounds=self.draw.textbbox((x,y),label,font=font)
+        if bounds[0]<0 or bounds[1]<0 or bounds[2]>1100 or bounds[3]>1040:
+            raise ValueError(f'文字超出畫布：{label}')
         self.draw.text((x,y), label, font=font, fill=color)
         self.svg.append(f'<text x="{x}" y="{y}" dominant-baseline="text-before-edge" '
                         f'font-size="{size}" fill="{color}">{html.escape(label)}</text>')
 
     def symbol(self, kind, at, axis='h', radius=12):
         x,y = at
-        if kind in ('door','secret','one-way','magic','false'):
+        if kind=='window':
+            r=radius*.65
+            self.draw.ellipse((x-r,y-r,x+r,y+r),fill='#eee3c9',outline='#6489a0',width=3)
+            self.svg.append(f'<circle cx="{x}" cy="{y}" r="{r}" fill="#eee3c9" stroke="#6489a0" stroke-width="3"/>')
+        elif kind in ('door','secret','one-way','magic','false','fort','clawed'):
             w,h = (radius, radius*.3) if axis=='h' else (radius*.3, radius)
             color = '#be9b52' if kind!='magic' else '#9775ba'
             self.box((x-w,y-h,x+w,y+h), '#e5cc89', color)
             if kind=='false':
                 self.line([(x-w,y-h),(x+w,y+h)],'#714750',2)
                 self.line([(x-w,y+h),(x+w,y-h)],'#714750',2)
+            elif kind=='fort':
+                self.box((x-w*.65,y-h*.65,x+w*.65,y+h*.65),'#8b6937')
+            elif kind=='clawed':
+                for i in (-1,1):
+                    self.line([(x+i*w*.45-w*.15,y-h),(x+i*w*.45+w*.15,y+h)],'#805f2d',2)
             elif kind=='secret':
-                self.text((x,y), '密', 18, '#34494c', True)
+                if radius>=10:
+                    self.text((x,y), '密', 18, '#34494c', True)
+                else:
+                    self.line([(x-w*.6,y-h*.7),(x+w*.6,y+h*.7)],'#34494c',2)
             elif kind=='one-way':
                 self.line([(x-w*.6,y-h*.6),(x+w*.6,y),(x-w*.6,y+h*.6)], color, 2)
         elif kind=='arch':
@@ -172,7 +188,7 @@ def render(record, font, output):
                 points.append(point((a[0]+t*dx+n*dy,a[1]+t*dy-n*dx)))
         p.polygon(points, '#aebcc2', '#526c7b')
     for door in record.get('doors',[]):
-        kind=door.get('kind','door');assert kind in ('door','arch','secret','one-way','magic','false')
+        kind=door.get('kind','door');assert kind in ('door','arch','secret','one-way','magic','false','fort','clawed','window')
         axis=door.get('axis','h');assert axis in ('h','v')
         used.add(kind)
         p.symbol(kind,point(door['at']),axis,min(14,scale*.23))
@@ -185,9 +201,11 @@ def render(record, font, output):
         at=point(marker['at'])
         background=p.image.getpixel((round(at[0]),round(at[1])))
         ink='#e5cc89' if background==(24,35,41) else '#273d44'
-        p.text(at,marker['id'],20,ink,True)
+        p.text(at,marker['id'],18 if scale<35 else 20,ink,True)
     for label in record.get('labels',[]):
         p.text(point(label['at']),label['text'],18,'#d4c091',True)
+    if record.get('source_limits'):
+        p.text((40,860),record['source_limits'][0],18,'#e5cc89')
     p.line([(40,890),(1060,890)],'#4e6369',2)
     for n,kind in enumerate(k for k in LABELS if k in used):
         x,y = 60+(n%6)*174, 922+(n//6)*40
@@ -195,7 +213,7 @@ def render(record, font, output):
         elif kind=='blocked':p.box((x-12,y-10,x+12,y+10),'#7c8e86')
         elif kind=='pit':p.box((x-12,y-10,x+12,y+10),'#aebcc2')
         elif kind=='rubble':p.box((x-12,y-10,x+12,y+10),'#b3a68b')
-        else:p.symbol(kind,(x,y))
+        else:p.symbol(kind,(x,y),radius=min(12,scale*.23))
         p.text((x+22,y-13),LABELS[kind],18)
     p.text((40,1000),'依紙本重繪的閱讀示意圖。圖號對照攻略正文，非遊戲座標。',18,'#b9c8c8')
     output.mkdir()
@@ -222,6 +240,11 @@ def main():
     assert len(ids)==len(set(ids)) and all(x.replace('-','').isalnum() and x.isascii() for x in ids)
     for record in data['maps']:
         validate_doors(record)
+        if record.get('cross_reference'):
+            reference=record['cross_reference']
+            rel=Path(reference['file'])
+            assert not rel.is_absolute() and len(rel.parts)==1
+            assert sha(args.annotations.parent/rel)==reference['sha256']
         rel=Path(record['source']);assert not rel.is_absolute() and '..' not in rel.parts
         source=args.source_root/rel
         assert sha(source)==record['source_sha256']

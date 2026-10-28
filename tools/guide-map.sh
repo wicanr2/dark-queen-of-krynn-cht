@@ -4,19 +4,38 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$ROOT/workplace"
 FONT="${DQK_FONT_DIR:-/home/anr2/cht/golden_box/death_knight_of_krynn/font}"
-PIL_IMAGE=sha256:44d0742ca1061bcd453440cdce925afa31c5324e115fca1334da0e364f0e2c48
+PIL_IMAGE=sha256:b050fc7c49003ea6eecbbe0fc93b465b6869daf550c3284d5039e5e87517e831
 BROWSER_IMAGE=sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2b837a
 test -d "$WORK"
 test -d "$ROOT/tools"
 case "${1:-}" in
+  source-images)
+    NAME="${2:-guide-ssi-source-images-20261028}"
+    [[ "$NAME" =~ ^guide-[a-zA-Z0-9-]+$ ]] || { echo '輸出名稱必須以 guide- 開頭' >&2; exit 2; }
+    SOURCE="$WORK/probe/guide-20261028"
+    test -d "$WORK/probe"
+    test -f "$SOURCE/ssi-cluebook-source.pdf"
+    test ! -e "$WORK/probe/$NAME"
+    timeout 30s docker run --rm --pull never --init --label project=dark-queen-of-krynn-cht \
+      --network none --memory 512m --cpus 1 --pids-limit 64 --user "$(id -u):$(id -g)" \
+      -e PYTHONDONTWRITEBYTECODE=1 --entrypoint bash \
+      -v "$ROOT/tools:/tools:ro" -v "$SOURCE:/source:ro" -v "$WORK/probe:/out" "$PIL_IMAGE" -c '
+set -euo pipefail
+test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
+python3 /tools/guide_pdf_sources.py /source/ssi-cluebook-source.pdf "/out/$1"
+find "/out/$1" -user root -o -type d -name "*.md"
+' -- "$NAME"
+    ;;
   atlas)
     NAME="${2:-guide-atlas-20261028-r1}"
     [[ "$NAME" =~ ^guide-[a-zA-Z0-9-]+$ ]] || { echo '輸出名稱必須以 guide- 開頭' >&2; exit 2; }
     ANNOTATIONS="$WORK/probe/guide-20261028"
+    ANNOTATION_FILE="${3:-atlas-annotations.json}"
+    [[ "$ANNOTATION_FILE" =~ ^[a-zA-Z0-9-]+\.json$ ]] || { echo '註記檔須為工作批次內的JSON檔名' >&2; exit 2; }
     test -d "$WORK/probe"
     test ! -e "$WORK/probe/$NAME"
     test -d "$ROOT/walkthrough"
-    test -f "$ANNOTATIONS/atlas-annotations.json"
+    test -f "$ANNOTATIONS/$ANNOTATION_FILE"
     test -f "$FONT/jf-openhuninn-2.1.ttf"
     test -f "$FONT/LICENSE-open-huninn.txt"
     timeout 60s docker run --rm --init --label project=dark-queen-of-krynn-cht \
@@ -27,10 +46,10 @@ case "${1:-}" in
       -v "$WORK/probe:/out" "$PIL_IMAGE" -c '
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
-python3 /tools/guide_atlas.py /annotations/atlas-annotations.json /input \
+python3 /tools/guide_atlas.py "/annotations/$2" /input \
   /font/jf-openhuninn-2.1.ttf /font/LICENSE-open-huninn.txt "/out/$1"
 find "/out/$1" -user root -o -type d -name "*.md"
-' -- "$NAME"
+' -- "$NAME" "$ANNOTATION_FILE"
     ;;
   world-map)
     NAME="${2:-guide-world-map-20261027}"
@@ -108,5 +127,5 @@ find "/out/$1" -user root -o -type d -name "*.md"
       --entrypoint node -v "$ROOT/tools:/tools:ro" -v "$WORK/caergoth-redraw:/out" \
       "$BROWSER_IMAGE" /tools/check_map_reader.mjs /out/reader.html /out
     ;;
-  *) echo '用法：bash tools/guide-map.sh index|redraw|check|geometry|world-map|atlas [guide-新名稱]' >&2; exit 2 ;;
+  *) echo '用法：bash tools/guide-map.sh index|redraw|check|geometry|world-map|atlas|source-images [guide-新名稱] [註記JSON檔名]' >&2; exit 2 ;;
 esac
