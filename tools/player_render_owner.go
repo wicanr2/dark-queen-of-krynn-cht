@@ -129,41 +129,52 @@ func loadPlayerRenderOwner(o *oracle.Oracle, profile string, hd playerHDRenderer
 	})
 	returns := map[oracle.Addr]bool{}
 	for _, hook := range bindings.Hooks {
-		entry := oracle.Addr{Seg: hook.Segment, Off: hook.Offset}
-		o.OnCall(entry, func(_ *oracle.Oracle) {
-			if !renderTransactionTouchesVideo(o, entry.Linear()+0xef00) {
-				owner.Counters["nonvideo_copy"]++
-				return
-			}
-			if len(owner.Pending) >= 256 {
-				panic("繪圖交易超過有界容量，停止提交半成品")
-			}
-			r := o.Regs()
-			target := o.Caller()
-			owner.Pending = append(owner.Pending, renderTransaction{
-				Return: paintReturn{target, r.SS, r.SP + 4}, Origin: entry, Step: o.Steps(), Kind: hook.Kind})
-			if returns[target] {
-				return
-			}
-			returns[target] = true
-			o.OnCall(target, func(_ *oracle.Oracle) {
-				r := o.Regs()
-				for i := len(owner.Pending) - 1; i >= 0; i-- {
-					p := owner.Pending[i].Return
-					if p.Addr == target && p.SS == r.SS && p.SP == r.SP {
-						owner.finishDriver(owner.Pending[i].Owned)
-						// 同一返回點可被不同呼叫重用，以實際堆疊身分配對。
-						owner.Pending = append(owner.Pending[:i], owner.Pending[i+1:]...)
-						return
-					}
-				}
-			})
-		})
+		owner.observeTransaction(oracle.Addr{Seg: hook.Segment, Off: hook.Offset}, hook.Kind, returns)
 	}
 	owner.installOwnedDrivers(bindings.NativeSteps)
 	owner.Text = loadPlayerTextOwner(o, profile, textGlyph)
 	owner.loadPictureText(profile)
 	return owner
+}
+
+func (owner *playerRenderOwner) observeTransaction(entry oracle.Addr, kind string, returns map[oracle.Addr]bool) {
+	o := owner.Oracle
+	o.OnCall(entry, func(_ *oracle.Oracle) {
+		r := o.Regs()
+		mark := paintReturn{o.Caller(), r.SS, r.SP + 4}
+		for _, pending := range owner.Pending {
+			if pending.Origin == entry && pending.Return == mark {
+				owner.Counters["transaction_entry_revisit"]++
+				return
+			}
+		}
+		if !renderTransactionTouchesVideo(o, entry.Linear()+0xef00) {
+			owner.Counters["nonvideo_copy"]++
+			return
+		}
+		if len(owner.Pending) >= 256 {
+			panic("繪圖交易超過有界容量，停止提交半成品")
+		}
+		target := mark.Addr
+		owner.Pending = append(owner.Pending, renderTransaction{
+			Return: mark, Origin: entry, Step: o.Steps(), Kind: kind})
+		if returns[target] {
+			return
+		}
+		returns[target] = true
+		o.OnCall(target, func(_ *oracle.Oracle) {
+			r := o.Regs()
+			for i := len(owner.Pending) - 1; i >= 0; i-- {
+				p := owner.Pending[i].Return
+				if p.Addr == target && p.SS == r.SS && p.SP == r.SP {
+					owner.finishDriver(owner.Pending[i].Owned)
+					// 同一返回點可被不同呼叫重用，以實際堆疊身分配對。
+					owner.Pending = append(owner.Pending[:i], owner.Pending[i+1:]...)
+					return
+				}
+			}
+		})
+	})
 }
 
 // 本作已證實的 Mode X 頁面契約；不更改 CRTC 或借換頁來讀隱藏頁。

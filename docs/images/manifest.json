@@ -239,6 +239,19 @@
       ],
       "bytes": 44091,
       "scope": "凱爾高斯獨立重繪閱讀圖，已收錄正式攻略，非逐格通行證據"
+    },
+    {
+      "file": "palanthas-hd-zh.png",
+      "source": "workplace/probe/player-sample-adventure-20261028-r7/08-after-answer.png",
+      "sha256": "b12ec1ed299aeee2848507233dfd29917eb7cfb40f60accdbba6054e7d2da62e",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 121867,
+      "scope": "正常冷啟動、讀取原附A隊伍並通過原版查驗後的帕蘭薩斯HD城景與繁中敘事；7625c40c，2倍視窗，非全遊戲驗收",
+      "binary_sha256": "7625c40ceb4620e9f593a0da4c909cd6bedf1ec635c8af1beef8a0f061ee93d9",
+      "theme_sha256": "990403b29b709441310a10378e868f9f9fee363cef562516d722d4c2d12e031f"
     }
   ]
 }

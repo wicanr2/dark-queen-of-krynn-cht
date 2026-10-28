@@ -138,6 +138,37 @@ type listBattleNotice struct {
 	PageKnown, InvalidPage bool
 	Ready, Restoring       bool
 }
+
+// 原版far-call交易在呼叫者位置結束。IRQ重訪入口不另建一份。
+func beginPaintCall(o *oracle.Oracle, stack *[]paintReturn, registered map[oracle.Addr]bool, complete func()) bool {
+	r := o.Regs()
+	mark := paintReturn{o.Caller(), r.SS, r.SP + 4}
+	for _, pending := range *stack {
+		if pending == mark {
+			return false
+		}
+	}
+	*stack = append(*stack, mark)
+	if !registered[mark.Addr] {
+		registered[mark.Addr] = true
+		o.OnCall(mark.Addr, func(_ *oracle.Oracle) {
+			if len(*stack) == 0 {
+				return
+			}
+			r := o.Regs()
+			last := (*stack)[len(*stack)-1]
+			if last.Addr != mark.Addr || last.SS != r.SS || last.SP != r.SP {
+				return
+			}
+			*stack = (*stack)[:len(*stack)-1]
+			if complete != nil {
+				complete()
+			}
+		})
+	}
+	return true
+}
+
 type listState struct {
 	statusViewOpen         bool
 	statusFromBattle       bool
@@ -594,22 +625,19 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			panic("列表掛勾 bytes 不符")
 		}
 	}
-	entry := func(stack *[]paintReturn, addr oracle.Addr) {
-		r := o.Regs()
-		*stack = append(*stack, paintReturn{addr, r.SS, r.SP})
-	}
-	ret := func(stack *[]paintReturn) {
-		if len(*stack) == 0 {
-			panic("列表繪製返回未配對")
-		}
-		p := (*stack)[len(*stack)-1]
-		r := o.Regs()
-		if p.SS != r.SS || p.SP != r.SP {
-			panic("列表返回堆疊不符")
-		}
-		*stack = (*stack)[:len(*stack)-1]
-	}
+	paintReturns, fillReturns := map[oracle.Addr]bool{}, map[oracle.Addr]bool{}
 	o.OnCall(oracle.Addr{Seg: 0xc15, Off: 0x55}, func(_ *oracle.Oracle) {
+		if !beginPaintCall(o, &l.paints, paintReturns, func() {
+			if len(l.paints) == 0 {
+				if l.trackListPage && !l.renderPageKnown {
+					panic("列表重用頁尚未定位")
+				}
+				l.trackListPage = false
+			}
+			g.listLog("list-return", nil)
+		}) {
+			return
+		}
 		if l.descriptorContext {
 			l.pane = ""
 		}
@@ -631,21 +659,9 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				g.listLog("list-context", map[string]any{"descriptor_sha256": descriptor, "menu_signature": menu.Signature, "caller": o.Caller()})
 			}
 		}
-		entry(&l.paints, oracle.Addr{})
 		g.listLog("list-entry", nil)
 	})
-	o.OnCall(oracle.Addr{Seg: 0xc15, Off: 0x508}, func(_ *oracle.Oracle) {
-		ret(&l.paints)
-		if len(l.paints) == 0 {
-			if l.trackListPage && !l.renderPageKnown {
-				panic("列表重用頁尚未定位")
-			}
-			l.trackListPage = false
-		}
-		g.listLog("list-return", nil)
-	})
-	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x78}, func(_ *oracle.Oracle) { entry(&l.fills, oracle.Addr{}) })
-	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x6db}, func(_ *oracle.Oracle) { ret(&l.fills) })
+	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x78}, func(_ *oracle.Oracle) { beginPaintCall(o, &l.fills, fillReturns, nil) })
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0xf7}, func(_ *oracle.Oracle) {
 		r := o.Regs()
 		v := [4]int{}

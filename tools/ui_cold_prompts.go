@@ -328,11 +328,18 @@ func (g *liveGame) installColdPrompts(path string) {
 				}
 			}
 			word := listWord{X: b.X, Y: b.Y, Width: b.Width, Key: b.Key, Group: b.Group, Foreground: byte(o.StackWord(4)) & 15, Background: b.Background, Button: b.Button}
+			mark := paintReturn{o.Caller(), o.Regs().SS, o.Regs().SP + 4}
+			if len(u.Pending) > 0 {
+				last := u.Pending[len(u.Pending)-1]
+				if last.Key == b.Key && last.Return == mark {
+					continue
+				}
+			}
 			u.erase(word.X, word.Y, word.Width, 8)
 			u.Words[[2]int{word.X, word.Y}] = word
 			index := g.coldPromptLog("word-before-glyph", map[string]any{"key": b.Key, "source_sha256": b.SourceSHA256, "format_sha256": b.FormatSHA256, "caller": o.Caller(), "word": word})
 			u.Await = append(u.Await, index)
-			if len(u.Config.Bindings) != 15 {
+			if len(u.Config.Bindings) != 15 && b.Group != "quiz" {
 				continue
 			}
 			r, at := o.Regs(), o.Caller()
@@ -350,7 +357,7 @@ func (g *liveGame) installColdPrompts(path string) {
 					if p.Return.Addr != at || p.Return.SS != r.SS || p.Return.SP != r.SP {
 						return
 					}
-					if !p.PageKnown {
+					if !p.PageKnown && len(u.Config.Bindings) == 15 {
 						panic("冷讀文字沒有顯存寫入")
 					}
 					p.Complete = true
@@ -358,6 +365,7 @@ func (g *liveGame) installColdPrompts(path string) {
 					u.Pending = u.Pending[:len(u.Pending)-1]
 					u.syncPages()
 					g.coldPromptLog("print-complete", map[string]any{"call_step": p.Entry, "key": p.Key, "target_page": p.Page})
+					g.completeStartupQuiz()
 				})
 			}
 		}
@@ -371,12 +379,86 @@ func (g *liveGame) installColdPrompts(path string) {
 		}
 		u.Await = nil
 	})
+	g.installColdFillObserver(active)
+}
+
+func (g *liveGame) completeStartupQuiz() bool {
+	u, l := g.cold.ui, g.list
+	if l == nil || !l.footerTransition {
+		return false
+	}
+	for _, key := range []string{"startup.quiz-page", "startup.quiz-word", "startup.quiz-heading", "startup.quiz-enter"} {
+		p := u.Prints[key]
+		if p == nil || !p.Complete {
+			return false
+		}
+		found := false
+		for _, word := range u.Words {
+			found = found || word.Key == key && word.Group == "quiz"
+		}
+		if !found {
+			return false
+		}
+	}
+	for _, word := range l.words {
+		if word.Group == "footer" && !strings.HasPrefix(word.Key, "role.") {
+			return false
+		}
+	}
+	removed := 0
+	for pos, word := range l.words {
+		if word.Group == "footer" && strings.HasPrefix(word.Key, "role.") {
+			delete(l.words, pos)
+			removed++
+		}
+	}
+	l.footerTransition = false
+	g.coldPromptLog("quiz-presentation-ready", map[string]any{"retired_role_words": removed})
+	return true
+}
+
+func (g *liveGame) installColdFillObserver(active func() bool) {
+	u, o := g.cold.ui, g.o
+	returns := map[oracle.Addr]bool{}
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x78}, func(_ *oracle.Oracle) {
 		if !active() {
 			return
 		}
 		r := o.Regs()
-		u.Fills = append(u.Fills, coldPromptFill{Return: paintReturn{SS: r.SS, SP: r.SP}, Entry: o.Steps()})
+		mark := paintReturn{Addr: o.Caller(), SS: r.SS, SP: r.SP + 4}
+		// OnCall先於IRQ派送。ISR返回入口時，原版prologue可能尚未執行。
+		if len(u.Fills) > 0 && u.Fills[len(u.Fills)-1].Return == mark {
+			return
+		}
+		u.Fills = append(u.Fills, coldPromptFill{Return: mark, Entry: o.Steps()})
+		if !returns[mark.Addr] {
+			returns[mark.Addr] = true
+			o.OnCall(mark.Addr, func(_ *oracle.Oracle) {
+				if len(u.Fills) == 0 {
+					return
+				}
+				f, r := u.Fills[len(u.Fills)-1], o.Regs()
+				if f.Return.Addr != mark.Addr || f.Return.SS != r.SS || f.Return.SP != r.SP {
+					return
+				}
+				// 已回到呼叫者，原版retf已完成；此後的IRQ重訪不再結束同筆交易。
+				u.Fills = u.Fills[:len(u.Fills)-1]
+				if f.Affected {
+					if len(u.Config.Bindings) != 15 {
+						g.coldPromptLog("native-clear-return", map[string]any{"entry_step": f.Entry})
+						return
+					}
+					if !f.PageKnown {
+						panic("冷讀填色沒有顯存寫入")
+					}
+					if f.Page != o.VideoLayoutState().DisplayStart {
+						u.ClearPages = append(u.ClearPages, f.Page)
+					}
+					u.syncPages()
+					g.coldPromptLog("native-clear-return", map[string]any{"entry_step": f.Entry, "target_page": f.Page})
+				}
+			})
+		}
 	})
 	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0xf7}, func(_ *oracle.Oracle) {
 		if !active() {
@@ -395,34 +477,6 @@ func (g *liveGame) installColdPrompts(path string) {
 			f := &u.Fills[len(u.Fills)-1]
 			f.Affected = true
 			g.coldPromptLog("native-clear", map[string]any{"entry_step": f.Entry, "rect": rect})
-		}
-	})
-	o.OnCall(oracle.Addr{Seg: 0x13c7, Off: 0x6db}, func(_ *oracle.Oracle) {
-		if !active() {
-			return
-		}
-		if len(u.Fills) == 0 {
-			panic("冷讀填色返回未配對")
-		}
-		f := u.Fills[len(u.Fills)-1]
-		r := o.Regs()
-		if f.Return.SS != r.SS || f.Return.SP != r.SP {
-			panic("冷讀填色堆疊不符")
-		}
-		u.Fills = u.Fills[:len(u.Fills)-1]
-		if f.Affected {
-			if len(u.Config.Bindings) != 15 {
-				g.coldPromptLog("native-clear-return", map[string]any{"entry_step": f.Entry})
-				return
-			}
-			if !f.PageKnown {
-				panic("冷讀填色沒有顯存寫入")
-			}
-			if f.Page != o.VideoLayoutState().DisplayStart {
-				u.ClearPages = append(u.ClearPages, f.Page)
-			}
-			u.syncPages()
-			g.coldPromptLog("native-clear-return", map[string]any{"entry_step": f.Entry, "target_page": f.Page})
 		}
 	})
 }

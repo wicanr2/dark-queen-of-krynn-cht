@@ -103,7 +103,7 @@ find /out -user root -o -type d -name "*.md"
 import hashlib,json,sys
 from pathlib import Path
 build=json.loads(Path("/player/build-info.json").read_text())
-if build.get("state")!="READY" or not build.get("native_effects_verified") or not build.get("virtual_time_accounting_verified"):
+if build.get("state")!="READY" or not build.get("native_effects_verified") or not build.get("virtual_time_accounting_verified") or not build.get("ui_observer_irq_verified"):
     sys.exit("繪圖迴圈替換仍為 DRAFT，尚未完成機器副作用與虛擬時間契約；本研究建置不進正式玩家路徑。")
 for path,key in [("dqk-player","binary_sha256"),("inputs/player-profile.json","profile_sha256")]:
     if hashlib.sha256(Path("/player",path).read_bytes()).hexdigest()!=build.get(key):

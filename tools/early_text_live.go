@@ -1441,6 +1441,11 @@ func runPlayer(profile, original, saves string) {
 			"header_transition": g.list.headerTransition, "reader_mode": g.reader.Mode,
 			"manual_events": g.reader.Manual.Events,
 		}
+		state["list_pending"] = map[string]int{"paints": len(g.list.paints), "fills": len(g.list.fills), "menus": len(g.list.menus), "buttons": len(g.list.buttons), "scrolls": len(g.list.scrolls), "ammo": len(g.list.ammoPaints)}
+		state["cold_words"] = g.cold.ui.snapshot()
+		state["cold_fills"] = len(g.cold.ui.Fills)
+		menu, menuValid := readMenuSource(o)
+		state["native_menu"], state["native_menu_valid"] = menu, menuValid
 		if g.reader.Guide != nil {
 			state["guide_events"] = g.reader.Guide.Events
 		}

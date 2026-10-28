@@ -63,6 +63,17 @@ if abi_path.is_file():
     verified = verified and len(cases)==1652 and all(
         row.get("Passed") is True and ("reject" in row["Name"] or row["DirectWrites"]==0)
         for row in cases)
+ui_path = root / "workplace/probe/player-coverage-20261028/cold-fill-contract-final.json"
+ui_verified = False
+if ui_path.is_file():
+    ui = json.loads(ui_path.read_text())
+    ui_verified = (ui.get("passed") is True and ui.get("cases") == 16 and ui.get("quiz_guard_cases") == 3
+                   and ui.get("machine_effects_unchanged") is True and ui.get("virtual_time_unchanged") is True
+                   and all(ui.get("sources", {}).get(name) == sha(root / name) for name in [
+                       "tools/ui_cold_prompts.go", "tools/ui_list_live.go", "tools/player_render_owner.go",
+                       "tools/early_text_live.go", "tools/ui_cold_fill_test.go"])
+                   and ui.get("tests_sha256") == sha(ui_path.parent / "cold-fill-tests-r4.json")
+                   and ui.get("root_receipt_sha256") == sha(ui_path.parent / "cold-fill-irq-root-r2.json"))
 player_sample = root / "workplace/probe/player-sample-canvas-complete-20261026-r1/checks.json"
 for candidate in sorted((root / "workplace/probe").glob("player-sample-*/checks.json")):
     candidate_data=json.loads(candidate.read_text())
@@ -71,7 +82,9 @@ for candidate in sorted((root / "workplace/probe").glob("player-sample-*/checks.
 sample = json.loads(player_sample.read_text()) if player_sample.is_file() else {}
 sample_verified = sample.get("passed") is True and sample.get("build_sha256") == sha(output / "dqk-player")
 info = {
-    "state": "READY" if verified else "DRAFT",
+    "state": "READY" if verified and ui_verified else "DRAFT",
+    "ui_observer_irq_verified": ui_verified,
+    "ui_observer_contract_sha256": sha(ui_path) if ui_verified else None,
     "native_effects_verified": verified,
     "virtual_time_accounting_verified": verified,
     "function_evidence_sha256": sha(abi_path) if abi_path.is_file() else None,
@@ -98,6 +111,12 @@ info = {
     "known_valid_command_native_writes": 0 if verified else None,
     "transparent_resume_verified": verified,
 }
+sample_correction = player_sample.with_name("label-correction.json")
+if sample_verified and sample_correction.is_file():
+    correction = json.loads(sample_correction.read_text())
+    if correction.get("source_sha256") == sha(player_sample) and isinstance(correction.get("scope"), list):
+        info["normal_player_sample_scope"] = correction["scope"]
+        info["normal_player_sample_correction_sha256"] = sha(sample_correction)
 picture_manifest = output / "picture-text/manifest.json"
 if picture_manifest.is_file():
     pictures = json.loads(picture_manifest.read_text())

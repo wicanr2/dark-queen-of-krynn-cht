@@ -390,3 +390,25 @@ FRAME41至44的寬度欄為0，資料符合色盤頭及色盤內容，分類為�
 修正只以CX作剩餘長度，守衛改為CX不大於DX。來源、位置、頁面、AH透明色及時間公式保留；事件前段沿既有Go單指令命令完成，後段仍以同一圖片身分批次提交。一般已解碼區塊也沿剩餘長度續畫，不重回原版像素迴圈。實作仍在`player_owned_drivers.go`，回歸在`render_abi_probe.go`，沒有新掛勾或對原版函式改名。
 
 正式程式更新為`bdd66ed7bbda5c61367261f7e34545728a4c205e9d101308e528cdbd289d7520`，profile仍為`96690613890e5e1021375c494e4cd775df9dcc132b9e78c8e03636117cbffd04`。備份`player-prior-20261028-resume/`僅含舊程式及建置資訊。安裝收據`player-coverage-20261028/install-resume-check.json` SHA-256 `72ccdaac25948c0b9cf1dba7b2296ad5f9b1868271c5595859603a4b087922d7`核對93份輸入、圖片中文、1487項HD、存檔與偏好保持。未重畫已接受素材，沒有全程通關、全部顯示模式或全遊戲覆蓋聲明。
+
+## 2026-10-28：填色觀察器在IRQ前過早結束
+
+已證實：正常玩家從選單讀入原附隊伍後，3f16134d的中文提示層出現「冷讀填色返回未配對」，收據為`player-sample-adventure-20261028-r3/player.log`。這是UI觀察器失配，並非原版檔案或HD素材損壞。
+
+| 證據 | 原始定位與界線 |
+|---|---|
+| 輸入 | 原DQK.EXE SHA-256仍為`3b41fb06a045568b0c35098a104499d489d8a5c0ef0dd48a039387ba2393ba58`；正常既有快照`battle-continuation-20261025/control-r1/final.state`為`69325a4d863f69af94bf7fea2f463f5a55f70690ac2e9e292979d33c239e2696` |
+| IDA9.4既有資料庫匯出 | `workplace/ida/pane-render-20261022/result.json` SHA-256 `94df3c7cb3b6f6fdbfd1f90bf4495cbcc1c7bc24e16518dbf924cfcc12b9e528`，原名`sub_22BE8`。入口IDA線性22BE8h、原檔偏移14FE8h、執行期13C7:0078，bytes為558BEC83EC2E5657；最後的retf位於IDA線性2324Bh、原檔1564Bh、執行期13C7:06DB，byte為CB |
+| SDK事件順序 | 固定f79eab6d的`oracle/run.go`在Machine.Step前呼叫OnCall；`internal/machine/machine.go`的Step先派送IRQ，再執行當前CPU指令。來源與雜湊保存`cold-fill-contract.json`。不是實機逐週期聲明 |
+| 原版窄重現 | `player-coverage-20261028/cold-fill-irq-root-r2.json` SHA-256 `02ca3fbbc7a02509c9c3698beec36089984e89dd8b852a7eacffda81b3bc9ef9`。直接執行原版sub_22BE8，固定IRQ在入口、retf前或呼叫者。入口IRQ讓入口觀察兩次而留下多餘交易；retf前IRQ讓同一SS:SP的返回觀察兩次，舊計數第二次無交易可結束 |
+| 觀察器回歸 | [ui_cold_fill_test.go](../../tools/ui_cold_fill_test.go)在原版函式入口／正文／retf／呼叫者邊界安排IRQ，兩種固定SDK週期模式共16組。觀察與未觀察兩側的CPU、完整RAM、VGA控制器、步數及週期完全一致，交易與殘字皆歸零。收據`cold-fill-tests-r2.json` SHA-256 `387ada2303b048241715238f258b669b86bef1941eca074ada27b36dbf937c48` |
+
+舊程式把OnCall視為retf已執行。實際上IRQ可能先改變CS:IP，ISR返回後同一retf才真正執行，故不能在第一個retf前回呼便結束交易。修正採原始呼叫者位址及返回後SS:SP；入口同一呼叫重訪不重複建單，原始retf完成後才移除。合法巢狀呼叫及清除頁面守衛保持，不修改SDK、IRQ、原版機器效果或Go畫布命令。
+
+窄探針先清除快照帶入的待送IRQ，再固定事件位置；較早r1的基準混入待送IRQ，保留供回查，不作返回步數依據。回歸首次缺少快照檔案描述符使用的`/orig`唯讀掛載，補齊後同一命令通過，分類為環境問題。函式不讀亂數，不涉及種子或重擲。此處是函式／觀察器證據，正常玩家路徑另列，不外推通關。
+
+追加證據：僅修正冷啟動填色後，57a405f7的正常載入還留下重複的image-header／rectangle／readback-scope交易，見r4的UI診斷。繪圖交易加入入口及返回身分去重，列表填色與列表繪製亦在真正返回呼叫者後結束。16組固定IRQ回歸另核這兩種觀察器，原機器效果相同，沒有用逾時清掉未知交易。
+
+r6又證實另一個呈現交接缺口：原版已印完四個查驗來源，所有交易為0，但舊角色底列仍等選單重畫。依既有來源綁定及四筆文字的實際返回，才撤除舊role詞框並結束等待；三個守衛案例確認缺來源／未返回或其他底列不能交接。最終19項證據為`cold-fill-contract-final.json`，SHA-256 `d39b0a17c924ef4bd95e8b1f7961eea06f935c33acf2a9ed02886ab9633ded82`。
+
+7625c40c正常r7從原附A隊伍抵達帕蘭薩斯入城及衛兵敘事，畫面可見PICB.22.1的HD城景與繁中。已接管命令原版寫入0、圖片身分退路0，正常操作去除10次入口重訪，最後繪圖／列表／冷啟動填色待辦皆0。收據`checks.json`為`6968c3283444fb038b237841a49df22a7a74cd4125fa030a4c448ca39949efbb`。最初將城名誤標為Caergoth，依畫面實際文字追加`label-correction.json`，原收據及函式結果保留。自由移動、新戰鬥及存退讀不在本次抽驗範圍。
