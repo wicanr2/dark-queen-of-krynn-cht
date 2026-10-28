@@ -19,10 +19,12 @@ def read(path):
 
 assert len(sys.argv) in (3, 4, 5)
 flags = sys.argv[3:]
-assert len(flags) == len(set(flags)) and set(flags) <= {'--hd-off', '--manual-map'}
+assert len(flags) == len(set(flags)) and set(flags) <= {'--hd-off', '--manual-map', '--demo'}
 root, out = map(Path, sys.argv[1:3])
 expected_hd = '--hd-off' not in flags
 manual_map = '--manual-map' in flags
+demo = '--demo' in flags
+assert not (manual_map and demo)
 assert out.is_dir() and out.stat().st_uid == os.getuid()
 reference = root / 'workplace/probe/player-sample-20261026-r5'
 reference_proof = read(reference / 'checks.json')
@@ -85,6 +87,14 @@ assert not counts.get('unexpected_owned_native_writes', 0) and counts['nonvideo_
 assert sha(out / '05-chinese.png') == sha(out / '07-return.png')
 assert sha(out / '06-manual.png') != sha(out / '05-chinese.png')
 assert 'panic' not in (out / 'player.log').read_text()
+if demo:
+    with Image.open(out/'02-return.png') as expected, Image.open(out/'09-demo-return.png') as actual:
+        assert expected.size == actual.size == (640,400)
+        for y in range(400):
+            for x in range(640):
+                if x < 32 and y < 32:continue
+                assert expected.getpixel((x,y)) == actual.getpixel((x,y)), ('demo return',x,y)
+    assert sha(out/'08-demo.png') != sha(out/'02-return.png'), '未進入示範'
 
 # 保留實際執行時的工具；舊批補檢查時不能用新runner覆寫來源快照。
 sources = out / 'source'
@@ -111,6 +121,8 @@ result = dict(
 if manual_map:
     result['scope'] += ['manual world map fit/native/double', 'manual map pan/reset', 'reader CPU pause', 'manual index and game return']
     result['manual_map_source_sha256'] = sha(map_file)
+if demo:
+    result['scope'] += ['opening Demo selection', 'Esc interrupts native demo', 'opening menu restored', 'Play enters character management after demo cancellation']
 (out / 'checks.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
 print(json.dumps({'passed': True, 'frames': len(differences), 'byte_differences': 0,
                   'open_render_transactions': 0, 'role_buttons': 12}))

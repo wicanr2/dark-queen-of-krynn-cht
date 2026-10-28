@@ -5,7 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 NAME="${1:?請指定新的玩家抽驗目錄名稱}"
 PLAYER="${2:-player-current}"
 READER_SAMPLE="${3:-}"
-[[ -z "$READER_SAMPLE" || "$READER_SAMPLE" = manual-map ]]
+[[ -z "$READER_SAMPLE" || "$READER_SAMPLE" = manual-map || "$READER_SAMPLE" = demo ]]
 [[ "$NAME" =~ ^player-sample-[a-zA-Z0-9-]+$ ]]
 [[ "$PLAYER" =~ ^player-[a-zA-Z0-9-]+$ ]]
 test ! -e "$ROOT/workplace/probe/$NAME"
@@ -64,8 +64,8 @@ export DISPLAY=:91
 cp /player/build-info.json "$OUT/build-info-at-start.json"
 /player/dqk-player -player /player/inputs -original /orig -saves "$OUT/session" >"$OUT/player.log" 2>&1 &
 APP_PID=$!
-if [[ "$2" = manual-map ]]; then
-  "$OUT/gui-driver" "$OUT" /reference manual-map >"$OUT/driver.log" 2>&1
+if [[ -n "$2" ]]; then
+  "$OUT/gui-driver" "$OUT" /reference "$2" >"$OUT/driver.log" 2>&1
 else
   "$OUT/gui-driver" "$OUT" /reference >"$OUT/driver.log" 2>&1
 fi
@@ -77,4 +77,4 @@ find "$OUT" -user root -o -type d -name "*.md"
 timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
  --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
  -v "$ROOT:/project:ro" -v "$ROOT/workplace/probe/$NAME:/out" --entrypoint python3 "$PIL" \
- /project/tools/player_sample_check.py /project /out ${READER_SAMPLE:+--manual-map}
+ /project/tools/player_sample_check.py /project /out ${READER_SAMPLE:+--$READER_SAMPLE}

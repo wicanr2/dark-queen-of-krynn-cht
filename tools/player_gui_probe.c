@@ -91,20 +91,27 @@ static void close_window(Display *d,Window w) {
 }
 int main(int argc,char **argv) {
     if(argc!=3&&argc!=4)return 2;
-    if(argc==4&&strcmp(argv[3],"manual-map"))return 2;
+    if(argc==4&&strcmp(argv[3],"manual-map")&&strcmp(argv[3],"demo"))return 2;
     snprintf(key_helper,sizeof(key_helper),"%s/xtest-key",argv[1]);
     Display *d=XOpenDisplay(NULL);if(!d)return 6;Window w=0;
     for(int i=0;i<200&&!w;i++){w=find_window(d,DefaultRootWindow(d));usleep(100000);}if(!w)return 7;
     sleep(3);capture(d,w,argv[1],"01-start");key(d,w,XK_Return);
     if(!wait_reference(d,w,argv[2],"02-return"))return 10;
-    capture(d,w,argv[1],"02-return");key(d,w,XK_p);
+    capture(d,w,argv[1],"02-return");
+    if(argc==4&&!strcmp(argv[3],"demo")){
+        key(d,w,XK_d);sleep(4);capture(d,w,argv[1],"08-demo");
+        key(d,w,XK_Escape);
+        if(!wait_reference(d,w,argv[2],"02-return")){capture(d,w,argv[1],"failure-demo-cancel");close_window(d,w);return 14;}
+        capture(d,w,argv[1],"09-demo-return");
+    }
+    key(d,w,XK_p);
     if(!wait_reference(d,w,argv[2],"02a-player")){capture(d,w,argv[1],"failure-role");close_window(d,w);sleep(2);XCloseDisplay(d);return 11;}
     capture(d,w,argv[1],"02a-player");
     key(d,w,XK_F2);sleep(1);capture(d,w,argv[1],"03-scale");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"04-original");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"05-chinese");
     key(d,w,XK_F6);sleep(1);capture(d,w,argv[1],"06-manual");
-    if(argc==4){
+    if(argc==4&&!strcmp(argv[3],"manual-map")){
         key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);
         capture(d,w,argv[1],"08-map-fit");
         key(d,w,XK_equal);capture(d,w,argv[1],"09-map-native");

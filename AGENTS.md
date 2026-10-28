@@ -211,7 +211,7 @@
 | `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，圖片內嵌文字由 [image-text.en.tsv](text/image-text.en.tsv) 與 [image-text.zh-TW.tsv](text/image-text.zh-TW.tsv) 成對保存。書籍正文仍留本機 |
 | `tools/` | 可重現的 Docker、盤點、驗證與打包入口 |
 | [圖片文字規格](docs/spec/005-render-owner.md#ready圖片文字的語言獨立替換)、[picture_text.go](tools/picture_text.go)、[picture_text_inputs.py](tools/picture_text_inputs.py) | 圖片文字的來源核對、繪製前底圖保存、Go文字安全框及獨立於HD的繁中替換；接入在[player_picture_text.go](tools/player_picture_text.go)，本機資料為正式入口的picture-text目錄 |
-| [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD 待接入 |
+| [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD與說明世界地圖已接入；目前數量與限制見CONTEXT |
 | [規格 004](docs/spec/004-hd-layer.md)、[player_hd.go](tools/player_hd.go) | HD 素材契約、完整可見來源比對與獨立開關；主題放 `workplace/probe/player-current/hd/`，視窗大小不控制 HD |
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | Go 命令畫布、交易及完整畫格提交；入口 `tools/player_render_owner.go`、`tools/player_owned_drivers.go`、`tools/render_scene_state.go`、`tools/player_scene_backend.go`。正式玩家不取原版整張 RGB；來源掛勾在規格目錄，不回寫原版。代表路徑零原版寫入與全場景覆蓋分開記錄 |
 | [player_text_format.go](tools/player_text_format.go)、[規格005](docs/spec/005-render-owner.md#ready帶變數的完整顯示來源) | 正式TSV格式與原版實際輸出配對；保留數值、加值、未知姓名及檔名，不讀寫原版varargs或語意資料 |
