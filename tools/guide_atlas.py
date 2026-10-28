@@ -39,7 +39,9 @@ LABELS = {'wall': '牆', 'door': '門', 'arch': '拱門', 'secret': '密門',
           'blocked': '不可通行', 'pit': '坑洞', 'teleport': '傳送點',
           'magic': '魔法門', 'false': '假門', 'stairs': '樓梯',
           'fort': '堅固門', 'clawed': '爪痕門', 'window': '窗戶',
-          'forest': '密林', 'rubble': '瓦礫'}
+          'stepped': '階梯通口', 'one-way-secret': '單向密門',
+          'blocked-door': '封閉門', 'secret-passage': '密道',
+          'forest': '密林', 'tree-wall': '樹牆', 'rubble': '瓦礫'}
 
 
 class Painter:
@@ -72,31 +74,41 @@ class Painter:
         if stroke:
             self.line(points + [points[0]], stroke)
 
-    def text(self, at, label, size=20, color='#f1e5c9', center=False):
+    def dashed(self, points, fill='#99774e', width=2):
+        for a,b in zip(points,points[1:]):
+            length=math.dist(a,b)
+            if length==0:continue
+            for start in range(0,math.ceil(length),9):
+                end=min(length,start+4)
+                self.line([(a[0]+(b[0]-a[0])*t/length,a[1]+(b[1]-a[1])*t/length) for t in (start,end)],fill,width)
+
+    def text(self, at, label, size=20, color='#f1e5c9', center=False, halo=False):
         x,y = at
         font = self.fonts[size]
         if center:
             box = self.draw.textbbox((0,0), label, font=font)
             x -= self.draw.textlength(label, font=font)/2
             y -= (box[3]+box[1])/2
-        bounds=self.draw.textbbox((x,y),label,font=font)
+        bounds=self.draw.textbbox((x,y),label,font=font,stroke_width=2 if halo else 0)
         if bounds[0]<0 or bounds[1]<0 or bounds[2]>1100 or bounds[3]>1040:
             raise ValueError(f'文字超出畫布：{label}')
-        self.draw.text((x,y), label, font=font, fill=color)
+        self.draw.text((x,y), label, font=font, fill=color,stroke_width=2 if halo else 0,
+                       stroke_fill='#eee3c9' if halo else None)
+        extra=' stroke="#eee3c9" stroke-width="4" paint-order="stroke"' if halo else ''
         self.svg.append(f'<text x="{x}" y="{y}" dominant-baseline="text-before-edge" '
-                        f'font-size="{size}" fill="{color}">{html.escape(label)}</text>')
+                        f'font-size="{size}" fill="{color}"{extra}>{html.escape(label)}</text>')
 
-    def symbol(self, kind, at, axis='h', radius=12):
+    def symbol(self, kind, at, axis='h', radius=12, direction=None):
         x,y = at
         if kind=='window':
             r=radius*.65
             self.draw.ellipse((x-r,y-r,x+r,y+r),fill='#eee3c9',outline='#6489a0',width=3)
             self.svg.append(f'<circle cx="{x}" cy="{y}" r="{r}" fill="#eee3c9" stroke="#6489a0" stroke-width="3"/>')
-        elif kind in ('door','secret','one-way','magic','false','fort','clawed'):
+        elif kind in ('door','secret','one-way','magic','false','fort','clawed','stepped','one-way-secret','blocked-door'):
             w,h = (radius, radius*.3) if axis=='h' else (radius*.3, radius)
             color = '#be9b52' if kind!='magic' else '#9775ba'
             self.box((x-w,y-h,x+w,y+h), '#e5cc89', color)
-            if kind=='false':
+            if kind in ('false','blocked-door'):
                 self.line([(x-w,y-h),(x+w,y+h)],'#714750',2)
                 self.line([(x-w,y+h),(x+w,y-h)],'#714750',2)
             elif kind=='fort':
@@ -104,13 +116,23 @@ class Painter:
             elif kind=='clawed':
                 for i in (-1,1):
                     self.line([(x+i*w*.45-w*.15,y-h),(x+i*w*.45+w*.15,y+h)],'#805f2d',2)
+            elif kind=='stepped':
+                for i in (-.45,.45):
+                    if axis=='h':self.line([(x+i*w,y-h),(x+i*w,y+h)],color,2)
+                    else:self.line([(x-w,y+i*h),(x+w,y+i*h)],color,2)
             elif kind=='secret':
                 if radius>=10:
                     self.text((x,y), '密', 18, '#34494c', True)
                 else:
                     self.line([(x-w*.6,y-h*.7),(x+w*.6,y+h*.7)],'#34494c',2)
-            elif kind=='one-way':
-                self.line([(x-w*.6,y-h*.6),(x+w*.6,y),(x-w*.6,y+h*.6)], color, 2)
+            elif kind in ('one-way','one-way-secret'):
+                if direction is None:
+                    self.line([(x-w*.6,y-h*.6),(x+w*.6,y),(x-w*.6,y+h*.6)], color, 2)
+                else:
+                    angle={'north':-math.pi/2,'east':0,'south':math.pi/2,'west':math.pi}[direction]
+                    pts=[(x+radius*.65*math.cos(angle+a),y+radius*.65*math.sin(angle+a)) for a in (-2.4,0,2.4)]
+                    self.line(pts,color,2)
+                if kind=='one-way-secret':self.line([(x-w*.8,y+h),(x+w*.8,y-h)],'#34494c',2)
         elif kind=='arch':
             # 中央留白後重畫拱形，不保留掃描字形或線條像素。
             def pt(a,b):
@@ -149,18 +171,22 @@ def render(record, font, output):
         assert -.5 <= v[0] <= w+.5 and -.5 <= v[1] <= h+.5, (record['id'],v)
         return (round(ox+v[0]*scale,3), round(oy+v[1]*scale,3))
 
-    used={'wall'}
+    trees=record.get('wall_kind')=='trees'
+    used={'tree-wall' if trees else 'wall'}
     if record.get('paper'):
         p.box((ox,oy,ox+w*scale,oy+h*scale),'#eee3c9')
+    for poly in record.get('forests',[]):
+        used.add('forest')
+        p.polygon([point(v) for v in poly],'#4b6651')
     for poly in record['floor']:
         assert len(poly)>=3
-        p.polygon([point(v) for v in poly], '#eee3c9', '#34494c')
+        p.polygon([point(v) for v in poly], '#eee3c9', '#34494c' if record.get('floor_outline',True) else None)
     for poly in record.get('voids',[]):
         assert len(poly)>=3
-        p.polygon([point(v) for v in poly], '#182329', '#34494c')
+        p.polygon([point(v) for v in poly], record.get('void_fill','#182329'), '#34494c')
     for wall in record.get('walls',[]):
         assert len(wall)>=2
-        p.line([point(v) for v in wall])
+        p.line([point(v) for v in wall], '#52704e' if trees else '#34494c')
     for box in record.get('rubble',[]):
         used.add('rubble')
         x0,y0=box[:2];x1,y1=box[2:]
@@ -192,11 +218,17 @@ def render(record, font, output):
                 n=.035 if j%2 else 0
                 points.append(point((a[0]+t*dx+n*dy,a[1]+t*dy-n*dx)))
         p.polygon(points, '#aebcc2', '#526c7b')
+    for route in record.get('routes',[]):
+        assert len(route)>=2
+        used.add('secret-passage')
+        p.dashed([point(v) for v in route])
     for door in record.get('doors',[]):
-        kind=door.get('kind','door');assert kind in ('door','arch','secret','one-way','magic','false','fort','clawed','window')
+        kind=door.get('kind','door');assert kind in ('door','arch','secret','one-way','magic','false','fort','clawed','window','stepped','one-way-secret','blocked-door')
         axis=door.get('axis','h');assert axis in ('h','v')
         used.add(kind)
-        p.symbol(kind,point(door['at']),axis,min(14,scale*.23))
+        direction=door.get('direction')
+        assert direction is None or (kind in ('one-way','one-way-secret') and direction in ('north','east','south','west'))
+        p.symbol(kind,point(door['at']),axis,min(14,scale*.23),direction)
     for symbol in record.get('symbols',[]):
         kind=symbol['kind'];assert kind in ('up','down','stairs','teleport')
         used.add(kind)
@@ -205,12 +237,13 @@ def render(record, font, output):
         assert isinstance(marker['id'],str) and marker['id']
         at=point(marker['at'])
         background=p.image.getpixel((round(at[0]),round(at[1])))
-        ink='#e5cc89' if background==(24,35,41) else '#273d44'
-        p.text(at,marker['id'],18 if scale<35 else 20,ink,True)
+        halo=bool(record.get('marker_halo'))
+        ink='#e5cc89' if background==(24,35,41) and not halo else '#273d44'
+        p.text(at,marker['id'],18 if scale<35 else 20,ink,True,halo)
     for label in record.get('labels',[]):
         at=point(label['at'])
         background=p.image.getpixel((round(at[0]),round(at[1])))
-        ink='#273d44' if record.get('paper') and background!=(24,35,41) else '#d4c091'
+        ink='#273d44' if (record.get('paper') or record.get('forests')) and background==(238,227,201) else '#d4c091'
         p.text(at,label['text'],18,ink,True)
     if record.get('source_limits'):
         p.text((40,860),record['source_limits'][0],18,'#e5cc89')
@@ -218,6 +251,9 @@ def render(record, font, output):
     for n,kind in enumerate(k for k in LABELS if k in used):
         x,y = 60+(n%6)*174, 922+(n//6)*40
         if kind=='wall':p.line([(x-12,y),(x+12,y)],'#bdc9c4',4)
+        elif kind=='tree-wall':p.line([(x-12,y),(x+12,y)],'#52704e',4)
+        elif kind=='forest':p.box((x-12,y-10,x+12,y+10),'#4b6651')
+        elif kind=='secret-passage':p.dashed([(x-12,y),(x+12,y)])
         elif kind=='blocked':p.box((x-12,y-10,x+12,y+10),'#7c8e86')
         elif kind=='pit':p.box((x-12,y-10,x+12,y+10),'#aebcc2')
         elif kind=='rubble':p.box((x-12,y-10,x+12,y+10),'#b3a68b')
