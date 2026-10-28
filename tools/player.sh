@@ -30,9 +30,11 @@ python3 /project/tools/menu_glyphs.py /font/jf-openhuninn-2.1.ttf "/output/$1/in
 python3 /project/tools/player_inputs.py fragments /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py display /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/manual_map_inputs.py /project "/output/$1/inputs" /font/jf-openhuninn-2.1.ttf
+python3 /project/tools/guide_inputs.py /project "/output/$1/inputs" /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py finish /project "/output/$1/inputs"
 python3 /project/tools/picture_text_inputs.py /project "/output/$1/picture-text" --font /font/jf-openhuninn-2.1.ttf
 mkdir "/output/$1/session"
+mkdir "/output/$1/hd"
 find "/output/$1" -user root -o -type d -name "*.md"
 ' -- "$NAME"
   ;;

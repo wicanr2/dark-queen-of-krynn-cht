@@ -113,11 +113,15 @@ func (r *journalReader) pageCount(id int) int {
 
 // 固定有理數最近鄰取樣。全圖居中，原尺寸及兩倍模式保持可見來源範圍有界。
 func (r *journalReader) imageFor(p *readerPage) readerIllustration {
-	if p.Mode == "manual-map" {
-		if r.Manual == nil || !r.Manual.Reading {
+	if p.Mode == "manual-map" || p.Mode == "guide-map" {
+		m := r.Manual
+		if p.Mode == "guide-map" {
+			m = r.Guide
+		}
+		if m == nil || !m.Reading {
 			panic("說明地圖不在閱讀中")
 		}
-		doc := r.Manual.Books[r.Manual.Book].Documents[r.Manual.Cursor]
+		doc := m.Books[m.Book].Documents[m.Cursor]
 		if doc.Image == nil || p.SourceKey != doc.ID {
 			panic("說明地圖來源不符")
 		}
@@ -154,6 +158,9 @@ func (g *liveGame) readerImageKey(key string) {
 	target := &r.Page
 	if r.Mode == "manual" && r.Manual != nil {
 		target = &r.Manual.Page
+	}
+	if r.Mode == "guide" && r.Guide != nil {
+		target = &r.Guide.Page
 	}
 	if *target == nil || (*target).Image == nil {
 		panic("圖文控制沒有圖文頁")

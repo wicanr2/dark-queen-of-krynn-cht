@@ -19,12 +19,13 @@ def read(path):
 
 assert len(sys.argv) in (3, 4, 5)
 flags = sys.argv[3:]
-assert len(flags) == len(set(flags)) and set(flags) <= {'--hd-off', '--manual-map', '--demo'}
+assert len(flags) == len(set(flags)) and set(flags) <= {'--hd-off', '--manual-map', '--demo', '--guide'}
 root, out = map(Path, sys.argv[1:3])
 expected_hd = '--hd-off' not in flags
 manual_map = '--manual-map' in flags
 demo = '--demo' in flags
-assert not (manual_map and demo)
+guide = '--guide' in flags
+assert sum((manual_map,demo,guide)) <= 1
 assert out.is_dir() and out.stat().st_uid == os.getuid()
 reference = root / 'workplace/probe/player-sample-20261026-r5'
 reference_proof = read(reference / 'checks.json')
@@ -87,6 +88,48 @@ assert not counts.get('unexpected_owned_native_writes', 0) and counts['nonvideo_
 assert sha(out / '05-chinese.png') == sha(out / '07-return.png')
 assert sha(out / '06-manual.png') != sha(out / '05-chinese.png')
 assert 'panic' not in (out / 'player.log').read_text()
+if guide:
+    events = diagnostics['guide_events']
+    assert [e['key'] for e in events] == ['F7','Return','Esc','Left','Left','Left','Return','PgDn','Esc','Down','Return',
+        'ZoomIn','ZoomIn','PanRight','PanDown','Home','Esc','Esc','F7','F7']
+    assert len({e['step'] for e in events[:18]}) == 1, '攻略查閱期間原版不應前進'
+    assert events[18]['step'] == events[19]['step']
+    assert events[6]['page']['Number'] == 1 and events[7]['page']['Number'] == 2
+    assert events[10]['book'] == 'chapter-17' and events[10]['page']['Mode'] == 'guide-map'
+    assert events[10]['page']['SourceKey'] == 'guide.map.flame-0'
+    assert events[10]['page']['Image'] == dict(zoom=0,x=0,y=0)
+    assert events[11]['page']['Image']['zoom'] == 1 and events[12]['page']['Image']['zoom'] == 2
+    assert events[14]['page']['Image']['x'] > events[12]['page']['Image']['x']
+    assert events[14]['page']['Image']['y'] > events[12]['page']['Image']['y']
+    assert events[15]['page']['Image'] == dict(zoom=0,x=0,y=0)
+    for name in ['23-guide-return','25-guide-toggle-return']:
+        assert sha(out/(name+'.png')) == sha(out/'07a-guide-base.png')
+    assert sha(out/'17-guide-map-fit.png') == sha(out/'21-guide-map-reset.png')
+    assert sha(out/'22-guide-map-index.png') == sha(out/'24-guide-reopen.png')
+    assert sha(out/'15a-guide-body.png') != sha(out/'16-guide-page.png')
+    assert any(c['action'] == 'guide' for c in controls), '工具列攻略未實際點選'
+    build = read(out/'build-info-at-start.json')
+    profiles = [p for p in (root/'workplace/probe').glob('player-*/inputs/player-profile.json') if sha(p) == build['profile_sha256']]
+    assert profiles
+    folder = profiles[0].parent
+    index = read(folder/'guide-index.json')
+    assert index['complete'] and index['map_count'] == 52 and len(index['books']) == 20
+    assert sum(len(b['documents']) for b in index['books']) == 72
+    source_path = folder/'guide-map-flame-0.png'
+    assert sha(source_path) == read(profiles[0])['Files'][source_path.name]
+    with Image.open(source_path) as original:
+        original = original.convert('RGB');w,h = original.size
+        for name, e in zip(['17-guide-map-fit','18-guide-map-native','19-guide-map-double','20-guide-map-pan','21-guide-map-reset'],[events[i] for i in (10,11,12,14,15)]):
+            view=e['page']['Image'];n,d=(208,h) if view['zoom']==0 else (view['zoom'],1)
+            left,top=max(0,(608-w*n//d)//2),max(0,(208-h*n//d)//2)
+            with Image.open(out/(name+'.png')) as picture:
+                for sy in range(48,360,6):
+                    ly=sy*2//3-32
+                    for sx in range(24,936,6):
+                        lx=sx*2//3-16
+                        if not (left<=lx<min(608,left+w*n//d) and top<=ly<min(208,top+h*n//d)):continue
+                        px,py=view['x']+(lx-left)*d//n,view['y']+(ly-top)*d//n
+                        assert picture.getpixel((sx,sy))[:3] == original.getpixel((px,py)),(name,sx,sy,px,py)
 if demo:
     with Image.open(out/'02-return.png') as expected, Image.open(out/'09-demo-return.png') as actual:
         assert expected.size == actual.size == (640,400)
@@ -123,6 +166,12 @@ if manual_map:
     result['manual_map_source_sha256'] = sha(map_file)
 if demo:
     result['scope'] += ['opening Demo selection', 'Esc interrupts native demo', 'opening menu restored', 'Play enters character management after demo cancellation']
+if guide:
+    result['scope'] += ['guide toolbar click and F7 toggle', '20 guide sections and 52 maps loaded',
+        'guide body paging', 'chapter navigation', 'map fit/native/double and pan/reset',
+        'independent map source pixel sampling', 'guest CPU paused during guide', 'index and game return']
+    result['guide_events'] = diagnostics['guide_events']
+    result['guide_map_source_sha256'] = sha(source_path)
 (out / 'checks.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
 print(json.dumps({'passed': True, 'frames': len(differences), 'byte_differences': 0,
                   'open_render_transactions': 0, 'role_buttons': 12}))

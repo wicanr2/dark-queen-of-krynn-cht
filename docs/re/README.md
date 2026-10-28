@@ -11,7 +11,7 @@
 | 研究 | 對應工作 |
 |---|---|
 | [001：遊戲與中文來源基線](001-input-baseline.md) | [#2](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/2) |
-| [002：中文攻略來源與頁序](002-walkthrough-source.md) | [#6](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6) |
+| [002：中文攻略來源、52張重繪圖與閱讀接入](002-walkthrough-source.md) | [#6](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6) |
 | [003：dosgolem 正常冷啟動基線](003-startup.md) | [#3](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/3) |
 | [004：劇情段落的繪製前入口](004-story-text.md) | [#4](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/4) |
 | [005：文字候選與繁中譯表](005-translation-catalog.md) | [#7](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7) |

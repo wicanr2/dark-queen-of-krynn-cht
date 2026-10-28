@@ -387,3 +387,26 @@ bash tools/guide-map.sh atlas guide-atlas-caves-新名稱 atlas-caves-annotation
 九張PNG尺寸、文字邊界、SVG無嵌圖、來源與輸出SHA通過；各批首尾代表圖獨立重建相同。
 皇宮1至23號皆有對應，樓梯不落在本圖障礙矩形內。這些是閱讀圖檢查，並非原版逐格或正常玩家驗證。
 累計34圖、453標記，其餘圖集與正式攻略入口仍待補。
+
+## 2026-10-28：完整圖集與攻略接入
+
+補齊鷹峽7圖、阿迪那那出地侏城堡4圖、火焰塔5圖，另整理既有凱爾高斯幾何與泰勒達斯地形，共52張、780個圖號及樓梯標記。舊目錄51個圖區中的鷹峽第三層實含第三、第四層，依來源分列。這是紙本閱讀圖數，不是原生GEO數量。
+
+| 批次 | 正式閱讀圖與本機收據 |
+|---|---|
+| 鷹峽7圖、165標記 | `guide-atlas-hawk-20261028-current/`；`hawk-review.json` SHA-256 `cde3bb82642bfcd2983a68244856c0d8f355a7863d9c99f644b7542d51e11706` |
+| 地侏城堡4圖、50標記 | `guide-atlas-ald-20261028-final/`；`ald-review.json` SHA-256 `713f0d6dc2cbeee68d4afac1b22d0e187455a452687774db25a636233b653468` |
+| 火焰塔5圖、93標記 | `guide-atlas-flame-20261028-current/`；`flame-review.json` SHA-256 `b5bf69f9653dca5ce916d44e9537928c7764a834e242c78b1aeb05cb052291e7` |
+| 凱爾高斯、11標記 | `guide-atlas-caergoth-20261028-final/`；`caergoth-review.json` SHA-256 `718754596c1fb20a0237f78189e60c3d1529b9bc5f5e8a4921f739d2cc29579a` |
+| 泰勒達斯、8標記 | `guide-atlas-world-20261028-final/`；`world-review.json` SHA-256 `f1d6375a9050301625e87834432f8e093ae1268ac8e2af7d7cf24ba7465d8b8c` |
+| 全圖集索引 | `guide-20261028/guide-map-delivery.json` SHA-256 `30a1224c7615f554595c4a44880ea487507e842e7e168fa9e3ee7bf9a75f45b8` |
+
+收據及人工註記位於`workplace/probe/guide-20261028/`。新增批次依`hawk_annotations.py`、`ald_annotations.py`、`flame_annotations.py`與`completion_maps.py`重生，`delivery_index.py`彙整各接受收據。前三批最多兩輪接受，後續只修正有直接來源的代號或符號位置。鷹峽保留AA4、分開Z4／C4及大小寫樓梯代號；城堡區分拱門、密門與15號封閉門；火焰塔保留A0至F3等代號及S／X／Y／Z。火焰色塊只表示紙圖核心範圍，不作原版地形判定。
+
+新增直線與圖符交叉來源為既存SSI攻略第34至36、42、44、46至49頁。中文主來源為第47期62／65頁與第48期66／67／69／71／72頁。各註記保存來源、雜湊與印刷頁碼，JPEG串流序號仍不當作PDF頁碼。世界圖沿既有24色地形輪廓與地名，加上攻略1至4號及重複標記。未嵌入掃描，未啟用位置或任務疊層。`atlas_single_check.py`修正首尾同圖時重建兩次同一路徑的檢查腳本問題，舊檢查器與歷史雜湊保留。
+
+正文沿已校讀40鍵、18章及導讀／法術提示，不改原版判定。[guide_inputs.py](../../tools/guide_inputs.py)核完整圖集、接受收據、PNG／SVG雜湊與無嵌圖，產生20個分章、72項閱讀內容及121個詞條。原有2857字模逐字保持，只增14字；36份舊資料逐位元組相同，另更新來源紀錄的正式譯表雜湊。原7730筆主表、1128來源、67句型、圖片中文及1487項HD保持原路徑。
+
+入口依[規格003](../spec/003-player-toolbar.md#攻略完整接入)的READY契約實作。正常視窗抽驗`player-sample-guide-20261028-r3/checks.json` SHA-256 `3d96b9933674afcb6c45f5b9f84c6844a771f885810650b0400d0b742f1d7c73`通過，範圍包括工具列點選、F7、火焰塔長文翻頁、地圖縮放／平移／復位與返回。首18個閱讀事件原版步數相同，地圖取樣逐點對回已重繪PNG；五張既有基準差異0，有效命令guest寫入0。
+
+正式程式已更新為`5e840a1fccfd05ffee00dc56b8ecc7e265c89357539f38bececf5efd920c15f1`，profile為`96690613890e5e1021375c494e4cd775df9dcc132b9e78c8e03636117cbffd04`，93份輸入。安裝備份`player-prior-20261028-guide/`保存舊967e2445及38份資料；存檔、圖片中文與HD保持。安裝收據`install-guide-check.json` SHA-256 `9605a64668ee0d53e6b144db3d66609c99047052e3a048eddf12cd888e9e5bee`。攻略入口已啟用，呈現契約標為CONFORMED；不外推逐格地形、每張圖的GUI走訪或全程通關。

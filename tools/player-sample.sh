@@ -5,7 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 NAME="${1:?請指定新的玩家抽驗目錄名稱}"
 PLAYER="${2:-player-current}"
 READER_SAMPLE="${3:-}"
-[[ -z "$READER_SAMPLE" || "$READER_SAMPLE" = manual-map || "$READER_SAMPLE" = demo ]]
+[[ -z "$READER_SAMPLE" || "$READER_SAMPLE" = manual-map || "$READER_SAMPLE" = demo || "$READER_SAMPLE" = guide ]]
 [[ "$NAME" =~ ^player-sample-[a-zA-Z0-9-]+$ ]]
 [[ "$PLAYER" =~ ^player-[a-zA-Z0-9-]+$ ]]
 test ! -e "$ROOT/workplace/probe/$NAME"
@@ -25,7 +25,7 @@ test -d "$ROOT/workplace/dosgolem"
 test -d /home/anr2/cht/dosgolem/workplace/gomodcache
 test -d "$ROOT/workplace/probe/gocache"
 GO=sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581
-PIL=sha256:44d0742ca1061bcd453440cdce925afa31c5324e115fca1334da0e364f0e2c48
+PIL=sha256:b050fc7c49003ea6eecbbe0fc93b465b6869daf550c3284d5039e5e87517e831
 docker image inspect "$GO" >/dev/null
 docker image inspect "$PIL" >/dev/null
 timeout 15s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
@@ -36,7 +36,7 @@ test "$(stat -c %u:%g /output)" = "$(id -u):$(id -g)"
 mkdir "/output/$1"
 mkdir "/output/$1/session"
 ' -- "$NAME"
-timeout --kill-after=5s 120s docker run --rm --pull never --init --network none \
+timeout --kill-after=5s 240s docker run --rm --pull never --init --network none \
  --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 \
  --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e LIBGL_ALWAYS_SOFTWARE=1 -e GOMAXPROCS=2 -e GOMEMLIMIT=1GiB \
  -e DQK_TRACE_PLAYER_UI=1 \

@@ -45,7 +45,7 @@ for name, want in manifest["Files"].items():
     assert sha(output / "inputs" / name) == want, name
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
-sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "manual_world_map.py", "manual_map_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
+sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "manual_world_map.py", "manual_map_inputs.py", "guide_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
 abi_root = root / "workplace/probe/render-abi-picture-text-20261027-r1"
 abi_path = abi_root / "evidence.json"
 verified = False
@@ -109,5 +109,14 @@ if picture_manifest.is_file():
     info["picture_text_manifest_sha256"] = sha(picture_manifest)
     info["picture_text_bindings"] = len(pictures["Bindings"])
     info["picture_text_captions"] = sum(len(b["Captions"]) for b in pictures["Bindings"])
+guide_index = output / "inputs/guide-index.json"
+if guide_index.is_file():
+    guide = json.loads(guide_index.read_text())
+    assert guide['version'] == 1 and guide['complete'] and guide['map_count'] == 52
+    assert len(guide['books']) == 20 and sum(len(b['documents']) for b in guide['books']) == 72
+    info['guide_maps'], info['guide_chapters'], info['guide_documents'] = 52, 18, 72
+    info['guide_index_sha256'] = sha(guide_index)
+    info['guide_catalog_sha256'] = sha(output / 'inputs/guide.zh-TW.tsv')
+    info['guide_provenance_sha256'] = sha(output / 'inputs/guide-provenance.json')
 (output / "build-info.json").write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n")
 print(json.dumps({k: info[k] for k in ["binary_sha256", "verified_resident_points", "native_steps", "profile_files", "new_gameplay_verification"]}))

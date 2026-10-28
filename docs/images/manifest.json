@@ -175,16 +175,6 @@
       "bytes": 10667
     },
     {
-      "file": "guide-caergoth.png",
-      "source": "workplace/probe/readme-gallery-portraits-20261026/guide-caergoth.png",
-      "sha256": "a4bc53c157343adadc684b9cf2ae9e15443c6b7946c97c949c87abc906e37cb0",
-      "size": [
-        1280,
-        1020
-      ],
-      "bytes": 123630
-    },
-    {
       "file": "credits-zh.png",
       "source": "workplace/probe/player-pictures-20261027/native-long-intro-r3.png",
       "sha256": "38041030c80e6e2c6a92b24f75de917f488a9205e42f4f2e31434d82780dfdc0",
@@ -205,6 +195,50 @@
       ],
       "bytes": 118685,
       "scope": "正常冷啟動後開啟冒險手冊第2頁的原尺寸查閱，地形示意，非逐格通行或全程冒險驗收"
+    },
+    {
+      "file": "guide-index-zh.png",
+      "source": "workplace/probe/player-sample-guide-20261028-r3/22-guide-map-index.png",
+      "sha256": "aa62859a93fdfc0dcdf2c3646d6b7ffa310691275ebb3c40bdcd6bb5fcbe8320",
+      "size": [
+        960,
+        600
+      ],
+      "bytes": 67036,
+      "scope": "正式攻略章節目錄，正常工具列與鍵盤操作"
+    },
+    {
+      "file": "guide-map-zh.png",
+      "source": "workplace/probe/player-sample-guide-20261028-r3/18-guide-map-native.png",
+      "sha256": "a8cd1dafa9fd6f29de66f28d8bda057bb5a7dba58b36ca84e0c9116be705f54b",
+      "size": [
+        960,
+        600
+      ],
+      "bytes": 61015,
+      "scope": "遊戲中查閱重繪火焰塔，原尺寸視圖；非遊戲通行座標"
+    },
+    {
+      "file": "guide-toolbar-zh.png",
+      "source": "workplace/probe/player-sample-guide-20261028-r3/14a-guide-toolbar.png",
+      "sha256": "a3ef605c3d5b12bd79ece25706336f2762faf9ed88ef3c75caa21b1892147a52",
+      "size": [
+        960,
+        600
+      ],
+      "bytes": 57122,
+      "scope": "正常角色管理的頂端工具列，攻略按鈕已啟用"
+    },
+    {
+      "file": "guide-caergoth.png",
+      "source": "workplace/probe/guide-atlas-caergoth-20261028-final/caergoth/map.png",
+      "sha256": "603bddb6b0e2f38f7ed535a8090b761ba5bfa37f6c2cebb3c4348b4d47c24628",
+      "size": [
+        1100,
+        1040
+      ],
+      "bytes": 44091,
+      "scope": "凱爾高斯獨立重繪閱讀圖，已收錄正式攻略，非逐格通行證據"
     }
   ]
 }

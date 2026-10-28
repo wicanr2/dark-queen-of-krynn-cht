@@ -79,6 +79,17 @@ type journalReader struct {
 	Images        map[int]readerIllustration
 	ImageSHA      string
 	Manual        *manualReader
+	Guide         *manualReader
+}
+
+func (r *journalReader) currentPage() *readerPage {
+	if r.Mode == "guide" && r.Guide != nil {
+		return r.Guide.Page
+	}
+	if r.Mode == "manual" && r.Manual != nil {
+		return r.Manual.Page
+	}
+	return r.Page
 }
 
 func readerLines(body string) []string {
@@ -262,10 +273,7 @@ func (g *liveGame) composeReader(px []byte) {
 	if g.reader == nil {
 		return
 	}
-	p := g.reader.Page
-	if g.reader.Manual != nil && g.reader.Manual.Page != nil {
-		p = g.reader.Manual.Page
-	}
+	p := g.reader.currentPage()
 	if p == nil {
 		return
 	}
@@ -407,7 +415,7 @@ func (g *liveGame) readerKey(key, source string, entry int) {
 		r.UIEvents = append(r.UIEvents, map[string]any{"step": step, "frame": len(g.frames), "key": key, "source": source, "ignored": "unstable"})
 		return
 	}
-	if key == "F6" || r.Mode == "manual" {
+	if key == "F6" || key == "F7" || r.Mode == "manual" || r.Mode == "guide" {
 		g.manualKey(key, source)
 		return
 	}
@@ -523,13 +531,18 @@ func (g *liveGame) tickReader() bool {
 		}
 	}
 	if r.Live {
+		if r.Guide != nil && inpututil.IsKeyJustPressed(ebiten.KeyF7) {
+			g.readerKey("F7", "keyboard", 0)
+			r.WaitDraw = true
+			return true
+		}
 		if r.Manual != nil && inpututil.IsKeyJustPressed(ebiten.KeyF6) {
 			g.readerKey("F6", "keyboard", 0)
 			r.WaitDraw = true
 			return true
 		}
-		if r.Mode == "manual" {
-			if r.Manual != nil && r.Manual.Page != nil && r.Manual.Page.Image != nil {
+		if r.Mode == "manual" || r.Mode == "guide" {
+			if page := r.currentPage(); page != nil && page.Image != nil {
 				for _, k := range []struct {
 					code ebiten.Key
 					name string

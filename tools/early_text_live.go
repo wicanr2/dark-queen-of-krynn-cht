@@ -1414,6 +1414,7 @@ func runPlayer(profile, original, saves string) {
 	g.installList(filepath.Join(profile, "inputs.json"), "", filepath.Join(profile, "en.tsv"))
 	g.installReader(filepath.Join(profile, "reader.zh-TW.tsv"), filepath.Join(profile, "illustrations.json"))
 	g.installManual(filepath.Join(profile, "manual.zh-TW.tsv"), filepath.Join(profile, "manual-index.json"))
+	g.installGuide(filepath.Join(profile, "guide.zh-TW.tsv"), filepath.Join(profile, "guide-index.json"))
 	if playerRenderLoader == nil {
 		panic("缺少玩家繪圖提交模組")
 	}
@@ -1439,6 +1440,9 @@ func runPlayer(profile, original, saves string) {
 			"page_flip": g.list.awaitPageFlip, "footer_transition": g.list.footerTransition,
 			"header_transition": g.list.headerTransition, "reader_mode": g.reader.Mode,
 			"manual_events": g.reader.Manual.Events,
+		}
+		if g.reader.Guide != nil {
+			state["guide_events"] = g.reader.Guide.Events
 		}
 		if renderer, ok := p.Renderer.(interface{ Diagnostics() any }); ok {
 			state["renderer"] = renderer.Diagnostics()
@@ -1474,7 +1478,7 @@ func (g *liveGame) playerButtons() []playerButton {
 		{Key: hdKey, Action: "hd", Enabled: hdEnabled},
 		{Key: "toolbar.journal", Action: "journal", Enabled: reader},
 		{Key: "toolbar.manual", Action: "manual", Enabled: reader && g.reader.Manual != nil},
-		{Key: "toolbar.guide", Action: "guide", Enabled: false},
+		{Key: "toolbar.guide", Action: "guide", Enabled: reader && g.reader.Guide != nil},
 		{Key: "toolbar.screenshot", Action: "screenshot", Enabled: true},
 		{Key: "toolbar.fullscreen", Action: "fullscreen", Enabled: true},
 	}
@@ -1520,16 +1524,23 @@ func (g *liveGame) playerAction(action string) {
 			}
 		}
 		g.translate = !g.translate
-	case "journal", "manual":
+	case "journal", "manual", "guide":
+		if action == "guide" && g.reader.Guide == nil {
+			p.Notice, p.NoticeUntil = p.Text["toolbar.guide_pending"], time.Now().Add(3*time.Second)
+			return
+		}
 		if g.reader != nil && g.translate {
 			key := "F5"
 			if action == "manual" {
 				key = "F6"
 			}
+			if action == "guide" {
+				key = "F7"
+			}
 			g.readerKey(key, "keyboard", 0)
 			g.reader.WaitDraw = true
 		}
-	case "hd", "guide":
+	case "hd":
 		if action == "hd" && p.HD != nil && p.HD.Available() && g.translate {
 			p.HDEnabled = !p.HDEnabled
 			return
@@ -1537,9 +1548,6 @@ func (g *liveGame) playerAction(action string) {
 		key := "toolbar.hd_pending"
 		if action == "hd" && p.HD != nil && p.HD.Available() {
 			key = "toolbar.hd_mode_hint"
-		}
-		if action == "guide" {
-			key = "toolbar.guide_pending"
 		}
 		p.Notice, p.NoticeUntil = p.Text[key], time.Now().Add(3*time.Second)
 	case "screenshot":
@@ -1661,6 +1669,9 @@ func (g *liveGame) updatePlayer() error {
 	if g.reader.Manual != nil && len(g.reader.Manual.Events) > 256 {
 		g.reader.Manual.Events = nil
 	}
+	if g.reader.Guide != nil && len(g.reader.Guide.Events) > 256 {
+		g.reader.Guide.Events = nil
+	}
 	return nil
 }
 
@@ -1756,10 +1767,7 @@ func (g *liveGame) playerProtectedRectangles() [][4]int {
 		}
 	}
 	if g.reader != nil {
-		page := g.reader.Page
-		if g.reader.Manual != nil && g.reader.Manual.Page != nil {
-			page = g.reader.Manual.Page
-		}
+		page := g.reader.currentPage()
 		if page != nil {
 			b := page.Box
 			r := [4]int{b[0] / 2, b[1] / 2, (b[2] + 1) / 2, (b[3] + 1) / 2}

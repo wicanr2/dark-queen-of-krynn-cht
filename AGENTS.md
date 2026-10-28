@@ -212,6 +212,7 @@
 | `tools/` | 可重現的 Docker、盤點、驗證與打包入口 |
 | [圖片文字規格](docs/spec/005-render-owner.md#ready圖片文字的語言獨立替換)、[picture_text.go](tools/picture_text.go)、[picture_text_inputs.py](tools/picture_text_inputs.py) | 圖片文字的來源核對、繪製前底圖保存、Go文字安全框及獨立於HD的繁中替換；接入在[player_picture_text.go](tools/player_picture_text.go)，本機資料為正式入口的picture-text目錄 |
 | [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD與說明世界地圖已接入；目前數量與限制見CONTEXT |
+| [guide_inputs.py](tools/guide_inputs.py)、[guide-ui.zh-TW.tsv](text/guide-ui.zh-TW.tsv) | 編譯本機18章攻略與52張重繪閱讀圖，核對來源及增補字模；沿規格003的F7、工具列與原框查閱，全文及完整圖集不入Git |
 | [規格 004](docs/spec/004-hd-layer.md)、[player_hd.go](tools/player_hd.go) | HD 素材契約、完整可見來源比對與獨立開關；主題放 `workplace/probe/player-current/hd/`，視窗大小不控制 HD |
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | Go 命令畫布、交易及完整畫格提交；入口 `tools/player_render_owner.go`、`tools/player_owned_drivers.go`、`tools/render_scene_state.go`、`tools/player_scene_backend.go`。正式玩家不取原版整張 RGB；來源掛勾在規格目錄，不回寫原版。代表路徑零原版寫入與全場景覆蓋分開記錄 |
 | [player_text_format.go](tools/player_text_format.go)、[規格005](docs/spec/005-render-owner.md#ready帶變數的完整顯示來源) | 正式TSV格式與原版實際輸出配對；保留數值、加值、未知姓名及檔名，不讀寫原版varargs或語意資料 |
@@ -219,7 +220,7 @@
 | [render-abi.sh](tools/render-abi.sh)、[player-sample.sh](tools/player-sample.sh) | 限定繪圖函式與正常玩家介面抽驗；前者可加 `gpu` 對照真實素材的 GPU／CPU 輸出，後者只送正常 X11 輸入。新目錄與收據皆留 `workplace/probe/`，範圍見規格 005 |
 | `workplace/` | 唯一研究工作區，含隔離副本、解壓、掃描轉錄、快取與 HD 批次；不入 Git |
 | `dist-all/` | 唯一正式交付根，建立前讀第 4 節交付契約；本機含原版產物不入 Git |
-| [guide_atlas.py](tools/guide_atlas.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28城鎮森林與皇宮九圖) | `bash tools/guide-map.sh atlas guide-新名稱 [註記JSON檔名]`依本機幾何重生圖稿，核來源與門線附著，不取掃描像素。註記限`guide-20261028/`內檔名；34圖依批次保存，正文及全部圖稿只留`workplace/`。這是紙本閱讀座標，未接正式攻略；紙色留白不表示可通行 |
+| [guide_atlas.py](tools/guide_atlas.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28完整圖集與攻略接入) | `bash tools/guide-map.sh atlas guide-新名稱 [註記JSON檔名]`依本機幾何重生圖稿，核來源與門線附著，不取掃描像素。註記限`guide-20261028/`內檔名；52圖已整理並接入正式攻略，正文及全部圖稿只留`workplace/`。這是紙本閱讀座標，紙色留白不表示可通行 |
 | [guide_pdf_sources.py](tools/guide_pdf_sources.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28海岸四圖與來源交叉核對) | `bash tools/guide-map.sh source-images guide-新名稱`只接受固定SHA的本機SSI攻略PDF，無損取出32張JPEG供校圖。影像序號不是PDF頁碼，來源圖不得作為重繪成品或直接放入閱讀器 |
 | GitHub Issues | 唯一可執行工作清單；現況必須由遠端回讀 |
 

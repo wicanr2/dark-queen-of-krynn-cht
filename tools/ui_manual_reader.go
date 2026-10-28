@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/draw"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -34,6 +35,7 @@ type manualBook struct {
 
 type manualReader struct {
 	Version            int               `json:"version"`
+	Scope              string            `json:"-"`
 	Books              []manualBook      `json:"books"`
 	UI                 map[string]string `json:"-"`
 	SHA, IndexSHA      string
@@ -239,28 +241,35 @@ func (m *manualReader) refresh(step uint64) {
 			p.Lines = append(p.Lines, fmt.Sprintf(m.UI["manual.index_item"], marker, strconv.Itoa(doc.SourcePage), m.UI[doc.TitleKey]))
 		}
 	}
+	if m.Scope == "guide" {
+		p.Mode = strings.Replace(p.Mode, "manual-", "guide-", 1)
+	}
 	m.Page = p
 }
 
 func (g *liveGame) manualKey(key, source string) {
 	r, step := g.reader, g.o.Steps()
 	m := r.Manual
+	mode, toggle := "manual", "F6"
+	if r.Mode == "guide" || (r.Mode == "" && key == "F7") {
+		m, mode, toggle = r.Guide, "guide", "F7"
+	}
 	if m == nil {
 		panic("未載入手冊")
 	}
-	if key == "F6" {
-		if r.Mode == "manual" {
+	if key == toggle {
+		if r.Mode == mode {
 			r.Page, r.Index, r.Mode = m.Saved, m.SavedIndex, ""
 			m.Page, m.Saved = nil, nil
 		} else if r.Mode == "" {
 			m.Saved, m.SavedIndex = r.Page, r.Index
-			r.Mode, m.Reading, m.Part = "manual", false, 0
+			r.Mode, m.Reading, m.Part = mode, false, 0
 			m.refresh(step)
 		}
-	} else if r.Mode == "manual" && m.Page != nil && m.Page.Image != nil &&
+	} else if r.Mode == mode && m.Page != nil && m.Page.Image != nil &&
 		(key == "ZoomIn" || key == "ZoomOut" || key == "PanLeft" || key == "PanRight" || key == "PanUp" || key == "PanDown" || key == "Home") {
 		g.readerImageKey(key)
-	} else if r.Mode == "manual" {
+	} else if r.Mode == mode {
 		book := &m.Books[m.Book]
 		if m.Reading {
 			count := (len(book.Documents[m.Cursor].Lines) + 12) / 13
@@ -293,10 +302,112 @@ func (g *liveGame) manualKey(key, source string) {
 				m.Page, m.Saved = nil, nil
 			}
 		}
-		if r.Mode == "manual" {
+		if r.Mode == mode {
 			m.refresh(step)
 		}
 	}
 	m.Events = append(m.Events, map[string]any{"step": step, "frame": len(g.frames), "key": key, "source": source,
 		"book": m.Books[m.Book].ID, "cursor": m.Cursor, "part": m.Part, "reading": m.Reading, "page": m.Page})
+}
+
+// 攻略沿既有原框閱讀元件，資料與說明、已讀手札各自獨立。
+func (g *liveGame) installGuide(path, index string) {
+	textExists, indexExists := false, false
+	for i, p := range []string{path, index} {
+		_, err := os.Stat(p)
+		if err != nil && !os.IsNotExist(err) {
+			must(err)
+		}
+		if i == 0 {
+			textExists = err == nil
+		} else {
+			indexExists = err == nil
+		}
+	}
+	if !textExists && !indexExists {
+		return
+	}
+	if !textExists || !indexExists || g.reader == nil || !g.reader.Ready {
+		panic("攻略資料不完整")
+	}
+	data, err := os.ReadFile(index)
+	must(err)
+	var manifest struct {
+		Version  int          `json:"version"`
+		Complete bool         `json:"complete"`
+		MapCount int          `json:"map_count"`
+		Books    []manualBook `json:"books"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	must(decoder.Decode(&manifest))
+	if decoder.Decode(new(any)) != io.EOF {
+		panic("攻略索引含額外資料")
+	}
+	if manifest.Version != 1 || !manifest.Complete || manifest.MapCount != 52 || len(manifest.Books) != 20 {
+		panic("攻略章節或圖集未齊")
+	}
+	m := &manualReader{Version: 1, Scope: "guide", Books: manifest.Books, UI: readLiveCatalog(path), IndexSHA: digest(data)}
+	data, err = os.ReadFile(path)
+	must(err)
+	m.SHA = digest(data)
+	expected, ids, files := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for key, count := range map[string]int{"manual.index_heading": 1, "manual.document_heading": 3, "manual.index_item": 3,
+		"manual.index_hint": 0, "manual.document_hint": 2, "manual.image_pending": 0, "manual.selected": 0, "manual.cell": 2, "manual.map_hint": 0} {
+		text := m.UI[key]
+		if text == "" || strings.Count(text, "%s") != count || strings.Contains(strings.ReplaceAll(text, "%s", ""), "%") {
+			panic("攻略介面模板不符")
+		}
+		expected[key] = true
+		if count == 0 {
+			g.validateManualText(text, 38)
+		}
+	}
+	counts := []int{0, 0, 1, 1, 4, 1, 1, 13, 1, 4, 1, 1, 4, 7, 1, 1, 4, 5, 2, 0}
+	maps := 0
+	for i := range m.Books {
+		book := &m.Books[i]
+		id := "preface"
+		if i == 19 {
+			id = "spells"
+		} else if i > 0 {
+			id = "chapter-" + strconv.Itoa(i)
+		}
+		if book.ID != id || book.TitleKey != "guide.book."+id || m.UI[book.TitleKey] == "" || len(book.Documents) != counts[i]+1 {
+			panic("攻略分章或地圖數不符")
+		}
+		expected[book.TitleKey] = true
+		g.validateManualText(fmt.Sprintf(m.UI["manual.index_heading"], m.UI[book.TitleKey]), 37)
+		for j := range book.Documents {
+			doc := &book.Documents[j]
+			if doc.ID == "" || ids[doc.ID] || doc.SourcePage < 1 || doc.SourcePage > 999 || m.UI[doc.TitleKey] == "" || m.UI[doc.BodyKey] == "" {
+				panic("攻略文章或來源頁不符")
+			}
+			ids[doc.ID], expected[doc.TitleKey], expected[doc.BodyKey] = true, true, true
+			if j == 0 {
+				if doc.Kind != "body" || doc.Image != nil {
+					panic("攻略缺少章節正文")
+				}
+			} else {
+				if doc.Kind != "illustration" || doc.Image == nil || files[doc.Image.File] || doc.BodyKey != "manual.image_pending" {
+					panic("攻略圖稿缺少或重複")
+				}
+				files[doc.Image.File] = true
+				maps++
+				loadManualPicture(filepath.Dir(index), doc.Image)
+			}
+			doc.Lines = manualLines(m.UI[doc.BodyKey])
+			for _, line := range doc.Lines {
+				g.validateManualText(line, 38)
+			}
+			g.validateManualText(m.heading(book, doc), 37)
+			g.validateManualText(fmt.Sprintf(m.UI["manual.index_item"], m.UI["manual.selected"], strconv.Itoa(doc.SourcePage), m.UI[doc.TitleKey]), 38)
+			count := (len(doc.Lines) + 12) / 13
+			g.validateManualText(fmt.Sprintf(m.UI["manual.document_hint"], strconv.Itoa(count), strconv.Itoa(count)), 38)
+		}
+	}
+	if maps != 52 || len(expected) != len(m.UI) {
+		panic("攻略圖集數量或孤兒詞條不符")
+	}
+	g.reader.Guide = m
 }

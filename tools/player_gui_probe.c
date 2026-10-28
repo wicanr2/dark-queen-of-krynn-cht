@@ -91,7 +91,7 @@ static void close_window(Display *d,Window w) {
 }
 int main(int argc,char **argv) {
     if(argc!=3&&argc!=4)return 2;
-    if(argc==4&&strcmp(argv[3],"manual-map")&&strcmp(argv[3],"demo"))return 2;
+    if(argc==4&&strcmp(argv[3],"manual-map")&&strcmp(argv[3],"demo")&&strcmp(argv[3],"guide"))return 2;
     snprintf(key_helper,sizeof(key_helper),"%s/xtest-key",argv[1]);
     Display *d=XOpenDisplay(NULL);if(!d)return 6;Window w=0;
     for(int i=0;i<200&&!w;i++){w=find_window(d,DefaultRootWindow(d));usleep(100000);}if(!w)return 7;
@@ -121,6 +121,30 @@ int main(int argc,char **argv) {
         key(d,w,XK_Escape);capture(d,w,argv[1],"13-map-index");
     }
     key(d,w,XK_Escape);sleep(1);capture(d,w,argv[1],"07-return");
+    if(argc==4&&!strcmp(argv[3],"guide")){
+        XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);usleep(1000000);
+        capture(d,w,argv[1],"07a-guide-base");
+        XWarpPointer(d,None,w,0,0,0,0,522,2);XSync(d,False);usleep(500000);
+        capture(d,w,argv[1],"14a-guide-toolbar");
+        fake_key(1,"mouse-down");usleep(300000);fake_key(1,"mouse-up");usleep(500000);
+        XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);usleep(500000);
+        capture(d,w,argv[1],"14-guide-index");
+        key(d,w,XK_Return);capture(d,w,argv[1],"15-guide-preface");
+        key(d,w,XK_Escape);
+        key(d,w,XK_Left);key(d,w,XK_Left);key(d,w,XK_Left); /* 第17章火焰塔 */
+        key(d,w,XK_Return);capture(d,w,argv[1],"15a-guide-body");
+        key(d,w,XK_Page_Down);capture(d,w,argv[1],"16-guide-page");
+        key(d,w,XK_Escape);
+        key(d,w,XK_Down);key(d,w,XK_Return);capture(d,w,argv[1],"17-guide-map-fit");
+        key(d,w,XK_equal);capture(d,w,argv[1],"18-guide-map-native");
+        key(d,w,XK_equal);capture(d,w,argv[1],"19-guide-map-double");
+        key(d,w,XK_d);key(d,w,XK_s);capture(d,w,argv[1],"20-guide-map-pan");
+        key(d,w,XK_Home);capture(d,w,argv[1],"21-guide-map-reset");
+        key(d,w,XK_Escape);capture(d,w,argv[1],"22-guide-map-index");
+        key(d,w,XK_Escape);capture(d,w,argv[1],"23-guide-return");
+        key(d,w,XK_F7);capture(d,w,argv[1],"24-guide-reopen");
+        key(d,w,XK_F7);capture(d,w,argv[1],"25-guide-toggle-return");
+    }
     key(d,w,XK_F10);sleep(1);
     close_window(d,w);XCloseDisplay(d);return 0;
 }

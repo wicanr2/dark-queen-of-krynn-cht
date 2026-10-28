@@ -1,0 +1,10 @@
+key	text
+manual.index_heading	攻略：%s
+manual.document_heading	%s｜%s頁 %s
+manual.index_item	%s %s頁 %s
+manual.index_hint	左右切章 上下選擇 Enter開啟 Esc返回 F7離開
+manual.document_hint	第%s／%s頁 PgUp前頁 PgDn後頁 Esc目錄 F7離開
+manual.image_pending	重繪閱讀圖。圖號對照本章正文。
+manual.selected	>
+manual.cell	%s：%s
+manual.map_hint	＋－縮放 WASD平移 Home全圖 Esc目錄 F7離開

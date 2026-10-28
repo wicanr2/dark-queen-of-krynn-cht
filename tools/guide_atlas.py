@@ -41,7 +41,7 @@ LABELS = {'wall': '牆', 'door': '門', 'arch': '拱門', 'secret': '密門',
           'fort': '堅固門', 'clawed': '爪痕門', 'window': '窗戶',
           'stepped': '階梯通口', 'one-way-secret': '單向密門',
           'blocked-door': '封閉門', 'secret-passage': '密道',
-          'forest': '密林', 'tree-wall': '樹牆', 'rubble': '瓦礫'}
+          'forest': '密林', 'tree-wall': '樹牆', 'rubble': '瓦礫', 'flame': '火焰核心'}
 
 
 class Painter:
@@ -184,6 +184,10 @@ def render(record, font, output):
     for poly in record.get('voids',[]):
         assert len(poly)>=3
         p.polygon([point(v) for v in poly], record.get('void_fill','#182329'), '#34494c')
+    for poly in record.get('flames',[]):
+        assert len(poly)>=3
+        used.add('flame')
+        p.polygon([point(v) for v in poly], '#d9ac77')
     for wall in record.get('walls',[]):
         assert len(wall)>=2
         p.line([point(v) for v in wall], '#52704e' if trees else '#34494c')
@@ -257,6 +261,7 @@ def render(record, font, output):
         elif kind=='blocked':p.box((x-12,y-10,x+12,y+10),'#7c8e86')
         elif kind=='pit':p.box((x-12,y-10,x+12,y+10),'#aebcc2')
         elif kind=='rubble':p.box((x-12,y-10,x+12,y+10),'#b3a68b')
+        elif kind=='flame':p.box((x-12,y-10,x+12,y+10),'#d9ac77')
         else:p.symbol(kind,(x,y),radius=min(12,scale*.23))
         p.text((x+22,y-13),LABELS[kind],18)
     p.text((40,1000),'依紙本重繪的閱讀示意圖。圖號對照攻略正文，非遊戲座標。',18,'#b9c8c8')
