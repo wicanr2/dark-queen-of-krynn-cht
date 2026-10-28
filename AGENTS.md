@@ -218,6 +218,7 @@
 | [player_text_format.go](tools/player_text_format.go)、[規格005](docs/spec/005-render-owner.md#ready帶變數的完整顯示來源) | 正式TSV格式與原版實際輸出配對；保留數值、加值、未知姓名及檔名，不讀寫原版varargs或語意資料 |
 | [player-sample.sh](tools/player-sample.sh)、[視窗驅動](tools/player_gui_probe.c)、[XTEST按鍵](tools/player_xtest_key.go)、[檢查器](tools/player_sample_check.py) | Docker內的正常介面代表抽驗；使用既有XGB／XTEST產生伺服器鍵盤事件，第二參數可選本機對照程式，來源與影像參考唯讀；結束後核畫格、控制與未完成交易，產生checks.json |
 | [render-abi.sh](tools/render-abi.sh)、[player-sample.sh](tools/player-sample.sh) | 限定繪圖函式與正常玩家介面抽驗；前者可加 `gpu` 對照真實素材的 GPU／CPU 輸出，後者只送正常 X11 輸入。新目錄與收據皆留 `workplace/probe/`，範圍見規格 005 |
+| [透明圖片事件續畫](docs/re/007-render-ownership.md#2026-10-28透明圖片事件續畫) | CX保留剩餘像素數，DX保留整列寬度；正式回歸1652組及森林示範已有收據。沿既有Go畫布保持圖片身分，不擴張為全場景覆蓋 |
 | `workplace/` | 唯一研究工作區，含隔離副本、解壓、掃描轉錄、快取與 HD 批次；不入 Git |
 | `dist-all/` | 唯一正式交付根，建立前讀第 4 節交付契約；本機含原版產物不入 Git |
 | [guide_atlas.py](tools/guide_atlas.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28完整圖集與攻略接入) | `bash tools/guide-map.sh atlas guide-新名稱 [註記JSON檔名]`依本機幾何重生圖稿，核來源與門線附著，不取掃描像素。註記限`guide-20261028/`內檔名；52圖已整理並接入正式攻略，正文及全部圖稿只留`workplace/`。這是紙本閱讀座標，紙色留白不表示可通行 |

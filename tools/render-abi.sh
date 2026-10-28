@@ -8,7 +8,7 @@ BASE="$ROOT/workplace/probe/$NAME"
 SDK="$ROOT/workplace/dosgolem"
 MODULES=/home/anr2/cht/dosgolem/workplace/gomodcache
 GO=sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581
-PIL=sha256:44d0742ca1061bcd453440cdce925afa31c5324e115fca1334da0e364f0e2c48
+PIL=sha256:b050fc7c49003ea6eecbbe0fc93b465b6869daf550c3284d5039e5e87517e831
 test ! -e "$BASE"
 test -d "$SDK"
 test -d "$MODULES"

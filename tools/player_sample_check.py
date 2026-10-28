@@ -131,6 +131,8 @@ if guide:
                         px,py=view['x']+(lx-left)*d//n,view['y']+(ly-top)*d//n
                         assert picture.getpixel((sx,sy))[:3] == original.getpixel((px,py)),(name,sx,sy,px,py)
 if demo:
+    if read(out/'build-info-at-start.json').get('transparent_resume_verified'):
+        assert not counts.get('image_native_fallback',0), '森林示範仍丟失完整圖片身分'
     with Image.open(out/'02-return.png') as expected, Image.open(out/'09-demo-return.png') as actual:
         assert expected.size == actual.size == (640,400)
         for y in range(400):
@@ -166,6 +168,8 @@ if manual_map:
     result['manual_map_source_sha256'] = sha(map_file)
 if demo:
     result['scope'] += ['opening Demo selection', 'Esc interrupts native demo', 'opening menu restored', 'Play enters character management after demo cancellation']
+    if read(build).get('transparent_resume_verified'):
+        result['scope'] += ['transparent image source retained after event boundary in forest demo']
 if guide:
     result['scope'] += ['guide toolbar click and F7 toggle', '20 guide sections and 52 maps loaded',
         'guide body paging', 'chapter navigation', 'map fit/native/double and pan/reset',

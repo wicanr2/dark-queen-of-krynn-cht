@@ -266,6 +266,7 @@ HD 開關與視窗大小獨立，2 倍、3 倍及自由縮放都可使用。
 原版程式保留遊戲規則、資源解析及必要機器效果，中文不寫回遊戲判定資料。
 遊戲讀回畫面時，只補必要的索引資料。未知或越界命令保留原版一次，並列為覆蓋限制，
 不以原圖先畫完再疊 HD 補洞。實際範圍與證據見[繪圖規格](docs/spec/005-render-owner.md)。
+圖片被事件拆成多段時，Go沿剩餘範圍續畫並保留同一來源，避免有效HD身分被撤除。
 
 唯一詳細現況、有效程式與驗證收據集中在 [CONTEXT.md](CONTEXT.md)，
 工作追蹤在 [GitHub Issues](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues)。

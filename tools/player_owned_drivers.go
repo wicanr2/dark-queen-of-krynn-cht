@@ -1308,7 +1308,7 @@ func (p *playerRenderOwner) rawTransfer(ea uint32, atomic bool) bool {
 		n *= 2
 	}
 	transparent := ea == 0x12ebf
-	if transparent && (r.CX != r.DX || byte(r.AX>>8) != 255) {
+	if transparent && (r.CX > r.DX || byte(r.AX>>8) != 255) {
 		return false
 	}
 	if n < 1 || int(r.DI)+n > 16000 || int(r.SI)+n > 65536 || uint32(r.DS)*16+uint32(r.SI)+uint32(n) > 0xa0000 {
@@ -1402,8 +1402,9 @@ func (p *playerRenderOwner) imageTransferOwned(ea uint32) bool {
 		n *= 2
 	}
 	if ea == 0x12ebf {
-		n = int(r.DX)
-		if r.CX != r.DX || byte(r.AX>>8) != 255 {
+		// 事件後可能已完成列前段；CX是剩餘數，DX仍是整列寬度。
+		n = int(r.CX)
+		if r.CX > r.DX || byte(r.AX>>8) != 255 {
 			p.fallbackImage(d)
 			return false
 		}

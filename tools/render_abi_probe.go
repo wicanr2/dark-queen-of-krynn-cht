@@ -82,34 +82,36 @@ func nativeVisiblePage(o *oracle.Oracle) (uint32, bool) {
 }
 
 type probeCase struct {
-	Name        string
-	Entry       oracle.Addr
-	Args        []uint16
-	Font        []byte
-	Image       *sourceTileCommand
-	Data        []byte
-	FrameAt     uint64
-	IRQAt       uint64
-	Reject      bool
-	Pattern     bool
-	Mask        byte
-	MemoryCopy  bool
-	Upload      bool
-	VideoCopy   bool
-	VideoMode   byte
-	OwnedSource bool
-	AliasReturn bool
-	RawTransfer bool
-	RawMasked   bool
-	MaskData    []byte
-	Temporary   bool
-	ShiftMasked bool
-	Clear       bool
-	RawRLE      bool
-	StackSS     uint16
-	MaskColumn  bool
-	SamePage    bool
-	MaskedRLE   bool
+	Name              string
+	Entry             oracle.Addr
+	Args              []uint16
+	Font              []byte
+	Image             *sourceTileCommand
+	Data              []byte
+	FrameAt           uint64
+	IRQAt             uint64
+	Reject            bool
+	Pattern           bool
+	Mask              byte
+	MemoryCopy        bool
+	Upload            bool
+	VideoCopy         bool
+	VideoMode         byte
+	OwnedSource       bool
+	AliasReturn       bool
+	RawTransfer       bool
+	RawMasked         bool
+	MaskData          []byte
+	Temporary         bool
+	ShiftMasked       bool
+	Clear             bool
+	RawRLE            bool
+	StackSS           uint16
+	MaskColumn        bool
+	SamePage          bool
+	MaskedRLE         bool
+	ResumeTransparent bool
+	RetainImage       bool
 }
 type probeResult struct {
 	Name                       string
@@ -586,6 +588,27 @@ func main() {
 			cases = append(cases, test)
 		}
 	}
+	// 固定原版sub_12E9E的首列迴圈事件邊界，另驗保留來源與純區塊兩條路徑。
+	for _, base := range append([]probeCase(nil), cases...) {
+		if base.Name != "source-blit-212e-7-12-01" {
+			continue
+		}
+		for _, at := range []uint64{292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 333, 334, 335, 350, 351} {
+			for _, irq := range []bool{false, true} {
+				for _, retain := range []bool{false, true} {
+					c := base
+					c.Name = fmt.Sprintf("resume-transparent-%d-irq-%t-source-%t", at, irq, retain)
+					c.ResumeTransparent, c.RetainImage = true, retain
+					if irq {
+						c.IRQAt = at
+					} else {
+						c.FrameAt = at
+					}
+					cases = append(cases, c)
+				}
+			}
+		}
+	}
 	results := []probeResult{}
 	for _, test := range cases {
 		for _, dosCost := range []bool{false, true} {
@@ -689,6 +712,18 @@ func main() {
 					if test.Image != nil {
 						tx.Image = &renderImageSource{Command: *test.Image}
 					}
+					if test.RetainImage {
+						width, height := int(test.Args[3]), int(test.Args[2])
+						a := &sceneAsset{W: width * 4, H: height, Index: make([]byte, width*4*height), Alpha: make([]byte, width*4*height)}
+						for i := range a.Index {
+							value := test.Data[(i/a.W)*width+(i%a.W)/4]
+							a.Index[i] = value
+							if value != 255 {
+								a.Alpha[i] = 255
+							}
+						}
+						tx.Owned = &ownedDriver{X: 8, Y: 31, W: a.W, H: a.H, Kind: "image", Asset: a, Page: 0}
+					}
 					if renderTransactionTouchesVideo(o, test.Entry.Linear()+0xef00) {
 						owner.Pending = append(owner.Pending, tx)
 					}
@@ -734,7 +769,9 @@ func main() {
 						} else {
 							model := owner.Scene.page(d.Page, o.PresentationPlane)
 							for i := range d.Asset.Index {
-								if len(d.Asset.Alpha) != 0 && d.Asset.Alpha[i] == 0 { continue }
+								if len(d.Asset.Alpha) != 0 && d.Asset.Alpha[i] == 0 {
+									continue
+								}
 								cell := model.Cells[(d.Y+i/d.W)*320+d.X+i%d.W]
 								res.SourceOwnershipEqual = res.SourceOwnershipEqual && cell.Asset == d.Asset && cell.Source == i && cell.Visible
 							}
@@ -770,6 +807,21 @@ func main() {
 								}
 								cell := model.Cells[(start+i)*4+plane]
 								res.SourceOwnershipEqual = res.SourceOwnershipEqual && cell.Asset == sourceAsset && cell.Source == sourceOff*4+readPlane && cell.Visible
+							}
+						}
+					}
+					if test.RetainImage {
+						d := owner.Pending[0].Owned
+						res.SourceOwnershipEqual = !d.Fallback
+						model := owner.Scene.page(0, o.PresentationPlane)
+						for y := 0; y < d.H; y++ {
+							for x := 0; x < d.W; x += 4 {
+								i := y*d.W + x
+								if d.Asset.Alpha[i] == 0 {
+									continue
+								}
+								cell := model.Cells[(31+y)*320+8+x]
+								res.SourceOwnershipEqual = res.SourceOwnershipEqual && cell.Asset == d.Asset && cell.Source == i && cell.Visible
 							}
 						}
 					}
@@ -821,6 +873,14 @@ func main() {
 					res.Passed = res.Passed && res.DirectWrites == 0 && res.Counters["owned_image_transfers"] == 0 && (res.NativeWrites == 0 || res.Counters["owned_source_blit_bytes"]+res.Counters["owned_masked_blit"] > 0)
 				} else {
 					res.Passed = res.Passed && res.DirectWrites == res.NativeWrites && res.Counters["virtual_instructions"] == 0
+				}
+			}
+			if test.ResumeTransparent {
+				res.Passed = res.Passed && res.DirectWrites == 0 && res.Counters["image_native_fallback"] == 0
+				if test.RetainImage {
+					res.Passed = res.Passed && res.Counters["owned_image_transfers"] > 0
+				} else {
+					res.Passed = res.Passed && res.Counters["owned_source_blit_bytes"] > 0
 				}
 			}
 			results = append(results, res)

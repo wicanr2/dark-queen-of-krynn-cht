@@ -46,13 +46,13 @@ for name, want in manifest["Files"].items():
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
 sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "manual_world_map.py", "manual_map_inputs.py", "guide_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
-abi_root = root / "workplace/probe/render-abi-picture-text-20261027-r1"
+abi_root = root / "workplace/probe/render-abi-resume-20261028-r1"
 abi_path = abi_root / "evidence.json"
 verified = False
 if abi_path.is_file():
     abi = json.loads(abi_path.read_text())
     verified = (abi.get("passed") is True and abi.get("machine_effects_verified") is True
-                and abi.get("virtual_time_verified") is True and abi.get("cases") == 1524
+                and abi.get("virtual_time_verified") is True and abi.get("cases") == 1652
                 and abi.get("inputs", {}).get("original_exe") == sha(exe)
                 and abi.get("inputs", {}).get("bindings") == sha(bindings)
                 and abi.get("receipt_sha256") == sha(abi_root / "abi-initial.json")
@@ -60,7 +60,7 @@ if abi_path.is_file():
                     "player_owned_drivers.go", "render_scene_state.go", "player_video_overlay.py",
                     "machine_presentation_video.go", "oracle_presentation_video.go", "oracle_video_observer.go"]))
     cases=json.loads((abi_root / "abi-initial.json").read_text())
-    verified = verified and len(cases)==1524 and all(
+    verified = verified and len(cases)==1652 and all(
         row.get("Passed") is True and ("reject" in row["Name"] or row["DirectWrites"]==0)
         for row in cases)
 player_sample = root / "workplace/probe/player-sample-canvas-complete-20261026-r1/checks.json"
@@ -96,6 +96,7 @@ info = {
     "go_canvas_presenter": True,
     "legacy_screen_rgb_fallback": False,
     "known_valid_command_native_writes": 0 if verified else None,
+    "transparent_resume_verified": verified,
 }
 picture_manifest = output / "picture-text/manifest.json"
 if picture_manifest.is_file():
