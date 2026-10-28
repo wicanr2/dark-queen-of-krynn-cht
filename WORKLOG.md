@@ -3272,3 +3272,14 @@
 - 圖稿限紙本近似閱讀座標；樓梯以中性符號保留位置，未假定上／下或原生GEO通行語意。完整圖集與正式閱讀器仍未齊，攻略按鈕維持停用。下一步接續希茲登、海底通道與瑟拉諾斯特，不重做已接受畫風。正式967e2445、38份資料、1487項HD與既有示範中斷保持。
 - README二十二處圖片引用、工具Python解析及shell語法通過。新工具、正文與輸出均為1000:1000；全專案無root-owned檔案或異常md目錄，沒有新增image或遺留專案容器。全文、人工幾何與圖稿只留本機，提交範圍為工具及文件。
 - 8e232e4已commit／push；Issue6及7已同步十八章與首批十五圖，遠端回讀仍為OPEN。攻略未齊不關閉Issue、不宣稱定版。收尾Docker清單為空，既有正式播放器與HD未改。
+
+## 2026-10-28：本專案工作區與Docker清理
+
+- 使用者於地圖續行中要求先清過期資料與Docker資源，之後確認只清本專案。盤點見其他專案正在執行，故未操作全機prune、其他專案容器、具名資料卷或共用工具映像。
+- 移除本作專用`dqk-ocr:ppocr5-r1`，原ID為5625e878af8cce84fff9a7f63248fa38e6ed38dbf32d1be59a60e74519842ee2，Docker原列2.56GB。刪除前確認沒有容器依賴。Pillow、Go、IDA等共用映像保持；未重建OCR。原Dockerfile、111套件固定版本、模型、OCR結果與來源收據皆保留。
+- 本作沒有可確認的專用volume或build-cache。預設builder為全機共用，所見cache主要描述其他工具鏈，未對無法歸屬的項目做刪除。本作一次性容器均由--rm回收。
+- 以既有research_storage.py清除Go快取657.0MiB。81份24／25日重播現已列為歷史證據，顯式依既有archive流程無損封存，未修改KEEP或歷史manifest。每份先比對壓縮還原的原始內容SHA，寫入storage-index.json後才移除未壓縮檔。沒有刪除原始位元組。
+- 刪除未審查且已被final取代的guide-atlas-20261028-r2目錄，保留其receipt內容於清理收據。第一輪來源接觸表、已接受final、目前海岸四圖初稿及所有人工幾何保持。封存與中間產物合計省7.788GiB，加Go快取，本工作區實際省8.430GiB。
+- 清理收據cleanup-20261028-result.json的SHA-256為76b1858e765f1bb115accb5e8059214ea956426588fc06025b173769783a96db。13份保護檔案前後SHA一致，包含現行程式、profile、HD清單、攻略及兩份未提交工具修改。81筆索引及gzip檔存在、未壓縮副本已移除。當時磁碟可用約287GiB；全機同期變動不計入本輪釋放量。
+- 地圖續行暫存未刪：四張海岸初稿為25標記，尚未作最終審查。SSI原版攻略PDF已由容器取得，SHA-256 b866541812647947a34eed7a636d8d3c7ed50b5926f576258a3dc72bdb38170d，來源URL記於ssi-cluebook-source.json；第9／10頁可確認13、23號與窗戶圖符，仍待回填。全文及PDF只留本機。
+- 後續取歷史重播先用research-storage.sh restore還原。若需新OCR，重建入口為`docker build -f tools/docker/ocr.Dockerfile -t dqk-ocr:ppocr5-r1 tools/docker`，再核對版本與新image ID；此次清理不執行重建。未提交地圖工具修改維持工作樹，不混入清理文件提交。

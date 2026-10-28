@@ -5,6 +5,9 @@
 
 | 項目 | 現況與證據 |
 |---|---|
+| 本輪清理 | 使用者確認只清本專案。81份24／25日歷史重播依既有契約無損封存，每份核對原始內容SHA後移除未壓縮副本；另刪未審查的`guide-atlas-20261028-r2/`與Go快取。工作區實際釋放8.430GiB，原始資料、現行播放器、HD、攻略與兩份未提交工具修改保持。收據`workplace/probe/cleanup-20261028-result.json` SHA-256 `76b1858e765f1bb115accb5e8059214ea956426588fc06025b173769783a96db`。Docker另刪本作專用`dqk-ocr:ppocr5-r1`；未找到可確認屬於本作的volume或build-cache，不清共用資源。當時磁碟可用約287GiB，不將共用主機的其他變動計為本輪釋放量。 |
+| 清理後工具鏈 | 共用Pillow與Go工具映像保持。OCR專用image已刪，既有掃描、OCR輸出、模型及版本紀錄保留；需要新OCR或PDF轉圖時，從`tools/docker/ocr.Dockerfile`及`ocr-runtime-versions.txt`重建同名image並記錄新ID，不直接執行舊固定ID。歷史重播若需取用，以`bash tools/research-storage.sh restore workplace/probe/批次名稱`還原。 |
+| 攻略未提交續行 | `tools/guide-map.sh`與`tools/guide_atlas.py`有本輪未提交修改，清理前後SHA一致。`guide-atlas-coast-20261028-r1/`的希茲登、海底通道及遺跡兩圖共四張、25標記，仍為初稿。已取得SSI原版攻略PDF交叉核對，來源與SHA在`guide-20261028/ssi-cluebook-source.json`；可確認陰影內13／23號及窗戶圖符，尚未回填本批，不算新增完成圖。續行先依現有來源PNG補正，不重做18章正文或首批15圖。 |
 | 本輪收尾界線 | 已核對原始輸入、目前38份資料、190個說明項目與1487項HD；Issue2盤點、4輸出路徑及5內建閱讀功能已完成並關閉。示範Esc中斷及返回遊戲已通過。攻略18章已重排並有首批15張重繪圖，其餘圖集與閱讀器接入待補，整體尚未定版，由Issue6及7續追。前批核對收據`guide-20261028/closeout-check.json`，SHA-256 `bc3f2941b3a6a7125d60e8aa148f729e1e1a51471394b6d6fb6e0989e7541e7e`，不以資料存在宣稱全程驗收。 |
 | 示範中斷 | 沿原版Esc鍵盤處理，已由正式967e2445在森林示範中返回主選單，再進角色管理。新`player-sample-demo-20261028-r2/checks.json` SHA-256 `dd7d393371ab2b515900faef904e93be728a9953d376c1844f5e946ac4bf4a0a`。五張既有基準差異0、guest寫入0；沒有改動遊戲程式、規則或HD。空白鍵只作片頭略過，不宣稱能中斷示範。 |
 | 本輪全中文與全量HD進行中 | 正式`player-current/`已接入7730筆譯文、1128個完整顯示來源與67種帶變數句型，另補24個圖片來源、43處文字及28個圖片TSV鍵。資料接入缺鍵0，不等於全場景驗收。現行1487項HD，新增13格介面金屬框與羅盤。圖片與HD交付批次為`localization-hd-20261026/`，接續攻略工作見下一列，總證據`pictures-ui-final-evidence.json`。 |
