@@ -150,6 +150,8 @@ def render(record, font, output):
         return (round(ox+v[0]*scale,3), round(oy+v[1]*scale,3))
 
     used={'wall'}
+    if record.get('paper'):
+        p.box((ox,oy,ox+w*scale,oy+h*scale),'#eee3c9')
     for poly in record['floor']:
         assert len(poly)>=3
         p.polygon([point(v) for v in poly], '#eee3c9', '#34494c')
@@ -206,7 +208,10 @@ def render(record, font, output):
         ink='#e5cc89' if background==(24,35,41) else '#273d44'
         p.text(at,marker['id'],18 if scale<35 else 20,ink,True)
     for label in record.get('labels',[]):
-        p.text(point(label['at']),label['text'],18,'#d4c091',True)
+        at=point(label['at'])
+        background=p.image.getpixel((round(at[0]),round(at[1])))
+        ink='#273d44' if record.get('paper') and background!=(24,35,41) else '#d4c091'
+        p.text(at,label['text'],18,ink,True)
     if record.get('source_limits'):
         p.text((40,860),record['source_limits'][0],18,'#e5cc89')
     p.line([(40,890),(1060,890)],'#4e6369',2)
