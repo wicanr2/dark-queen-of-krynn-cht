@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"image"
@@ -139,5 +140,65 @@ func TestHDCompleteProjectileScope(t *testing.T) {
 		if got := hdCompleteProjectile(tc.key, tc.w, tc.h, tc.foreground); got != tc.want {
 			t.Fatalf("完整投射物邊界 %v：得到%t", tc, got)
 		}
+	}
+}
+
+func TestHDThinBorderLoaderScope(t *testing.T) {
+	// 經過完整PNG、IDX、標頭及alpha載入，不只測試尺寸判斷函式。
+	for _, tc := range []struct {
+		name, key        string
+		w, h, foreground int
+		want             bool
+	}{
+		{"complete", "FRAME..7", 320, 7, 2240, true},
+		{"neighbor", "FRAME..6", 320, 7, 2240, false},
+		{"wrong-width", "FRAME..7", 316, 7, 2212, false},
+		{"wrong-height", "FRAME..7", 320, 6, 1920, false},
+		{"sparse", "FRAME..7", 320, 7, 63, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			original := image.NewNRGBA(image.Rect(0, 0, tc.w, tc.h))
+			painted := image.NewNRGBA(image.Rect(0, 0, tc.w*3, tc.h*3))
+			indexed := make([]byte, tc.w*tc.h)
+			for i := 0; i < tc.foreground; i++ {
+				x, y := i%tc.w, i/tc.w
+				c := color.NRGBA{R: byte(i%2) * 255, A: 255}
+				indexed[i] = byte(i % 2)
+				original.SetNRGBA(x, y, c)
+				for yy := 0; yy < 3; yy++ {
+					for xx := 0; xx < 3; xx++ {
+						painted.SetNRGBA(x*3+xx, y*3+yy, c)
+					}
+				}
+			}
+			writePNG := func(name string, im image.Image) string {
+				var buf bytes.Buffer
+				if err := png.Encode(&buf, im); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0600); err != nil {
+					t.Fatal(err)
+				}
+				return digest(buf.Bytes())
+			}
+			originalSHA, paintedSHA := writePNG("original.png", original), writePNG("painted.png", painted)
+			if err := os.WriteFile(filepath.Join(dir, "original.idx"), indexed, 0600); err != nil {
+				t.Fatal(err)
+			}
+			header := []byte{0, 0, 0, 0, 0, 0, byte(tc.w / 4), 16}
+			binary.LittleEndian.PutUint16(header[:2], uint16(tc.h))
+			record := hdAssetRecord{Key: tc.key, Original: "original.png", Image: "painted.png", Indexed: "original.idx", OriginalSHA256: originalSHA, SHA256: paintedSHA, IndexedSHA256: digest(indexed), SourceHeader: hex.EncodeToString(header), SourceBytes: len(indexed) + 8, SourceSHA256: digest(append(header, indexed...))}
+			data, err := json.Marshal(map[string]any{"Version": 1, "Scale": 3, "Ready": true, "Assets": []hdAssetRecord{record}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "hd.json"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if got := loadHDLayer(dir) != nil; got != tc.want {
+				t.Fatalf("載入結果%t，預期%t", got, tc.want)
+			}
+		})
 	}
 }

@@ -28,6 +28,7 @@
 | 繪圖接管 | 使用者要求完全接管繪圖，必要時反組譯找掛勾。入口為[規格 005](docs/spec/005-render-owner.md)與[研究 007](docs/re/007-render-ownership.md)：玩家視窗只取新繪圖層的完整前緩衝；原版顯存留作背景相容資料。影像與短字串在原版繪製前辨識，不再用全畫面搜尋作 HD 來源。完整命令覆蓋及全量素材尚須補齊，不把部分接管稱為全部完成。 |
 | 其他語言 | 本輪先處理繁中，不把前作五語擴充視為本作已授權交付範圍 |
 | HD 與介面 | 使用者確認目前整合版：角色管理 20 像素圓體、其餘文字 16 像素、閱讀保留原框、頂端懸停工具列，見 [規格 003](docs/spec/003-player-toolbar.md)。HD 開關與視窗大小各自獨立，2 倍、3 倍與自由縮放都保留 HD 偏好；接續既有試繪方向，每批最多兩輪，見 [規格 004](docs/spec/004-hd-layer.md) |
+| 音樂順序 | 2026-10-28使用者選定保留原譜音符、節奏與曲式，換高品質樂器音色，隨後明確指定先完成HD畫面再做音樂。此時不開始音樂實作；現況見`CONTEXT.md`，進入音樂階段再讀`/home/anr2/.codex/skills/compose-rpg-remake-music/SKILL.md`及知識路由的音訊入口 |
 | 手札與說明 | 使用者已選擇內建手札與繁中說明面板，引用時顯示對應手札；原版規則與存檔判定不變 |
 | 攻略與答案 | 內建獨立、手動開啟的攻略閱讀頁；正文重新排版，攻略地圖重新繪製並作繁中標註，掃描只作校對來源，不以嵌入 PDF 或掃描頁交付；自動提示、查驗題答案及地圖疊層未定案 |
 | 封包與發行 | 平台、完整版、推廣片及公開方式尚未定案 |
@@ -214,6 +215,7 @@
 | [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD與說明世界地圖已接入；目前數量與限制見CONTEXT |
 | [guide_inputs.py](tools/guide_inputs.py)、[guide-ui.zh-TW.tsv](text/guide-ui.zh-TW.tsv) | 編譯本機18章攻略與52張重繪閱讀圖，核對來源及增補字模；沿規格003的F7、工具列與原框查閱，全文及完整圖集不入Git |
 | [規格 004](docs/spec/004-hd-layer.md)、[player_hd.go](tools/player_hd.go) | HD 素材契約、完整可見來源比對與獨立開關；主題放 `workplace/probe/player-current/hd/`，視窗大小不控制 HD |
+| [hd_source_audit.py](tools/hd_source_audit.py) | Docker內以`--inventory`、`--theme`、`--original`及`--out`核對r3的1831筆來源、HD雜湊／遮罩及既定原生例外；來源與主題唯讀，輸出新收據。不是正常玩家路徑或全遊戲HD完成證據，未知來源明列失敗 |
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | Go 命令畫布、交易及完整畫格提交；入口 `tools/player_render_owner.go`、`tools/player_owned_drivers.go`、`tools/render_scene_state.go`、`tools/player_scene_backend.go`。正式玩家不取原版整張 RGB；來源掛勾在規格目錄，不回寫原版。代表路徑零原版寫入與全場景覆蓋分開記錄 |
 | [player_text_format.go](tools/player_text_format.go)、[規格005](docs/spec/005-render-owner.md#ready帶變數的完整顯示來源) | 正式TSV格式與原版實際輸出配對；保留數值、加值、未知姓名及檔名，不讀寫原版varargs或語意資料 |
 | [player-sample.sh](tools/player-sample.sh)、[視窗驅動](tools/player_gui_probe.c)、[XTEST按鍵](tools/player_xtest_key.go)、[檢查器](tools/player_sample_check.py) | Docker內的正常介面代表抽驗；使用既有XGB／XTEST產生伺服器鍵盤事件，第二參數可選本機對照程式，來源與影像參考唯讀；結束後核畫格、控制與未完成交易，產生checks.json |
