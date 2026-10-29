@@ -252,6 +252,32 @@
       "scope": "正常冷啟動、讀取原附A隊伍並通過原版查驗後的帕蘭薩斯HD城景與繁中敘事；7625c40c，2倍視窗，非全遊戲驗收",
       "binary_sha256": "7625c40ceb4620e9f593a0da4c909cd6bedf1ec635c8af1beef8a0f061ee93d9",
       "theme_sha256": "990403b29b709441310a10378e868f9f9fee363cef562516d722d4c2d12e031f"
+    },
+    {
+      "file": "camp-save-hd-zh.png",
+      "source": "workplace/probe/player-sample-exploration-20261029-r4/10-save-zh.png",
+      "sha256": "1886af0d78e1b6d4083ad9d2d056fb98e0626eea0a2e071fb3aecb92e12284d8",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 107543,
+      "scope": "正常冷讀C槽、進入旅店營地後的HD動畫及完整繁中儲存提示；槽位字母沿原版，2倍視窗",
+      "binary_sha256": "9df4cac925043825528b07fd336dfa13543d1b9646b77d9f182cc8af3c1b4216",
+      "theme_sha256": "990403b29b709441310a10378e868f9f9fee363cef562516d722d4c2d12e031f"
+    },
+    {
+      "file": "journal54-zh.png",
+      "source": "workplace/probe/player-sample-exploration-20261029-r4/20-journal54.png",
+      "sha256": "9c7f594fb787030d95b6e00e545ed92b51bf41cc00249bd4d1072d52de2de772",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 105059,
+      "scope": "正常王宮會面自動引用手札54；閱讀面板遮住底層姓名標題，返回恢復遊戲，非全部手札走訪證據",
+      "binary_sha256": "9df4cac925043825528b07fd336dfa13543d1b9646b77d9f182cc8af3c1b4216",
+      "theme_sha256": "990403b29b709441310a10378e868f9f9fee363cef562516d722d4c2d12e031f"
     }
   ]
 }

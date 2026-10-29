@@ -136,3 +136,75 @@ func TestStartupQuizPresentationGate(t *testing.T) {
 		})
 	}
 }
+
+func TestCampSavePromptGuards(t *testing.T) {
+	for _, source := range []string{"save which game:", "Exit to DOS? "} {
+		t.Run(source, func(t *testing.T) {
+			color, background := byte(0x70), byte(7)
+			native := [2]int{0, 192}
+			f := listField{Pane: "callsite", Group: "footer", Key: "session-save." + digest([]byte(source))[:20],
+				SHA256: digest([]byte(source)), FormatSHA256: digest([]byte("%s")), UpperFormatSHA256: digest([]byte("%s")),
+				Length: len(source), Width: len(source)*8 - 4, RawX: 8004, RawY: 189,
+				Caller: oracle.Addr{Seg: 0xb72, Off: 0x27c}, UpperCaller: oracle.Addr{Seg: 0xceb, Off: 0x995},
+				UpperNative: &native, Color: &color, BackgroundOverride: &background}
+			if !validCampSavePrompt(f, source) {
+				t.Fatal("拒絕已觀測提示")
+			}
+			for name, change := range map[string]func(*listField){
+				"key":             func(f *listField) { f.Key = "unknown" },
+				"source":          func(f *listField) { f.SHA256 = "unknown" },
+				"format":          func(f *listField) { f.FormatSHA256 = "unknown" },
+				"upper-format":    func(f *listField) { f.UpperFormatSHA256 = "unknown" },
+				"caller":          func(f *listField) { f.Caller.Off++ },
+				"upper-caller":    func(f *listField) { f.UpperCaller.Off++ },
+				"position":        func(f *listField) { f.RawX++ },
+				"native-position": func(f *listField) { f.UpperNative = nil },
+				"color":           func(f *listField) { f.Color = nil },
+				"background":      func(f *listField) { f.BackgroundOverride = nil },
+				"border":          func(f *listField) { f.Width += 4 },
+				"length":          func(f *listField) { f.Length-- },
+				"pattern":         func(f *listField) { f.SourcePattern = "unknown" },
+				"menu":            func(f *listField) { f.MenuSignature = "unknown" },
+			} {
+				bad := f
+				change(&bad)
+				if validCampSavePrompt(bad, source) {
+					t.Fatalf("未拒絕失配：%s", name)
+				}
+			}
+			if validCampSavePrompt(f, source+" ") {
+				t.Fatal("未拒絕未觀測來源")
+			}
+		})
+	}
+}
+
+func TestQuizFooterReplacement(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		word listWord
+		want bool
+	}{
+		{"replacement", listWord{X: 8, Y: 189, Width: 32, Group: "footer"}, true},
+		{"body", listWord{X: 8, Y: 189, Width: 32, Group: "body"}, false},
+		{"disjoint", listWord{X: 136, Y: 189, Width: 16, Group: "footer"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			u := &coldPromptUI{Words: map[[2]int]listWord{
+				{8, 189}:  {X: 8, Y: 189, Width: 48, Key: "startup.quiz-enter", Group: "quiz"},
+				{24, 16}:  {X: 24, Y: 16, Width: 80, Key: "startup.quiz-page", Group: "quiz"},
+				{80, 189}: {X: 80, Y: 189, Width: 32, Key: "other-prompt", Group: "footer"},
+			}}
+			wantCount := 3
+			if tc.want {
+				wantCount--
+			}
+			if got := u.replaceQuizFooter(tc.word); got != tc.want || len(u.Words) != wantCount {
+				t.Fatal("錯誤退休查驗詞框")
+			}
+			if u.replaceQuizFooter(tc.word) {
+				t.Fatal("同一詞框重複退休")
+			}
+		})
+	}
+}

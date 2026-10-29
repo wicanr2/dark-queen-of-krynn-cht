@@ -73,6 +73,19 @@ type listFieldWrapper struct {
 	X, Y   int
 }
 
+// 原版提示框保留右邊四像素。只接受已觀測的儲存／退出完整來源。
+func validCampSavePrompt(f listField, source string) bool {
+	return (source == "save which game:" || source == "Exit to DOS? ") &&
+		f.Key == "session-save."+digest([]byte(source))[:20] && f.SHA256 == digest([]byte(source)) &&
+		f.Pane == "callsite" && f.Group == "footer" && f.SourcePattern == "" && f.MenuSignature == "" &&
+		f.Start == 0 && f.Length == len(source) && f.Width == len(source)*8-4 && f.FontSize == 0 &&
+		f.RawX == 8004 && f.RawY == 189 && f.Caller == (oracle.Addr{Seg: 0xb72, Off: 0x27c}) &&
+		f.UpperCaller == (oracle.Addr{Seg: 0xceb, Off: 0x995}) &&
+		f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) &&
+		f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
+		f.Color != nil && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7
+}
+
 type listMovementCaption struct {
 	Entry     uint64
 	Paint     paintReturn
@@ -514,6 +527,8 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 			f.Start == 0 && f.Length == 16 && f.Width == 124 && f.UpperCaller == (oracle.Addr{Seg: 0xCEB, Off: 0x995}) &&
 			f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) && f.UpperFormatSHA256 == digest([]byte("%s")) &&
 			f.Color != nil && *f.Color == 0x70 && f.BackgroundOverride != nil && *f.BackgroundOverride == 7 || creationPrompt
+		savePrompt := validCampSavePrompt(f, l.sources[f.Key])
+		slotWidth = slotWidth || savePrompt
 		if f.FontSize != 0 {
 			if f.FontSize != 20 || f.Pane != "menu" || f.MenuSignature != "191c0ba49dc03bfaceb8be1ab19c0d92efb10341e05b2c851e46682a74451ed1" ||
 				f.Group != "footer" || f.Caller != (oracle.Addr{Seg: 0xCEB, Off: 0x1BE}) || f.RawY < 119 || f.RawY > 189 {
@@ -589,7 +604,7 @@ func (g *liveGame) installList(inputs, requestPath, sourcePath string) {
 				f.RawX == 8004 && f.RawY == 189 && f.UpperNative != nil && *f.UpperNative == ([2]int{0, 192}) &&
 				f.FormatSHA256 == digest([]byte("%s")) && f.UpperFormatSHA256 == digest([]byte("%s")) && f.SHA256 == digest([]byte(l.sources[f.Key])) &&
 				f.Color != nil && *f.Color == 0x8f && f.BackgroundOverride == nil
-			if !prompt && !purchase && !itemsLabel && !loadPrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption && !movementLeft && !dyingWarning && !validExplorationCastField(f, l.sources[f.Key]) && !validVictoryResultField(f, l.sources[f.Key]) {
+			if !prompt && !purchase && !itemsLabel && !loadPrompt && !savePrompt && !nativeName && !nativeReturn && !creationText && !createdName && !creationPrompt && !combatCaption && !aimingRange && !combatTarget && !spellCaption && !movementLeft && !dyingWarning && !validExplorationCastField(f, l.sources[f.Key]) && !validVictoryResultField(f, l.sources[f.Key]) {
 				panic("未驗證的提示欄位幾何或顏色")
 			}
 		}
@@ -1490,6 +1505,9 @@ func (g *liveGame) installListFields() {
 			} else {
 				l.erase(w.X, w.Y, w.Width, 8)
 				l.words[[2]int{w.X, w.Y}] = w
+				if g.cold != nil && g.cold.ui != nil && g.cold.ui.replaceQuizFooter(w) {
+					g.coldPromptLog("quiz-footer-replaced", map[string]any{"key": w.Key, "rect": [4]int{w.X, w.Y, w.Width, 8}})
+				}
 			}
 			if f.SourcePattern == "movement-left" {
 				l.movementCaption = nil

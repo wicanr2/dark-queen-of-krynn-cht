@@ -111,6 +111,7 @@ def fragments(root, output, font):
 def display(root, output, font):
     """只衍生完整 UI／名稱來源，不把片段或語意鍵倒入完整句子路徑。"""
     assert output.is_dir() and output.stat().st_uid == 1000 and font.is_file()
+    camp_save_prompts(root, output)
     for name in DISPLAY_FILES:
         if (output / name).exists():
             assert (output / name).stat().st_uid == 1000
@@ -186,6 +187,34 @@ def display(root, output, font):
 DISPLAY_FILES = ['display-source.en.tsv', 'display.zh-TW.tsv', 'display-glyphs-16.json',
                  'display-font-additions.tsv', 'display-provenance.json',
                  'display-format.en.tsv', 'display-format.zh-TW.tsv']
+
+
+def camp_save_prompts(root, output):
+    """原版包裝器的完整顯示來源；譯文仍取正式主表，不改遊戲鍵值。"""
+    formal = catalog(root / 'workplace/translation/zh-TW.tsv')
+    en, zh = catalog(output / 'en.tsv'), catalog(output / 'zh-TW.tsv')
+    config = json.loads((output / 'inputs.json').read_text())
+    glyphs = json.loads((output / 'glyphs-16.json').read_text())['glyphs']
+    for source, formal_key in [('save which game:', 'ui.b79e25a28abaa9602b5c'),
+                               ('Exit to DOS? ', 'ui.99fd52d933e6d59c667b')]:
+        digest = hashlib.sha256(source.encode()).hexdigest()
+        key = 'session-save.' + digest[:20]
+        field = dict(Pane='callsite', Group='footer', Key=key, SHA256=digest,
+                     FormatSHA256=hashlib.sha256(b'%s').hexdigest(), Start=0,
+                     Length=len(source), Width=len(source)*8-4, RawX=8004, RawY=189,
+                     Caller=dict(Seg=0xb72, Off=0x27c), UpperCaller=dict(Seg=0xceb, Off=0x995),
+                     UpperNative=[0, 192], Color=0x70, BackgroundOverride=7,
+                     UpperFormatSHA256=hashlib.sha256(b'%s').hexdigest())
+        previous = [f for f in config['Fields'] if f['Key'] == key]
+        assert not previous or previous == [field], '既有儲存提示與已驗證欄位不符'
+        if not previous:
+            config['Fields'].append(field)
+        assert key not in en or en[key] == source
+        en[key], zh[key] = source, formal[formal_key]
+        assert len(zh[key])*8 <= field['Width'] and all(ch in glyphs for ch in zh[key])
+    save_catalog(output / 'en.tsv', en)
+    save_catalog(output / 'zh-TW.tsv', zh)
+    (output / 'inputs.json').write_text(json.dumps(config, ensure_ascii=False, indent=2)+'\n')
 
 
 def prepare(root, output):
@@ -291,7 +320,7 @@ def finish(root, output, replace=False):
 def refresh(root, output, font):
     assert output.is_dir() and output.stat().st_uid == 1000
     assert (output / 'player-profile.json').is_file() and font.is_file()
-    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json', 'render-hooks.json', 'zh-TW.tsv'] + DISPLAY_FILES + FRAGMENT_FILES
+    owned = ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json', 'player-profile.json', 'render-hooks.json', 'en.tsv', 'zh-TW.tsv', 'inputs.json'] + DISPLAY_FILES + FRAGMENT_FILES
     for name in owned:
         if (output / name).exists():
             assert (output / name).stat().st_uid == 1000

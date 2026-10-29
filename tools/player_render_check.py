@@ -64,6 +64,9 @@ if abi_path.is_file():
         row.get("Passed") is True and ("reject" in row["Name"] or row["DirectWrites"]==0)
         for row in cases)
 ui_path = root / "workplace/probe/player-coverage-20261028/cold-fill-contract-final.json"
+camp_ui_path = root / "workplace/probe/player-hd-finish-20261029/camp-save-contract.json"
+if camp_ui_path.is_file():
+    ui_path = camp_ui_path
 ui_verified = False
 if ui_path.is_file():
     ui = json.loads(ui_path.read_text())
@@ -72,8 +75,10 @@ if ui_path.is_file():
                    and all(ui.get("sources", {}).get(name) == sha(root / name) for name in [
                        "tools/ui_cold_prompts.go", "tools/ui_list_live.go", "tools/player_render_owner.go",
                        "tools/early_text_live.go", "tools/ui_cold_fill_test.go"])
-                   and ui.get("tests_sha256") == sha(ui_path.parent / "cold-fill-tests-r4.json")
-                   and ui.get("root_receipt_sha256") == sha(ui_path.parent / "cold-fill-irq-root-r2.json"))
+                   and ui.get("tests_sha256") == sha(ui_path.parent / ("ui-tests.json" if ui_path == camp_ui_path else "cold-fill-tests-r4.json"))
+                   and ui.get("root_receipt_sha256") == sha(root / "workplace/probe/player-coverage-20261028/cold-fill-irq-root-r2.json"))
+    if ui_path == camp_ui_path:
+        ui_verified = ui_verified and ui.get("camp_guard_cases") == 2 and ui.get("quiz_footer_guard_cases") == 3
 player_sample = root / "workplace/probe/player-sample-canvas-complete-20261026-r1/checks.json"
 for candidate in sorted((root / "workplace/probe").glob("player-sample-*/checks.json")):
     candidate_data=json.loads(candidate.read_text())

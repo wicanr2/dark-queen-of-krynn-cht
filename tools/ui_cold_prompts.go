@@ -86,6 +86,22 @@ func (u *coldPromptUI) erase(x, y, w, h int) bool {
 	}
 	return removed
 }
+
+// 呼叫端已驗證新底列的來源與位置。只交出被實際替換的查驗輸入詞框。
+func (u *coldPromptUI) replaceQuizFooter(word listWord) bool {
+	if word.Group != "footer" || word.Y != 189 || word.Width <= 0 {
+		return false
+	}
+	removed := false
+	for p, old := range u.Words {
+		if old.Key == "startup.quiz-enter" && old.Group == "quiz" && old.Y == word.Y &&
+			old.X < word.X+word.Width && word.X < old.X+old.Width {
+			delete(u.Words, p)
+			removed = true
+		}
+	}
+	return removed
+}
 func (u *coldPromptUI) held() bool {
 	if len(u.Config.Bindings) == 15 {
 		u.syncPages()

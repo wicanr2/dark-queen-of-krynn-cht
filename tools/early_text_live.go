@@ -689,11 +689,13 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 	}
 	if g.translate && g.list != nil {
 		g.composeList(px)
-		g.composeReader(px)
 	}
 	if g.translate && g.cold != nil && g.cold.ui != nil {
 		u := g.cold.ui
 		g.composeWords(px, u.snapshot(), u.Catalog, u.Glyphs)
+	}
+	if g.translate && g.list != nil {
+		g.composeReader(px)
 	}
 	if g.translate && g.player != nil {
 		g.player.Renderer.ComposeText(px, g, rgb)
