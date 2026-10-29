@@ -7,6 +7,8 @@ import subprocess
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def run(args,log):
+    if args[0]=='ffmpeg':
+        args=args[:1]+['-filter_threads','1','-filter_complex_threads','1']+args[1:-1]+['-threads','2']+args[-1:]
     result=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
     log.write_text(result.stdout)
     result.check_returncode()

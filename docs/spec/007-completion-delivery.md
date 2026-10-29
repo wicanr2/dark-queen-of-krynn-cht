@@ -1,6 +1,6 @@
 # 全量串接、兩輪抽驗與正式交付
 
-狀態：READY。2026-10-29使用者明確指定先完成串接，再抽驗兩輪，沒有問題即收尾、正式打包與錄製推廣影片；平台已選Windows、Linux、macOS。沿現況8c2d1a0，不重開已接受的HD圖稿。
+狀態：CONFORMED，限本規格的代表抽驗與本機交付範圍。2026-10-29使用者明確指定先完成串接，再抽驗兩輪，沒有問題即收尾、正式打包與錄製推廣影片；平台已選Windows、Linux、macOS。不重開已接受的HD圖稿。
 
 ## 串接與停止線
 
@@ -27,3 +27,9 @@
 - 影片驗codec、尺寸、fps、音量、非靜音、削波、黑幀、凍結及字幕邊界，保留分幕抽幀與權利資料。靜態閱讀畫面不誤判為程式凍結。
 
 來源：專案CONTEXT、規格003至006；交付與版號分別見`~/.codex/knowledge-base/local/retro-remake-dist-all-output.md`及`retro-remake-release-versioning.md`。實作入口見AGENTS的交付與錄影索引，歷程追加WORKLOG。
+
+## 完成證據
+
+正式版`v.1.0.0-20261029`，引擎來源`020de26c67e59fa61260459f15baf835cadf9cbe`。目前程式與證據入口集中於[CONTEXT](../../CONTEXT.md)。本機`completion-20261029/two-round-checks.json`保存兩輪收據，`battle-menu-checks.json`保存23個戰鬥綁定差額及首字形前匹配。
+
+交付為`dist-all/v.1.0.0-20261029/`的六個ZIP及42秒推廣影片，SHA256SUMS.json保存封包、驗收與影片雜湊。Linux與Wine下Windows的封包正常啟動通過；macOS只驗兩個Mach-O切片與App結構。人耳聽感、各平台未驗真機及未走訪來源保留為證據限制，不擴張完成聲明。

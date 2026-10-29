@@ -43,3 +43,14 @@ find /out -user root -o -type d -name "*.md"
 ' -- "$MODE"
 timeout 30s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 512m --cpus 1 --pids-limit 64 \
  -v "$ROOT/tools:/tools:ro" -v "$OUT:/out" --entrypoint python3 sc-cht-hdtools:pillow11.3.0-r2 /tools/package_smoke_check.py /out "$MODE"
+timeout 30s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 256m --cpus 1 --pids-limit 32 \
+ -v "$OUT:/out" --entrypoint python3 sc-cht-hdtools:pillow11.3.0-r2 -c '
+from pathlib import Path
+import json,hashlib,shutil
+p=Path("/out");c=json.loads((p/"checks.json").read_text());assert c["passed"]
+assert all(hashlib.sha256((p/n).read_bytes()).hexdigest()==h for n,h in c["screenshots"].items())
+if (p/"wine").is_dir():shutil.rmtree(p/"wine")
+for n in ["smoke-driver","xtest-key"]:
+    if (p/n).is_file():(p/n).unlink()
+for f in p.glob("*.ppm"):f.unlink()
+'
