@@ -314,6 +314,7 @@ def finish(root, output, replace=False):
     temporary = output / 'player-profile.json.tmp'
     temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     temporary.replace(output / 'player-profile.json')
+    subprocess.run([sys.executable, str(root / 'tools/battle_menu_inputs.py'), str(root), str(output)], check=True)
     print(json.dumps({'profile_files': len(files), 'state': 'READY', 'gameplay_replayed': False}))
 
 

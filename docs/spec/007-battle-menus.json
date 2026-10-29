@@ -1,0 +1,219 @@
+{
+  "schema": 1,
+  "evidence_level": "confirmed observed table; existing menu printer contract",
+  "caller": {
+    "Seg": 3307,
+    "Off": 446
+  },
+  "menus": [
+    {
+      "signature": "326aacadb1a01c55f2e08f88cd3fc3ce209f7cfb0826f53439bd66558839a4dc",
+      "count": 18,
+      "buttons": [
+        {
+          "index": 1,
+          "source_sha256": "28427fa78a230e425f39ca571bdb28822b6ad43300a54ad4c1aaa84b232e63b0",
+          "key": "battle.ui.28427fa78a230e425f39",
+          "raw_x": 8004,
+          "raw_y": 8089
+        },
+        {
+          "index": 2,
+          "source_sha256": "c36d819e7bc6d2b7da51394411c733db89c395987885ca6770167a3b9bc45c3c",
+          "key": "field.c36d819e7bc6d2b7da51",
+          "raw_x": 8020,
+          "raw_y": 8089
+        },
+        {
+          "index": 3,
+          "source_sha256": "1500405573373612419407ad142611c4bee504ae927cc1835e1a1ec54c5497ad",
+          "key": "field.15004055733736124194",
+          "raw_x": 8036,
+          "raw_y": 8089
+        },
+        {
+          "index": 4,
+          "source_sha256": "9f49fadb6a863305a9b3e350cba91aff0adc2790f56ae60687e7137a99de0344",
+          "key": "battle.ui.9f49fadb6a863305a9b3",
+          "raw_x": 8056,
+          "raw_y": 8089
+        },
+        {
+          "index": 5,
+          "source_sha256": "fd9b6df3cdbc3d35b9a3e634d9ecba3765eaadb9abe4bf13c20cf8df089b8a48",
+          "key": "battle.ui.fd9b6df3cdbc3d35b9a3",
+          "raw_x": 8004,
+          "raw_y": 8095
+        },
+        {
+          "index": 6,
+          "source_sha256": "dcc839a4015c4b7dd9db959a8f757833b8adb92462a751b973386e453c6d58a3",
+          "key": "field.dcc839a4015c4b7dd9db",
+          "raw_x": 8028,
+          "raw_y": 8095
+        },
+        {
+          "index": 7,
+          "source_sha256": "c372fee9b4566b85a592ae6e98e571f3929c8e262cf2feff7acba63a65a50f14",
+          "key": "battle.speed",
+          "raw_x": 8048,
+          "raw_y": 8095
+        },
+        {
+          "index": 8,
+          "source_sha256": "f4db1e48476f60753980b10d66219042b3a3d9c65c9cc77a53d81b88fd869c64",
+          "key": "battle.ui.f4db1e48476f60753980",
+          "raw_x": 8072,
+          "raw_y": 8095
+        }
+      ],
+      "evidence": "workplace/probe/finish-scene-completion-r2/session/ui-diagnostics.json",
+      "evidence_sha256": "393dc863dd17d26806d97d8133ab01d1bd2f7e0a8b051d25549f565e3c6e4349",
+      "raw_table_sha256": "bee3e58b7725c49c3369a06a07a845c8f4d2b9983c2f63693e6f1f29dca496f9"
+    },
+    {
+      "signature": "b938d6d4118ce4a6a9eedd768cfaa205887b960bef3d21636c0d07feae7c19a3",
+      "count": 20,
+      "buttons": [
+        {
+          "index": 1,
+          "source_sha256": "28427fa78a230e425f39ca571bdb28822b6ad43300a54ad4c1aaa84b232e63b0",
+          "key": "battle.ui.28427fa78a230e425f39",
+          "raw_x": 8004,
+          "raw_y": 8089
+        },
+        {
+          "index": 2,
+          "source_sha256": "c36d819e7bc6d2b7da51394411c733db89c395987885ca6770167a3b9bc45c3c",
+          "key": "field.c36d819e7bc6d2b7da51",
+          "raw_x": 8020,
+          "raw_y": 8089
+        },
+        {
+          "index": 3,
+          "source_sha256": "1500405573373612419407ad142611c4bee504ae927cc1835e1a1ec54c5497ad",
+          "key": "field.15004055733736124194",
+          "raw_x": 8036,
+          "raw_y": 8089
+        },
+        {
+          "index": 4,
+          "source_sha256": "c8d3fc567bbcbf384407a4ca279787fdb6e73932155e962e562507acfbf53094",
+          "key": "battle.ui.c8d3fc567bbcbf384407",
+          "raw_x": 8056,
+          "raw_y": 8089
+        },
+        {
+          "index": 5,
+          "source_sha256": "9f49fadb6a863305a9b3e350cba91aff0adc2790f56ae60687e7137a99de0344",
+          "key": "battle.ui.9f49fadb6a863305a9b3",
+          "raw_x": 8080,
+          "raw_y": 8089
+        },
+        {
+          "index": 6,
+          "source_sha256": "fd9b6df3cdbc3d35b9a3e634d9ecba3765eaadb9abe4bf13c20cf8df089b8a48",
+          "key": "battle.ui.fd9b6df3cdbc3d35b9a3",
+          "raw_x": 8004,
+          "raw_y": 8095
+        },
+        {
+          "index": 7,
+          "source_sha256": "37fa3a1e818dc430e6996442478e5d2356445b2fd2dacb8d71a6a631eb92c1c9",
+          "key": "menu.shared.bandage",
+          "raw_x": 8028,
+          "raw_y": 8095
+        },
+        {
+          "index": 8,
+          "source_sha256": "dcc839a4015c4b7dd9db959a8f757833b8adb92462a751b973386e453c6d58a3",
+          "key": "field.dcc839a4015c4b7dd9db",
+          "raw_x": 8060,
+          "raw_y": 8095
+        },
+        {
+          "index": 9,
+          "source_sha256": "c372fee9b4566b85a592ae6e98e571f3929c8e262cf2feff7acba63a65a50f14",
+          "key": "battle.speed",
+          "raw_x": 8080,
+          "raw_y": 8095
+        },
+        {
+          "index": 10,
+          "source_sha256": "f4db1e48476f60753980b10d66219042b3a3d9c65c9cc77a53d81b88fd869c64",
+          "key": "battle.ui.f4db1e48476f60753980",
+          "raw_x": 8104,
+          "raw_y": 8095
+        }
+      ],
+      "evidence": "workplace/probe/promo-completion-combat-final/session/ui-diagnostics.json",
+      "evidence_sha256": "b2b2f42899540db72c5b69837d2e3ce8f2b60d4736491adfc1e63cef1c5e5e9f",
+      "raw_table_sha256": "5dc79aae3e71851cd54a9ba0fb0bca061f2a59c596b1cf8adb465c323991581a"
+    },
+    {
+      "signature": "9cb289a7506f33d0dfb1b39eaecfc7fc0159f4dbdbcb63dec3f6083b1b49f2fe",
+      "count": 18,
+      "buttons": [
+        {
+          "index": 1,
+          "source_sha256": "28427fa78a230e425f39ca571bdb28822b6ad43300a54ad4c1aaa84b232e63b0",
+          "key": "battle.ui.28427fa78a230e425f39",
+          "raw_x": 8004,
+          "raw_y": 8089
+        },
+        {
+          "index": 2,
+          "source_sha256": "c36d819e7bc6d2b7da51394411c733db89c395987885ca6770167a3b9bc45c3c",
+          "key": "field.c36d819e7bc6d2b7da51",
+          "raw_x": 8020,
+          "raw_y": 8089
+        },
+        {
+          "index": 3,
+          "source_sha256": "c8d3fc567bbcbf384407a4ca279787fdb6e73932155e962e562507acfbf53094",
+          "key": "battle.ui.c8d3fc567bbcbf384407",
+          "raw_x": 8036,
+          "raw_y": 8089
+        },
+        {
+          "index": 4,
+          "source_sha256": "9f49fadb6a863305a9b3e350cba91aff0adc2790f56ae60687e7137a99de0344",
+          "key": "battle.ui.9f49fadb6a863305a9b3",
+          "raw_x": 8060,
+          "raw_y": 8089
+        },
+        {
+          "index": 5,
+          "source_sha256": "fd9b6df3cdbc3d35b9a3e634d9ecba3765eaadb9abe4bf13c20cf8df089b8a48",
+          "key": "battle.ui.fd9b6df3cdbc3d35b9a3",
+          "raw_x": 8004,
+          "raw_y": 8095
+        },
+        {
+          "index": 6,
+          "source_sha256": "dcc839a4015c4b7dd9db959a8f757833b8adb92462a751b973386e453c6d58a3",
+          "key": "field.dcc839a4015c4b7dd9db",
+          "raw_x": 8028,
+          "raw_y": 8095
+        },
+        {
+          "index": 7,
+          "source_sha256": "c372fee9b4566b85a592ae6e98e571f3929c8e262cf2feff7acba63a65a50f14",
+          "key": "battle.speed",
+          "raw_x": 8048,
+          "raw_y": 8095
+        },
+        {
+          "index": 8,
+          "source_sha256": "f4db1e48476f60753980b10d66219042b3a3d9c65c9cc77a53d81b88fd869c64",
+          "key": "battle.ui.f4db1e48476f60753980",
+          "raw_x": 8072,
+          "raw_y": 8095
+        }
+      ],
+      "evidence": "workplace/probe/promo-completion-combat-ui/session/ui-diagnostics.json",
+      "evidence_sha256": "38ab2349b288eb2419f6f43f37973f22dcb0bef32d3930842a54d54269f3c6da",
+      "raw_table_sha256": "b9fcae31645e78b0347438883152bc82192c20c6136a130f6842ce3bd0de6821"
+    }
+  ]
+}

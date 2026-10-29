@@ -18,7 +18,7 @@ def main(a):
     n=events(a.normal)
     clips=[(a.normal,0.2,3,'克萊恩三部曲終章'),(a.normal,n['role'],4,'20像素圓體・繁中角色管理'),
            (a.normal,n['toolbar'],3,'獨立工具列・HD與視窗大小分開'),
-           (a.exploration,3,8,'HD洞穴探索・場景快照展示'),(a.combat,3,8,'HD戰鬥畫面・場景快照展示'),
+           (a.exploration,events(a.exploration)['cave'],8,'HD洞穴探索・場景快照展示'),(a.combat,events(a.combat)['battle'],8,'HD戰鬥畫面・場景快照展示'),
            (a.normal,n['manual'],4,'內建繁中手札與說明'),(a.normal,n['map'],4,'重新繪製的繁中閱讀地圖'),
            (a.normal,n['guide-body'],4,'18章手動攻略・52張重繪圖')]
     generated=[];segments=[];cursor=0

@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 NAME="${1:?新錄影批次}";MODE="${2:?normal、exploration或combat}";PLAYER="${3:-player-finish-20261029}"
 [[ "$NAME" =~ ^promo-[a-zA-Z0-9-]+$ && "$PLAYER" =~ ^player-[a-zA-Z0-9-]+$ ]]
-case "$MODE" in normal) STATE="";DURATION=75;;exploration) STATE=voyage-text-20261025/ashore-control-r3/final.state;DURATION=22;;combat) STATE=battle-continuation-20261025/control-r1/final.state;DURATION=18;;*)exit 2;;esac
+case "$MODE" in normal) STATE="";DURATION=75;;exploration) STATE=voyage-text-20261025/ashore-control-r3/final.state;DURATION=40;;combat) STATE=battle-continuation-20261025/control-r1/final.state;DURATION=55;;*)exit 2;;esac
 BASE="$ROOT/workplace/probe/$NAME";SOURCE="$ROOT/workplace/probe/$PLAYER"
 GAME_CONTAINER="dqk-$NAME-game";VIDEO_CONTAINER="dqk-$NAME-video"
 trap 'docker rm -f "$GAME_CONTAINER" "$VIDEO_CONTAINER" >/dev/null 2>&1 || true' EXIT

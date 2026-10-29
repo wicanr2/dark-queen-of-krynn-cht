@@ -232,6 +232,8 @@
 | `dist-all/` | 唯一正式交付根，建立前讀第 4 節交付契約；本機含原版產物不入 Git |
 | [收尾交付規格007](docs/spec/007-completion-delivery.md) | 本輪全量串接、兩輪抽驗、三平台正式打包及本機推廣影片的完成門檻；不重開歷史已完成批次。 |
 | [completion_audit.py](tools/completion_audit.py)、[player_sources.txt](tools/player_sources.txt) | 正式譯文到直接、別名與完整組句的逐項串接核對；玩家建置、介面驗證及跨平台建置共用同一份Go來源清單。 |
+| [completion_check.py](tools/completion_check.py) | 彙整兩輪正常介面、獨立場景快照、箭矢及沿用收據；核對同一正式二進位與來源，界定完成聲明。 |
+| [battle_menu_inputs.py](tools/battle_menu_inputs.py)、[三種戰鬥表形](docs/spec/007-battle-menus.json) | 收尾錄影發現的精確按鈕表形，沿既有譯文與座標契約追加資料綁定，保持原版按鍵與狀態。 |
 | [release-build.sh](tools/release-build.sh) | 固定版號與來源commit，在既有Docker映像建置Windows x86_64、Linux x86_64及macOS universal；編譯與實機驗收分列。 |
 | [release_payload.py](tools/release_payload.py) | 按交付契約建立三平台本機完整版與無原版資料引擎包，核每檔雜湊、UTF-8 ZIP、BOM、授權及資料排除。 |
 | [package-local.sh](tools/package-local.sh)、[package-smoke.sh](tools/package-smoke.sh)、[封包操作](tools/package_smoke.c)、[封包檢查](tools/package_smoke_check.py) | Docker內產生全版與引擎包，從封包目錄啟動Linux與Wine下的Windows程式，驗正常角色管理、說明與退出。 |

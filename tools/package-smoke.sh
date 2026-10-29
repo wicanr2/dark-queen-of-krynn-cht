@@ -2,22 +2,24 @@
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${1:?完整版號}";MODE="${2:?linux或windows}"
+BATCH="${3:-$MODE}"
+[[ "$BATCH" =~ ^[a-zA-Z0-9-]+$ ]]
 [[ "$VERSION" =~ ^v\.[0-9]+\.[0-9]+\.[0-9]+-[0-9]{8}$ ]]
 case "$MODE" in linux) IMAGE=dosgolem-go-ebiten:1.24-r1;;windows) IMAGE=cok-wine-verify:noble-r1;;*)exit 2;;esac
-STAGE="$ROOT/workplace/probe/package-$VERSION";OUT="$ROOT/dist-all/$VERSION/smoke/$MODE"
+STAGE="$ROOT/workplace/probe/package-$VERSION";OUT="$ROOT/dist-all/$VERSION/smoke/$BATCH"
 test -d "$STAGE";test -d "$ROOT/dist-all/$VERSION/smoke";test ! -e "$OUT"
 test -d "$ROOT/workplace/dosgolem";test -d /home/anr2/cht/dosgolem/workplace/gomodcache
 timeout 60s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
- -e HOME=/tmp -e GOPROXY=off -e GOCACHE=/tmp/gocache -e GOMODCACHE=/modules \
+ -e HOME=/tmp -e GOPROXY=off -e GOCACHE=/tmp/gocache -e GOMODCACHE=/modules -e GOMAXPROCS=2 \
  -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro \
  -v "$ROOT/dist-all/$VERSION/smoke:/out" -w /src --entrypoint bash dosgolem-go-ebiten:1.24-r1 -c '
 set -euo pipefail
 mkdir "/out/$1";mkdir "/out/$1/session"
 cc -O2 /tools/package_smoke.c -lX11 -o "/out/$1/smoke-driver"
 go build -o "/out/$1/xtest-key" /tools/player_xtest_key.go
-' -- "$MODE"
+' -- "$BATCH"
 timeout --kill-after=5s 150s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 256 --label project=dark-queen-of-krynn-cht \
- -e HOME=/tmp -e LIBGL_ALWAYS_SOFTWARE=1 -e GOMAXPROCS=2 -e DQK_TRACE_PLAYER_UI=1 -e WINEPREFIX=/out/wine -e WINEDEBUG=-all \
+ -e HOME=/tmp -e LIBGL_ALWAYS_SOFTWARE=1 -e GOMAXPROCS=2 -e DQK_TRACE_PLAYER_UI=1 -e WINEPREFIX=/out/wine -e WINEDEBUG=-all -e WINEARCH=win64 -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 \
  -v "$STAGE:/packages:ro" -v "$OUT:/out" --entrypoint bash "$IMAGE" -c '
 set -euo pipefail
 Xvfb :95 -screen 0 1280x900x24 -nolisten tcp >/out/xvfb.log 2>&1 & XVFB_PID=$!
@@ -29,6 +31,8 @@ if [[ "$1" = linux ]];then
   PACKAGES=(/packages/*linux-amd64-full-local)
   XDG_DATA_HOME=/out/userdata "${PACKAGES[0]}/啟動.sh" >/out/player.log 2>&1 & APP_PID=$!
 else
+  wineboot -u >/out/wineboot.log 2>&1
+  wineserver -w
   PACKAGES=(/packages/*windows-amd64-full-local)
   PACKAGE="${PACKAGES[0]}"
   wine "$PACKAGE/DarkQueen.exe" -player "Z:$PACKAGE/data/inputs" -original "Z:$PACKAGE/original" -saves Z:/out/session >/out/player.log 2>&1 & APP_PID=$!

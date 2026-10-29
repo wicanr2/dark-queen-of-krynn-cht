@@ -24,6 +24,7 @@ COMMON=(--rm --pull never --network none --user "$(id -u):$(id -g)" --memory 3g 
 timeout --kill-after=5s 240s docker run "${COMMON[@]}" "$GO" -c '
 set -euo pipefail
 mkdir -p /out/bin
+cp /usr/local/go/LICENSE /out/go-toolchain-license.txt
 SOURCES=();while IFS= read -r source; do SOURCES+=("/tools/$source");done </tools/player_sources.txt
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w -X main.playerVersion=$DQK_VERSION -X main.playerCommit=$DQK_SOURCE_COMMIT" -modfile /out/audio-go.mod -overlay /out/build-overlay/overlay.json -o /out/bin/dqk-windows-amd64.exe "${SOURCES[@]}"
 '

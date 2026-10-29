@@ -33,6 +33,7 @@ def readme(version,platform,full):
 
 {'Windows雙擊「啟動.bat」；Linux執行 ./啟動.sh；macOS開啟「黑暗之后.app」。' if full else '先從您本機已準備的完整資料匯入 data/ 與 original/，再啟動。可使用 import-local.py 來源資料夾 本封包資料夾。原版ZIP本身不包含本專案的翻譯與HD，不能冒充完整中文資料。'}
 存檔位於使用者資料目錄，更新程式不覆寫存檔。Windows使用LOCALAPPDATA，Linux使用XDG_DATA_HOME或~/.local/share，macOS使用~/Library/Application Support。
+macOS的data與original位於「黑暗之后.app/Contents/Resources/」；匯入工具的來源與目的地皆指定這一層。
 
 F2縮放；F12繁中／原版；工具列HD獨立切換；F5手札、F6說明、F7攻略、F8音樂；F10截圖、F11全螢幕。示範可按Esc中斷。
 
@@ -67,9 +68,10 @@ def launchers(base,platform):
         p.chmod(0o755)
 
 
-def notices(root,modules,deps,font,base,full):
+def notices(root,player,modules,deps,font,base,full):
     out=base/'licenses';out.mkdir()
     shutil.copy2(root/'LICENSE',out/'LICENSE-project.txt')
+    shutil.copy2(player/'go-toolchain-license.txt',out/'LICENSE-Go.txt')
     shutil.copy2(root/'workplace/dosgolem/LICENSE',out/'LICENSE-dosgolem.txt')
     shutil.copy2(root/'tools/LICENSE-Gold-Box-Explorer.txt',out/'LICENSE-Gold-Box-Explorer.txt')
     names=['github.com/hajimehoshi/ebiten/v2@v2.9.9','github.com/ebitengine/oto/v3@v3.4.0','github.com/ebitengine/purego@v0.9.0','github.com/ebitengine/gomobile@v0.0.0-20250923094054-ea854a63cce1','github.com/ebitengine/hideconsole@v1.0.0','github.com/jezek/xgb@v1.1.1','golang.org/x/sys@v0.36.0','golang.org/x/sync@v0.17.0']
@@ -139,7 +141,7 @@ def main(args):
                 copy_tree(root/'workplace/input/dos/drkqueen',resource/'original')
             else:
                 (resource/'import-local.py').write_text(IMPORTER)
-            notices(root,args.modules,args.deps,args.font,base,kind=='full-local')
+            notices(root,player,args.modules,args.deps,args.font,base,kind=='full-local')
             text=readme(args.version,platform,kind=='full-local')
             if platform=='windows-amd64':(base/'README.txt').write_bytes(b'\xef\xbb\xbf'+text.replace('\n','\r\n').encode())
             else:(base/'README.md').write_text(text)
