@@ -278,6 +278,21 @@
       "scope": "正常王宮會面自動引用手札54；閱讀面板遮住底層姓名標題，返回恢復遊戲，非全部手札走訪證據",
       "binary_sha256": "9df4cac925043825528b07fd336dfa13543d1b9646b77d9f182cc8af3c1b4216",
       "theme_sha256": "990403b29b709441310a10378e868f9f9fee363cef562516d722d4c2d12e031f"
+    },
+    {
+      "file": "cave-hd-scene-sample.png",
+      "source": "workplace/probe/scene-sample-20261029/exploration/04-exploration.png",
+      "sha256": "bfeaa92ab2849ee98bfd22097d0b6dcea293adaefb8f214f24a0acc93eb41487",
+      "size": [
+        640,
+        400
+      ],
+      "bytes": 109231,
+      "scope": "由原版洞穴快照注入後實際移動、轉向與營地返回的Go呈現抽驗；2倍視窗，研究入口共用正式呈現來源，不作正常冷啟動走訪證據",
+      "state_injection": true,
+      "research_binary_sha256": "05a59d2c7de0d4f1a51a508f0ef67ccd53dcd7efae6cc1fe069fff1dab35982e",
+      "formal_render_sources_from": "9df4cac925043825528b07fd336dfa13543d1b9646b77d9f182cc8af3c1b4216",
+      "theme_sha256": "990403b29b709441310a10378e868f9f9fee363cef562516d722d4c2d12e031f"
     }
   ]
 }

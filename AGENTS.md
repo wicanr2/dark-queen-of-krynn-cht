@@ -21,8 +21,9 @@
 | 項目 | 本作目前契約 |
 |---|---|
 | 中文題名 | 沿用使用者稱呼「黑暗之后」；來源盤點時核對封面，不自行改名 |
-| 優先順序 | 使用者要求先完成中文化，再補齊 HD；目前中文資料已接到統一入口，HD接入依現況續行。攻略18章正文已重排，餘圖與閱讀器待接，現況見 `CONTEXT.md` |
+| 優先順序 | 繁中、HD及完整攻略先完成，再做已選定的原譜高品質樂器音樂。2026-10-29使用者允許場景類型抽驗及記憶體調整，依目前證據收斂；不以歷史未走訪項重開已完成批次，現況見`CONTEXT.md` |
 | 驗證與 HD 審查上限 | 2026-10-26 使用者重新授權「可以抽驗」，可做必要函式對照與代表玩家操作；以最小充分證據收斂，不重跑全部父批，不把未跑範圍記成已驗。HD 同批最多審查兩輪，第二輪後接受結果。證據入口為 `CONTEXT.md`，來源與交付權利邊界維持。 |
+| 場景抽驗與狀態調整 | 2026-10-29使用者指定「全場景抽驗即可」，並授權修改記憶體狀態協助抽驗。按場景與繪圖類型選固定代表樣本；研究收據標明快照、記憶體修改、來源與比較界線，注入結果不冒充正常冷啟動或通關。正式遊戲不加入狀態捷徑。入口為規格005與CONTEXT的目前證據。 |
 | 工具列 | 2026-10-25 使用者明確要求納入；參照《幽靈騎士》頂端工具列，接上已授權的繁中／原版、縮放、手札、說明、手動攻略及 HD 控制。尚未接妥的控制明列停用原因，不移植前作作弊、答案、多語或未授權功能。 |
 | 技術起點 | 參照前作的 dosgolem 執行原版與輸出覆繪方法；本作可執行性、掛勾與相容性逐項重驗 |
 | 繪圖接管 | 使用者要求完全接管繪圖，必要時反組譯找掛勾。入口為[規格 005](docs/spec/005-render-owner.md)與[研究 007](docs/re/007-render-ownership.md)：玩家視窗只取新繪圖層的完整前緩衝；原版顯存留作背景相容資料。影像與短字串在原版繪製前辨識，不再用全畫面搜尋作 HD 來源。完整命令覆蓋及全量素材尚須補齊，不把部分接管稱為全部完成。 |
@@ -216,6 +217,7 @@
 | [guide_inputs.py](tools/guide_inputs.py)、[guide-ui.zh-TW.tsv](text/guide-ui.zh-TW.tsv) | 編譯本機18章攻略與52張重繪閱讀圖，核對來源及增補字模；沿規格003的F7、工具列與原框查閱，全文及完整圖集不入Git |
 | [規格 004](docs/spec/004-hd-layer.md)、[player_hd.go](tools/player_hd.go) | HD 素材契約、完整可見來源比對與獨立開關；主題放 `workplace/probe/player-current/hd/`，視窗大小不控制 HD |
 | [hd_source_audit.py](tools/hd_source_audit.py) | Docker內以`--inventory`、`--theme`、`--original`及`--out`核對r3的1831筆來源、HD雜湊／遮罩及既定原生例外；來源與主題唯讀，輸出新收據。不是正常玩家路徑或全遊戲HD完成證據，未知來源明列失敗 |
+| [hd-scene-sample.sh](tools/hd-scene-sample.sh)、[hd_scene_probe.go](tools/hd_scene_probe.go) | Docker內依每個HD家族的鍵排序首／中／末與完整長邊框固定選樣，核對正式Go畫布的原版、HD、遮擋及色盤輸出。需既有合法來源產生的完整主題，命令為`bash tools/hd-scene-sample.sh scene-hd-新名稱`；屬素材布局抽驗，不是房間或結局流程證據 |
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | Go 命令畫布、交易及完整畫格提交；入口 `tools/player_render_owner.go`、`tools/player_owned_drivers.go`、`tools/render_scene_state.go`、`tools/player_scene_backend.go`。正式玩家不取原版整張 RGB；來源掛勾在規格目錄，不回寫原版。代表路徑零原版寫入與全場景覆蓋分開記錄 |
 | [player_text_format.go](tools/player_text_format.go)、[規格005](docs/spec/005-render-owner.md#ready帶變數的完整顯示來源) | 正式TSV格式與原版實際輸出配對；保留數值、加值、未知姓名及檔名，不讀寫原版varargs或語意資料 |
 | [player-sample.sh](tools/player-sample.sh)、[視窗驅動](tools/player_gui_probe.c)、[XTEST按鍵](tools/player_xtest_key.go)、[檢查器](tools/player_sample_check.py) | Docker內的正常介面代表抽驗；使用既有XGB／XTEST產生伺服器鍵盤事件，第二參數可選本機對照程式，來源與影像參考唯讀；結束後核畫格、控制與未完成交易，產生checks.json |
