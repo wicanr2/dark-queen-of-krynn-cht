@@ -7,7 +7,11 @@ BATCH="${3:-$MODE}"
 [[ "$VERSION" =~ ^v\.[0-9]+\.[0-9]+\.[0-9]+-[0-9]{8}$ ]]
 case "$MODE" in linux) IMAGE=dosgolem-go-ebiten:1.24-r1;;windows) IMAGE=cok-wine-verify:noble-r1;;*)exit 2;;esac
 STAGE="$ROOT/workplace/probe/package-$VERSION";OUT="$ROOT/dist-all/$VERSION/smoke/$BATCH"
-test -d "$STAGE";test -d "$ROOT/dist-all/$VERSION/smoke";test ! -e "$OUT"
+if [[ ! -d "$STAGE" ]];then
+ echo "封包解壓暫存已清理；先執行 bash tools/restore-package-stage.sh $VERSION，再重跑驗收。" >&2
+ exit 2
+fi
+test -d "$ROOT/dist-all/$VERSION/smoke";test ! -e "$OUT"
 test -d "$ROOT/workplace/dosgolem";test -d /home/anr2/cht/dosgolem/workplace/gomodcache
 timeout 60s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
  -e HOME=/tmp -e GOPROXY=off -e GOCACHE=/tmp/gocache -e GOMODCACHE=/modules -e GOMAXPROCS=2 \

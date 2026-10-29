@@ -239,6 +239,7 @@
 | [release-build.sh](tools/release-build.sh) | 固定版號與來源commit，在既有Docker映像建置Windows x86_64、Linux x86_64及macOS universal；編譯與實機驗收分列。 |
 | [release_payload.py](tools/release_payload.py) | 按交付契約建立三平台本機完整版與無原版資料引擎包，核每檔雜湊、UTF-8 ZIP、BOM、授權及資料排除。 |
 | [package-local.sh](tools/package-local.sh)、[package-smoke.sh](tools/package-smoke.sh)、[封包操作](tools/package_smoke.c)、[封包檢查](tools/package_smoke_check.py) | Docker內產生全版與引擎包，從封包目錄啟動Linux與Wine下的Windows程式，驗正常角色管理、說明與退出。 |
+| [restore-package-stage.sh](tools/restore-package-stage.sh) | 結案清理後，只有需要重跑封包驗收時才執行`bash tools/restore-package-stage.sh 完整版號`。從dist-all的ZIP核SHA後重建workplace/probe/package-版本，恢復可執行權限，不覆寫既有暫存或正式包。 |
 | [promo-capture.sh](tools/promo-capture.sh)、[錄影操作](tools/promo_session.c)、[promo_merge.py](tools/promo_merge.py) | 隔離X11視窗的實際錄影與分幕剪輯，接已授權原譜HD音樂，保存影音技術檢查與場景注入標記；影片只留本機。 |
 | [推廣片字幕](text/promo-story.zh-TW.tsv)、[promo_story.py](tools/promo_story.py) | 故事與玩法篇的自有繁中文案、12幕分鏡與影音合成；依README及手冊摘要撰寫，使用正式程式新錄影，來源與權利分列。規格見007。 |
 | [finish-scene.sh](tools/finish-scene.sh)、[場景注入](tools/finish_scene_inject.go)、[操作](tools/finish_scene_probe.c)、[核對](tools/finish_scene_check.py) | 兩輪中的洞穴與戰鬥代表樣本；只加入研究程式，正式入口不提供注入捷徑。正常入口另用player-sample.sh。 |

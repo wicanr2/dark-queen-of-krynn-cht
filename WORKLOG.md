@@ -3462,3 +3462,12 @@
 - 配樂沿已授權原譜RODQ1-0與RODQ3-0的取樣HD版本，僅剪輯淡入淡出及交叉淡化，沒有新增旋律、TTS或冒稱晶片錄音。來源、字幕、原始錄影及影片只留本機；自有字幕與可重現工具加入Git。
 - 現行交付新增故事與玩法篇、SRT、逐幕總覽及影音／權利清單，原42秒短片逐位元組保持，六個平台封包與已發布tag保持；SHA256SUMS.json更新為 2fdbd13a00dabdc03a76cef22fc73fec1d57eec67d6670f03cc999838ff8f840。中間產物與凍結的故事來源README在promo-story-edit-r2-20261029，沒有上傳影片或新增公開Release。
 - Issue11已補影片內容、來源與驗收結果後關閉。字幕、錄影與合成工具及文件提交main並推送；影片、來源錄影與完整素材未加入Git。最後本專案容器0，root-owned檔及.md目錄0，輸出UID/GID1000；沒有新增Docker映像或volume。
+
+## 2026-10-29 結案空間清理
+
+- 使用者要求清理空間並結案，沿既有只限本專案的授權。回查收尾與主機衛生路由、文件職責及既有research-storage入口，建立Issue12。盤點約38GiB研究區，其中原圖、HD與歷史證據依規則保留；未發現16MiB以上未封存receipt.json，不重驗未變的312份歷史壓縮資料。
+- 確認六個正式ZIP大小與整包SHA，逐檔比對20951個解壓暫存的manifest及檔案SHA，全數相同才列入刪除。初版規劃器因/out掛載別名不能相對/project而失敗，當時沒有刪除；修正為實際邏輯路徑後，用同一映像重新核對六包及全部暫存，再執行。
+- 刪除workplace/probe/package-v.1.0.0-20261029，沿research-storage.sh cache清664.8MiB本專案Go快取並保留空目錄。依刪除檔案配置區塊計，本輪釋放4.356GiB；主機可用約335.24GiB，主機其他專案仍在活動，不把全部可用量變化歸因本輪。
+- 清理後重新核對六份正式包與6962個保留檔案的SHA，原始輸入、翻譯、現行player-current、HD、字模、音樂、存檔及兩版影片保持；312份封存索引原有entries完全相同。結果SHA-256 19ffa7945ff77cfc46f28a5f9cfa90a06b5c94b583de574111c6a488b334eb2a，六份暫存manifest另保存在cleanup-close-stage-manifests.json。
+- 新增restore-package-stage.sh與AGENTS入口，供需要重跑封包驗收時從既有ZIP還原；用真實Linux引擎包在容器臨時目錄驗SHA、還原與可執行權限通過，正式暫存維持刪除。package-smoke在缺暫存時顯示此還原方法；未重開遊戲、繪圖或完整遊玩驗證。
+- Docker未發現可明確歸屬本專案的過期資源，共用工具映像、未知歸屬的懸空映像、其他專案volume與builder-cache保留；本專案容器0，root-owned檔及.md目錄0，輸出UID/GID1000。結案資料、還原入口與紀錄提交main並推送，既有正式tag與交付包保持。
