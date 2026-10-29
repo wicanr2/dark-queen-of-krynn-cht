@@ -5,7 +5,9 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 NAME="${1:?請指定新的玩家抽驗目錄名稱}"
 PLAYER="${2:-player-current}"
 READER_SAMPLE="${3:-}"
-[[ -z "$READER_SAMPLE" || "$READER_SAMPLE" = manual-map || "$READER_SAMPLE" = demo || "$READER_SAMPLE" = guide ]]
+AUDIO_SAMPLE="${4:-null}"
+[[ "$AUDIO_SAMPLE" = null || ( "$AUDIO_SAMPLE" = pulse && "$READER_SAMPLE" = music ) ]]
+[[ -z "$READER_SAMPLE" || "$READER_SAMPLE" = manual-map || "$READER_SAMPLE" = demo || "$READER_SAMPLE" = guide || "$READER_SAMPLE" = music ]]
 [[ "$NAME" =~ ^player-sample-[a-zA-Z0-9-]+$ ]]
 [[ "$PLAYER" =~ ^player-[a-zA-Z0-9-]+$ ]]
 test ! -e "$ROOT/workplace/probe/$NAME"
@@ -28,6 +30,16 @@ GO=sha256:8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581
 PIL=sha256:b050fc7c49003ea6eecbbe0fc93b465b6869daf550c3284d5039e5e87517e831
 docker image inspect "$GO" >/dev/null
 docker image inspect "$PIL" >/dev/null
+RUNTIME="$GO"
+AUDIO_ARGS=()
+if [[ "$AUDIO_SAMPLE" = pulse ]]; then
+ PULSE_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pulse"
+ test -d "$PULSE_DIR"
+ test -S "$PULSE_DIR/native"
+ test "$(docker image inspect dqk-player-audio:1.24-r1 --format '{{index .Config.Labels "dqk.audio.contract"}}')" = pulse-alsa-1.2.7.1-1
+ RUNTIME=dqk-player-audio:1.24-r1
+ AUDIO_ARGS=(-v "$PULSE_DIR:/pulse:ro" -e PULSE_SERVER=unix:/pulse/native -e ALSA_CONFIG_PATH=/opt/dqk/asound-pulse.conf)
+fi
 timeout 15s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
  --memory 256m --cpus 1 --pids-limit 32 --label project=dark-queen-of-krynn-cht \
  -v "$ROOT/workplace/probe:/output" --entrypoint bash "$GO" -c '
@@ -47,7 +59,7 @@ timeout --kill-after=5s 240s docker run --rm --pull never --init --network none 
  -v "$HD:/player/hd:ro" \
  -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" -v "$ROOT/workplace/probe/$NAME:/out" \
  -v "$ROOT/workplace/probe/player-sample-20261026-r5:/reference:ro" \
- --entrypoint bash "$GO" -c '
+ "${AUDIO_ARGS[@]}" --entrypoint bash "$RUNTIME" -c '
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
 OUT=/out
@@ -61,6 +73,11 @@ trap cleanup EXIT
 for i in {1..50}; do [[ -S /tmp/.X11-unix/X91 ]] && break; sleep .1; done
 test -S /tmp/.X11-unix/X91
 export DISPLAY=:91
+if [[ "$2" = music && "$3" = null ]]; then
+  echo "pcm.!default { type null }" > /tmp/asound-null.conf
+  export ALSA_CONFIG_PATH=/tmp/asound-null.conf
+fi
+echo "{\"audio_device\":\"$3\"}" > "$OUT/audio-device.json"
 cp /player/build-info.json "$OUT/build-info-at-start.json"
 /player/dqk-player -player /player/inputs -original /orig -saves "$OUT/session" >"$OUT/player.log" 2>&1 &
 APP_PID=$!
@@ -73,7 +90,7 @@ wait "$APP_PID"
 APP_PID=""
 test -f "$OUT/session/render-counts.json"
 find "$OUT" -user root -o -type d -name "*.md"
-' -- "$NAME" "$READER_SAMPLE"
+' -- "$NAME" "$READER_SAMPLE" "$AUDIO_SAMPLE"
 timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
  --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
  -v "$ROOT:/project:ro" -v "$ROOT/workplace/probe/$NAME:/out" --entrypoint python3 "$PIL" \

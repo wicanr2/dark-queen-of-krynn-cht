@@ -293,6 +293,17 @@
       "research_binary_sha256": "05a59d2c7de0d4f1a51a508f0ef67ccd53dcd7efae6cc1fe069fff1dab35982e",
       "formal_render_sources_from": "9df4cac925043825528b07fd336dfa13543d1b9646b77d9f182cc8af3c1b4216",
       "theme_sha256": "990403b29b709441310a10378e868f9f9fee363cef562516d722d4c2d12e031f"
+    },
+    {
+      "file": "toolbar-music-zh.png",
+      "source": "workplace/probe/player-sample-music-pulse-20261029-r1/10-music-toolbar.png",
+      "sha256": "6da4b7ddcc542cdf01607ec396e70c6a57e43e589b6630afcd67bead76ed9a9f",
+      "size": [
+        960,
+        600
+      ],
+      "bytes": 58458,
+      "scope": "正常冷啟動、角色管理及頂端工具列；獨立音樂開關。非狀態注入，桌面音訊服務技術驗證不等於聽驗"
     }
   ]
 }

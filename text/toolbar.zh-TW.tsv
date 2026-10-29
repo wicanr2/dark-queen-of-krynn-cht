@@ -13,3 +13,7 @@ toolbar.fullscreen	全螢幕
 toolbar.guide_pending	攻略正文與重繪地圖接入後啟用
 toolbar.hd_pending	HD素材接入後啟用
 toolbar.hd_mode_hint	切回繁中顯示後啟用HD
+toolbar.music	音樂開
+toolbar.music_off	音樂關
+toolbar.music_unavailable	無音訊
+toolbar.music_pending	音樂素材或音訊裝置尚未就緒

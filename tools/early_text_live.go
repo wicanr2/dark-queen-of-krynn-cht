@@ -1291,6 +1291,8 @@ type playerSession struct {
 	MouseButtons      [2]bool
 	HD                playerHDRenderer
 	HDEnabled         bool
+	Music             playerMusicRenderer
+	MusicEnabled      bool
 	Screenshot        bool
 	Renderer          playerFrameRenderer
 	Controls          []map[string]any
@@ -1328,6 +1330,14 @@ type playerImageAsset struct {
 
 // 可選 HD 模組只由一般玩家建置連入。舊研究建置不需要可選素材或新檔案。
 var playerHDLoader func(string) playerHDRenderer
+
+type playerMusicRenderer interface {
+	Available() bool
+	SetEnabled(bool)
+	Close(string)
+}
+
+var playerMusicLoader func(*oracle.Oracle, string) playerMusicRenderer
 
 type playerButton struct {
 	Key, Action string
@@ -1374,7 +1384,7 @@ func runPlayer(profile, original, saves string) {
 	defer o.Close()
 	o.SetCmdLine("SB220 SI7 RB330")
 	o.SetScratch(filepath.Join(saves, "saves"))
-	p := &playerSession{Directory: saves, Scale: 2, Mouse: [2]int{-1, -1}, HDEnabled: true}
+	p := &playerSession{Directory: saves, Scale: 2, Mouse: [2]int{-1, -1}, HDEnabled: true, MusicEnabled: true}
 	if playerHDLoader != nil {
 		p.HD = playerHDLoader(filepath.Join(profile, "..", "hd"))
 	}
@@ -1393,6 +1403,7 @@ func runPlayer(profile, original, saves string) {
 	var preferences struct {
 		Scale int
 		HD    *bool
+		Music *bool
 	}
 	if raw, err := os.ReadFile(filepath.Join(saves, "preferences.json")); err == nil {
 		if json.Unmarshal(raw, &preferences) == nil {
@@ -1402,7 +1413,15 @@ func runPlayer(profile, original, saves string) {
 			if preferences.HD != nil {
 				p.HDEnabled = *preferences.HD
 			}
+			if preferences.Music != nil {
+				p.MusicEnabled = *preferences.Music
+			}
 		}
+	}
+	if playerMusicLoader != nil {
+		p.Music = playerMusicLoader(o, filepath.Join(profile, "..", "music"))
+		p.Music.SetEnabled(p.MusicEnabled)
+		defer p.Music.Close(saves)
 	}
 	g := &liveGame{o: o, out: saves, translate: true, player: p, active: map[[2]int]liveEvent{},
 		lastPixels: make([]byte, 640*400*4), list: &listState{}, cold: &coldLoad{Handoff: ^uint64(0)}}
@@ -1460,6 +1479,7 @@ func runPlayer(profile, original, saves string) {
 	}
 	preferences.Scale = p.Scale
 	preferences.HD = &p.HDEnabled
+	preferences.Music = &p.MusicEnabled
 	raw, err = json.MarshalIndent(preferences, "", "  ")
 	must(err)
 	tmp := filepath.Join(saves, "preferences.tmp")
@@ -1478,6 +1498,13 @@ func (g *liveGame) playerButtons() []playerButton {
 	if p.HD != nil && p.HD.Available() {
 		hdKey, hdEnabled = "toolbar.hd", g.translate
 	}
+	musicKey := "toolbar.music_unavailable"
+	if p.Music != nil && p.Music.Available() {
+		musicKey = "toolbar.music_off"
+		if p.MusicEnabled {
+			musicKey = "toolbar.music"
+		}
+	}
 	buttons := []playerButton{
 		{Key: "toolbar.scale2", Action: "scale2", Enabled: true},
 		{Key: "toolbar.scale3", Action: "scale3", Enabled: true},
@@ -1488,6 +1515,7 @@ func (g *liveGame) playerButtons() []playerButton {
 		{Key: "toolbar.guide", Action: "guide", Enabled: reader && g.reader.Guide != nil},
 		{Key: "toolbar.screenshot", Action: "screenshot", Enabled: true},
 		{Key: "toolbar.fullscreen", Action: "fullscreen", Enabled: true},
+		{Key: musicKey, Action: "music", Enabled: p.Music != nil && p.Music.Available()},
 	}
 	for i := range buttons {
 		b := &buttons[i]
@@ -1507,7 +1535,7 @@ func (g *liveGame) playerButtons() []playerButton {
 func (g *liveGame) playerAction(action string) {
 	p := g.player
 	defer func() {
-		p.Controls = append(p.Controls, map[string]any{"action": action, "step": g.o.Steps(), "chinese": g.translate, "scale": p.Scale, "hd": p.HDEnabled,
+		p.Controls = append(p.Controls, map[string]any{"action": action, "step": g.o.Steps(), "chinese": g.translate, "scale": p.Scale, "hd": p.HDEnabled, "music": p.MusicEnabled,
 			"words": len(g.list.words), "reader_stable": g.readerStable()})
 	}()
 	if p.HD != nil && (action == "scale2" || action == "scale3" || action == "language" || action == "hd") {
@@ -1559,6 +1587,13 @@ func (g *liveGame) playerAction(action string) {
 		p.Notice, p.NoticeUntil = p.Text[key], time.Now().Add(3*time.Second)
 	case "screenshot":
 		p.Screenshot = true
+	case "music":
+		if p.Music != nil && p.Music.Available() {
+			p.MusicEnabled = !p.MusicEnabled
+			p.Music.SetEnabled(p.MusicEnabled)
+		} else {
+			p.Notice, p.NoticeUntil = p.Text["toolbar.music_pending"], time.Now().Add(3*time.Second)
+		}
 	case "fullscreen":
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
@@ -1575,7 +1610,7 @@ func (g *liveGame) tickPlayerToolbar() bool {
 	for _, shortcut := range []struct {
 		Key    ebiten.Key
 		Action string
-	}{{ebiten.KeyF2, "scale"}, {ebiten.KeyF10, "screenshot"}, {ebiten.KeyF11, "fullscreen"}, {ebiten.KeyF12, "language"}} {
+	}{{ebiten.KeyF2, "scale"}, {ebiten.KeyF8, "music"}, {ebiten.KeyF10, "screenshot"}, {ebiten.KeyF11, "fullscreen"}, {ebiten.KeyF12, "language"}} {
 		if inpututil.IsKeyJustPressed(shortcut.Key) {
 			action := shortcut.Action
 			if action == "scale" {
@@ -1592,7 +1627,7 @@ func (g *liveGame) tickPlayerToolbar() bool {
 		for _, b := range g.playerButtons() {
 			if x >= b.X && x < b.X+b.Width {
 				// 停用項目只顯示原因；不執行尚未完成的功能。
-				if b.Enabled || b.Action == "hd" || b.Action == "guide" {
+				if b.Enabled || b.Action == "hd" || b.Action == "guide" || b.Action == "music" {
 					g.playerAction(b.Action)
 				}
 				return true

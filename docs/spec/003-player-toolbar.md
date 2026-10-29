@@ -149,3 +149,9 @@ bash tools/player-sample.sh player-sample-demo-新的名稱 player-current demo
 重建入口為[player.sh](../../tools/player.sh)的prepare，資料編譯入口為[guide_inputs.py](../../tools/guide_inputs.py)，自有介面文字見[guide-ui.zh-TW.tsv](../../text/guide-ui.zh-TW.tsv)。全文、幾何、完整圖集及來源仍只留本機。
 
 正常抽驗`player-sample-guide-20261028-r3/`使用5e840a1f，從冷啟動與角色管理實際點選頂端攻略，再以鍵盤切至火焰塔。20個攻略事件涵蓋導讀、長文第1／2頁、地圖全圖／原尺寸／兩倍、WASD平移、Home、兩層Esc及F7開關。首18個事件原版步數相同，圖區由獨立來源座標取樣核對。既有五張基準差異0、有效命令guest寫入0、沒有未完成交易；返回在相同滑鼠位置與背景相同。收據SHA-256 `3d96b9933674afcb6c45f5b9f84c6844a771f885810650b0400d0b742f1d7c73`。全52張通過正式載入檢查，沒有逐張GUI或全程冒險聲明。
+
+## 原譜音樂工具列
+
+沿[音樂規格006](006-hd-music.md)，在既有工具列右端增加64像素的「音樂開／關」，舊按鈕位置保持，總寬548像素。F8使用同一動作。音樂偏好獨立於HD、語言與縮放，存在preferences.json的Music欄位；舊偏好缺欄位時預設開啟。
+
+音樂資料或音訊裝置失配時顯示「無音訊」，點選提供簡短原因，保留遊戲操作。正常冷啟動、F8、工具列點選、縮放及語言切換已有ALSA null與桌面音訊服務兩組收據，見研究008。技術輸出不代表人耳聽驗。

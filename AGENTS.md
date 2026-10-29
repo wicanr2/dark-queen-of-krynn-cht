@@ -29,7 +29,7 @@
 | 繪圖接管 | 使用者要求完全接管繪圖，必要時反組譯找掛勾。入口為[規格 005](docs/spec/005-render-owner.md)與[研究 007](docs/re/007-render-ownership.md)：玩家視窗只取新繪圖層的完整前緩衝；原版顯存留作背景相容資料。影像與短字串在原版繪製前辨識，不再用全畫面搜尋作 HD 來源。完整命令覆蓋及全量素材尚須補齊，不把部分接管稱為全部完成。 |
 | 其他語言 | 本輪先處理繁中，不把前作五語擴充視為本作已授權交付範圍 |
 | HD 與介面 | 使用者確認目前整合版：角色管理 20 像素圓體、其餘文字 16 像素、閱讀保留原框、頂端懸停工具列，見 [規格 003](docs/spec/003-player-toolbar.md)。HD 開關與視窗大小各自獨立，2 倍、3 倍與自由縮放都保留 HD 偏好；接續既有試繪方向，每批最多兩輪，見 [規格 004](docs/spec/004-hd-layer.md) |
-| 音樂順序 | 2026-10-28使用者選定保留原譜音符、節奏與曲式，換高品質樂器音色，隨後明確指定先完成HD畫面再做音樂。此時不開始音樂實作；現況見`CONTEXT.md`，進入音樂階段再讀`/home/anr2/.codex/skills/compose-rpg-remake-music/SKILL.md`及知識路由的音訊入口 |
+| 音樂順序 | 使用者選定保留原譜音符、節奏與曲式，換高品質樂器音色。HD已於2026-10-29依授權抽驗收尾，接續Issue8；入口為[研究008](docs/re/008-original-music.md)與[規格006](docs/spec/006-hd-music.md)。音樂方法讀`/home/anr2/.codex/skills/compose-rpg-remake-music/SKILL.md`及知識路由的音訊入口，不新增旋律或改編曲式 |
 | 手札與說明 | 使用者已選擇內建手札與繁中說明面板，引用時顯示對應手札；原版規則與存檔判定不變 |
 | 攻略與答案 | 內建獨立、手動開啟的攻略閱讀頁；正文重新排版，攻略地圖重新繪製並作繁中標註，掃描只作校對來源，不以嵌入 PDF 或掃描頁交付；自動提示、查驗題答案及地圖疊層未定案 |
 | 封包與發行 | 平台、完整版、推廣片及公開方式尚未定案 |
@@ -212,6 +212,11 @@
 | `docs/spec/README.md`、`docs/spec/` | 規格索引、狀態、依賴、驗收條件與 Issue 回鏈 |
 | `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，圖片內嵌文字由 [image-text.en.tsv](text/image-text.en.tsv) 與 [image-text.zh-TW.tsv](text/image-text.zh-TW.tsv) 成對保存。書籍正文仍留本機 |
 | `tools/` | 可重現的 Docker、盤點、驗證與打包入口 |
+| [music-hd.sh](tools/music-hd.sh)、[xmi_score.py](tools/xmi_score.py)、[製作器](tools/music_score_render.py)、[核對器](tools/music_score_check.py)、[音樂研究008](docs/re/008-original-music.md) | Docker內擷取XMI、原譜取樣合成及音符／控制事件核對；`prepare`、`render`、`check`、`probe`與`install`用法見研究008。8曲的原版、JSON、MIDI、WAV與Ogg只留本機。 |
+| [music_cues.go](tools/music_cues.go)、[原版探針](tools/music_cue_probe.go)、[player_music.go](tools/player_music.go)、[解碼與資料核對](tools/player_music_assets.go)、[音樂測試](tools/player_music_assets_test.go) | 原版遠呼叫的只讀開始／停止／音量觀察；音樂獨立於圖像HD、語言與縮放，正式TSV工具列及F8控制；證據與聽驗限制見規格006。 |
+| [player_music_inputs.py](tools/player_music_inputs.py)、`workplace/probe/music-go-deps/` | 固定oggvorbis v1.0.5及vorbis v1.0.2；`music-hd.sh deps`首次建立，建置前核zip與每個解壓成員。只產生本作modfile，不修改SDK或共用模組快取。 |
+| [player-audio-image.sh](tools/player-audio-image.sh)、[Dockerfile.player-audio](tools/Dockerfile.player-audio)、[asound-pulse.conf](tools/asound-pulse.conf) | 固定Go映像的桌面音訊延伸，只補ALSA至PulseAudio橋接；使用`bash tools/player-audio-image.sh`，既存映像先驗。啟動只連目前UID的socket；無裝置保留遊戲。 |
+| [player_ui_contract.py](tools/player_ui_contract.py) | `bash tools/player.sh check-ui player-整合目錄`重跑24個受影響介面子案例及2項音樂測試；沿用原版IRQ根收據，輸出本機ui-contract.json，不重新執行全量繪圖父批。 |
 | [圖片文字規格](docs/spec/005-render-owner.md#ready圖片文字的語言獨立替換)、[picture_text.go](tools/picture_text.go)、[picture_text_inputs.py](tools/picture_text_inputs.py) | 圖片文字的來源核對、繪製前底圖保存、Go文字安全框及獨立於HD的繁中替換；接入在[player_picture_text.go](tools/player_picture_text.go)，本機資料為正式入口的picture-text目錄 |
 | [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD與說明世界地圖已接入；目前數量與限制見CONTEXT |
 | [guide_inputs.py](tools/guide_inputs.py)、[guide-ui.zh-TW.tsv](text/guide-ui.zh-TW.tsv) | 編譯本機18章攻略與52張重繪閱讀圖，核對來源及增補字模；沿規格003的F7、工具列與原框查閱，全文及完整圖集不入Git |

@@ -46,6 +46,7 @@ for name, want in manifest["Files"].items():
 assert sha(output / "inputs/render-hooks.json") == sha(bindings)
 sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("player_", "render_scene_", "ui_", "oracle_", "machine_"))]
 sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "manual_world_map.py", "manual_map_inputs.py", "guide_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
+sources += [root / "tools" / n for n in ["music_cues.go", "player_music_inputs.py", "player_ui_contract.py"]]
 abi_root = root / "workplace/probe/render-abi-resume-20261028-r1"
 abi_path = abi_root / "evidence.json"
 verified = False
@@ -65,6 +66,8 @@ if abi_path.is_file():
         for row in cases)
 ui_path = root / "workplace/probe/player-coverage-20261028/cold-fill-contract-final.json"
 camp_ui_path = root / "workplace/probe/player-hd-finish-20261029/camp-save-contract.json"
+if (output / "ui-contract.json").is_file():
+    camp_ui_path = output / "ui-contract.json"
 if camp_ui_path.is_file():
     ui_path = camp_ui_path
 ui_verified = False
@@ -123,6 +126,20 @@ if sample_verified and sample_correction.is_file():
         info["normal_player_sample_scope"] = correction["scope"]
         info["normal_player_sample_correction_sha256"] = sha(sample_correction)
 picture_manifest = output / "picture-text/manifest.json"
+music_manifest = output / "music/manifest.json"
+info['music_tracks'] = 0
+info['music_listening_verified'] = False
+if music_manifest.is_file():
+    music = json.loads(music_manifest.read_text())
+    music_valid = (music.get('schema') == 1 and music.get('sample_rate') == 48000
+                   and music.get('channels') == 2 and len(music.get('tracks', [])) == 8)
+    music_valid = music_valid and all(
+        '/' not in t['key'] and '..' not in t['key']
+        and (output/'music'/(t['key']+'.ogg')).is_file()
+        and sha(output/'music'/(t['key']+'.ogg')) == t['ogg_sha256'] for t in music['tracks'])
+    info['music_assets_verified'] = music_valid
+    info['music_manifest_sha256'] = sha(music_manifest)
+    info['music_tracks'] = 8 if music_valid else 0
 if picture_manifest.is_file():
     pictures = json.loads(picture_manifest.read_text())
     assert pictures["Version"] == 1 and len(pictures["Bindings"]) == 24

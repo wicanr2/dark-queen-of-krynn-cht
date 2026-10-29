@@ -10,6 +10,7 @@ PIL=sha256:b050fc7c49003ea6eecbbe0fc93b465b6869daf550c3284d5039e5e87517e831
 FONT=/home/anr2/cht/golden_box/death_knight_of_krynn/font
 SDK="$ROOT/workplace/dosgolem"
 MODULES=/home/anr2/cht/dosgolem/workplace/gomodcache
+MUSIC_DEPS="$ROOT/workplace/probe/music-go-deps"
 test -d "$ROOT/workplace/probe"
 docker image inspect "$GO" >/dev/null
 docker image inspect "$PIL" >/dev/null
@@ -38,7 +39,9 @@ mkdir "/output/$1/hd"
 find "/output/$1" -user root -o -type d -name "*.md"
 ' -- "$NAME"
   ;;
- refresh-ui)
+ refresh-ui|refresh-toolbar)
+  INPUT_MODE=refresh
+  if [[ "$1" == refresh-toolbar ]]; then INPUT_MODE=toolbar; fi
   test -d "$BASE/inputs"
   test -d "$FONT"
   test -f "$FONT/jf-openhuninn-2.1.ttf"
@@ -46,12 +49,13 @@ find "/output/$1" -user root -o -type d -name "*.md"
     --memory 1g --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
     -e PYTHONDONTWRITEBYTECODE=1 -v "$ROOT:/project:ro" -v "$BASE/inputs:/inputs" \
     -v "$FONT:/font:ro" --entrypoint python3 "$PIL" /project/tools/player_inputs.py \
-    refresh /project /inputs --font /font/jf-openhuninn-2.1.ttf
+    "$INPUT_MODE" /project /inputs --font /font/jf-openhuninn-2.1.ttf
   ;;
  build)
   test -d "$BASE/inputs"
   test -d "$SDK"
   test -d "$MODULES"
+  test -d "$MUSIC_DEPS"
   test -d "$ROOT/workplace/probe/gocache"
   test "$(git -C "$SDK" rev-parse HEAD)" = f79eab6db8c64a524a06535e53e5d32b0bbcf7c8
   git -C "$SDK" diff --quiet HEAD -- .
@@ -59,15 +63,19 @@ find "/output/$1" -user root -o -type d -name "*.md"
     --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
     -v "$SDK:/src:ro" -v "$ROOT/tools:/tools:ro" -v "$BASE:/out" \
     --entrypoint python3 "$PIL" /tools/player_video_overlay.py /src /out/build-overlay
+  timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
+    --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
+    -v "$SDK:/src:ro" -v "$ROOT/tools:/tools:ro" -v "$MUSIC_DEPS:/music-deps:ro" -v "$BASE:/out" \
+    --entrypoint python3 "$PIL" /tools/player_music_inputs.py /src /music-deps /out
   timeout --kill-after=5s 120s docker run --rm --pull never --init --network none \
     --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 \
     --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e GOPROXY=off -e GOMAXPROCS=2 \
     -e GOCACHE=/gocache -e GOMODCACHE=/modules -v "$SDK:/src:ro" -v "$ROOT/tools:/tools:ro" \
-    -v "$MODULES:/modules:ro" -v "$ROOT/workplace/probe/gocache:/gocache" -v "$BASE:/out" \
+    -v "$MODULES:/modules:ro" -v "$MUSIC_DEPS:/music-deps:ro" -v "$ROOT/workplace/probe/gocache:/gocache" -v "$BASE:/out" \
     -w /src --entrypoint bash "$GO" -c '
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
-go build -overlay /out/build-overlay/overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_owned_drivers.go /tools/player_scene_backend.go /tools/player_picture_text.go /tools/picture_text.go /tools/render_scene_state.go /tools/player_text_owner.go /tools/player_text_format.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go
+go build -modfile /out/audio-go.mod -overlay /out/build-overlay/overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_owned_drivers.go /tools/player_scene_backend.go /tools/player_picture_text.go /tools/picture_text.go /tools/render_scene_state.go /tools/player_text_owner.go /tools/player_text_format.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go /tools/music_cues.go /tools/player_music.go /tools/player_music_assets.go
 sha256sum /out/dqk-player >/out/binary.sha256
 find /out -user root -o -type d -name "*.md"
 '
@@ -75,6 +83,28 @@ find /out -user root -o -type d -name "*.md"
     --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
     -v "$ROOT:/project:ro" -v "$BASE:/out" --entrypoint python3 "$PIL" \
     /project/tools/player_render_check.py /project /out
+  ;;
+ check-ui)
+  test -f "$BASE/audio-go.mod"
+  test -f "$BASE/build-overlay/overlay.json"
+  test -d "$MUSIC_DEPS"
+  test -f "$ROOT/workplace/input/dos/drkqueen/DQK.EXE"
+  timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
+    --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
+    -v "$ROOT:/project:ro" -v "$BASE:/out" --entrypoint python3 "$PIL" \
+    /project/tools/player_ui_contract.py prepare /project /out
+  timeout --kill-after=5s 60s docker run --rm --pull never --init --network none \
+    --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 \
+    --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e LIBGL_ALWAYS_SOFTWARE=1 \
+    -e GOPROXY=off -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOMAXPROCS=2 -e DQK_SOURCE_ROOT=/project -e DQK_MUSIC_ASSETS=/out/music \
+    -v "$SDK:/src:ro" -v "$ROOT/tools:/tools:ro" -v "$MODULES:/modules:ro" \
+    -v "$MUSIC_DEPS:/music-deps:ro" -v "$ROOT/workplace/probe/gocache:/gocache" \
+    -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" \
+    -v "$ROOT:/project:ro" -v "$BASE:/out" -w /src --entrypoint bash "$GO" /out/ui-tests.sh
+  timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
+    --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
+    -v "$ROOT:/project:ro" -v "$BASE:/out" --entrypoint python3 "$PIL" \
+    /project/tools/player_ui_contract.py finish /project /out
   ;;
  check-render)
   test -d "$SDK"
@@ -123,14 +153,27 @@ if build.get("picture_text_manifest_sha256"):
     test -f "$XAUTHORITY"
     XAUTH_ARGS=(-v "$XAUTHORITY:/tmp/player-xauthority:ro" -e XAUTHORITY=/tmp/player-xauthority)
   fi
+  RUNTIME="$GO"
+  AUDIO_ARGS=()
+  PULSE_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pulse"
+  if [[ -d "$PULSE_DIR" && -S "$PULSE_DIR/native" ]] && \
+     [[ "$(docker image inspect dqk-player-audio:1.24-r1 --format '{{index .Config.Labels "dqk.audio.contract"}}' 2>/dev/null || true)" = pulse-alsa-1.2.7.1-1 ]]; then
+    RUNTIME=dqk-player-audio:1.24-r1
+    AUDIO_ARGS=(-v "$PULSE_DIR:/pulse:ro" -e PULSE_SERVER=unix:/pulse/native -e ALSA_CONFIG_PATH=/opt/dqk/asound-pulse.conf)
+  elif [[ -d /dev/snd ]]; then
+    AUDIO_ARGS=(--device /dev/snd)
+    for CONTROL in /dev/snd/controlC*; do
+      if [[ -c "$CONTROL" ]]; then AUDIO_ARGS+=(--group-add "$(stat -c %g "$CONTROL")"); break; fi
+    done
+  fi
   # 使用者啟動的互動程序有六小時上限；結束後容器移除，存檔目錄保留。
   timeout --kill-after=10s 21600s docker run --rm --pull never --init --network none \
     --user "$(id -u):$(id -g)" --memory 3g --cpus 2 --pids-limit 128 \
-    --label project=dark-queen-of-krynn-cht -e DISPLAY -e LIBGL_ALWAYS_SOFTWARE=1 \
+    --label project=dark-queen-of-krynn-cht -e DISPLAY -e LIBGL_ALWAYS_SOFTWARE=1 -e HOME=/tmp \
     -e GOMAXPROCS=2 -e GOMEMLIMIT=2GiB -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
-    "${XAUTH_ARGS[@]}" -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" \
-    -v "$BASE:/player:ro" -v "$BASE/session:/session" --entrypoint /player/dqk-player "$GO" \
+    "${XAUTH_ARGS[@]}" "${AUDIO_ARGS[@]}" -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" \
+    -v "$BASE:/player:ro" -v "$BASE/session:/session" --entrypoint /player/dqk-player "$RUNTIME" \
     -player /player/inputs -original /orig -saves /session
   ;;
- *) echo '用法：bash tools/player.sh prepare|refresh-ui|build|check-render|run [player-新名稱]' >&2; exit 2 ;;
+ *) echo '用法：bash tools/player.sh prepare|refresh-ui|refresh-toolbar|build|check-ui|check-render|run [player-新名稱]' >&2; exit 2 ;;
 esac

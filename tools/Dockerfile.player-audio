@@ -1,0 +1,9 @@
+# 執行用延伸：保留固定Go建置映像，僅補桌面PulseAudio的ALSA橋接。
+# base image ID: 8ed6bdee2bce1f32f804e888f942b25bbf62f2165a43344bb4587f3371de0581
+FROM dosgolem-go-ebiten:1.24-r1
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libasound2-plugins=1.2.7.1-1 \
+    && rm -rf /var/lib/apt/lists/*
+COPY asound-pulse.conf /opt/dqk/asound-pulse.conf
+LABEL project="dark-queen-of-krynn-cht" dqk.audio.contract="pulse-alsa-1.2.7.1-1"
+USER 1000:1000

@@ -91,7 +91,7 @@ static void close_window(Display *d,Window w) {
 }
 int main(int argc,char **argv) {
     if(argc!=3&&argc!=4)return 2;
-    if(argc==4&&strcmp(argv[3],"manual-map")&&strcmp(argv[3],"demo")&&strcmp(argv[3],"guide"))return 2;
+    if(argc==4&&strcmp(argv[3],"manual-map")&&strcmp(argv[3],"demo")&&strcmp(argv[3],"guide")&&strcmp(argv[3],"music"))return 2;
     snprintf(key_helper,sizeof(key_helper),"%s/xtest-key",argv[1]);
     Display *d=XOpenDisplay(NULL);if(!d)return 6;Window w=0;
     for(int i=0;i<200&&!w;i++){w=find_window(d,DefaultRootWindow(d));usleep(100000);}if(!w)return 7;
@@ -107,9 +107,15 @@ int main(int argc,char **argv) {
     key(d,w,XK_p);
     if(!wait_reference(d,w,argv[2],"02a-player")){capture(d,w,argv[1],"failure-role");close_window(d,w);sleep(2);XCloseDisplay(d);return 11;}
     capture(d,w,argv[1],"02a-player");
+    if(argc==4&&!strcmp(argv[3],"music")){
+        key(d,w,XK_F8);capture(d,w,argv[1],"08-music-off");
+    }
     key(d,w,XK_F2);sleep(1);capture(d,w,argv[1],"03-scale");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"04-original");
     key(d,w,XK_F12);sleep(1);capture(d,w,argv[1],"05-chinese");
+    if(argc==4&&!strcmp(argv[3],"music")){
+        key(d,w,XK_F8);capture(d,w,argv[1],"09-music-on");
+    }
     key(d,w,XK_F6);sleep(1);capture(d,w,argv[1],"06-manual");
     if(argc==4&&!strcmp(argv[3],"manual-map")){
         key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);
@@ -121,6 +127,14 @@ int main(int argc,char **argv) {
         key(d,w,XK_Escape);capture(d,w,argv[1],"13-map-index");
     }
     key(d,w,XK_Escape);sleep(1);capture(d,w,argv[1],"07-return");
+    if(argc==4&&!strcmp(argv[3],"music")){
+        XWarpPointer(d,None,w,0,0,0,0,774,2);XSync(d,False);usleep(500000);
+        capture(d,w,argv[1],"10-music-toolbar");
+        fake_key(1,"mouse-down");usleep(200000);fake_key(1,"mouse-up");usleep(500000);
+        XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);usleep(300000);
+        capture(d,w,argv[1],"11-music-toolbar-off");
+        key(d,w,XK_F8);capture(d,w,argv[1],"12-music-resume");
+    }
     if(argc==4&&!strcmp(argv[3],"guide")){
         XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);usleep(1000000);
         capture(d,w,argv[1],"07a-guide-base");

@@ -298,7 +298,7 @@ def finish(root, output, replace=False):
                    == size * height for v in glyphs.values())
     with (output / 'toolbar.zh-TW.tsv').open() as file:
         rows = list(csv.DictReader(file, delimiter='\t', quoting=csv.QUOTE_NONE))
-    assert len({r['key'] for r in rows}) == len(rows) == 14
+    assert len({r['key'] for r in rows}) == len(rows) == 18
     assert max(len(r['text']) for r in rows) <= 38
     # 不解釋原版狀態，不移動舊收據，只核對整合內容及來源。
     files = {str(p.relative_to(output)): sha(p) for p in sorted(output.rglob('*'))
@@ -315,6 +315,21 @@ def finish(root, output, replace=False):
     temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     temporary.replace(output / 'player-profile.json')
     print(json.dumps({'profile_files': len(files), 'state': 'READY', 'gameplay_replayed': False}))
+
+
+def toolbar(root, output, font):
+    """只更新工具列，先核對其餘整合輸入，保留既有翻譯與來源收據。"""
+    assert output.is_dir() and output.stat().st_uid == 1000 and font.is_file()
+    profile = json.loads((output / 'player-profile.json').read_text())
+    for name, expected in profile['Files'].items():
+        assert sha(output / name) == expected, name
+    unchanged = {name: expected for name, expected in profile['Files'].items()
+                 if name not in ['toolbar.zh-TW.tsv', 'toolbar-glyphs-16.json']}
+    shutil.copyfile(root / 'text/toolbar.zh-TW.tsv', output / 'toolbar.zh-TW.tsv')
+    subprocess.run([sys.executable, str(root / 'tools/menu_glyphs.py'), str(font),
+                    str(output / 'toolbar.zh-TW.tsv'), str(output / 'toolbar-glyphs-16.json'), '16'], check=True)
+    finish(root, output, replace=True)
+    assert all(sha(output / name) == expected for name, expected in unchanged.items())
 
 
 def refresh(root, output, font):
@@ -338,12 +353,12 @@ def refresh(root, output, font):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['prepare', 'finish', 'refresh', 'display', 'fragments'])
+    parser.add_argument('mode', choices=['prepare', 'finish', 'refresh', 'toolbar', 'display', 'fragments'])
     parser.add_argument('root', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--font', type=Path)
     args = parser.parse_args()
-    if args.mode in ['refresh', 'display', 'fragments']:
+    if args.mode in ['refresh', 'toolbar', 'display', 'fragments']:
         assert args.font is not None
         globals()[args.mode](args.root, args.output, args.font)
     else:

@@ -19,13 +19,14 @@ def read(path):
 
 assert len(sys.argv) in (3, 4, 5)
 flags = sys.argv[3:]
-assert len(flags) == len(set(flags)) and set(flags) <= {'--hd-off', '--manual-map', '--demo', '--guide'}
+assert len(flags) == len(set(flags)) and set(flags) <= {'--hd-off', '--manual-map', '--demo', '--guide', '--music'}
 root, out = map(Path, sys.argv[1:3])
 expected_hd = '--hd-off' not in flags
 manual_map = '--manual-map' in flags
 demo = '--demo' in flags
 guide = '--guide' in flags
-assert sum((manual_map,demo,guide)) <= 1
+music = '--music' in flags
+assert sum((manual_map,demo,guide,music)) <= 1
 assert out.is_dir() and out.stat().st_uid == os.getuid()
 reference = root / 'workplace/probe/player-sample-20261026-r5'
 reference_proof = read(reference / 'checks.json')
@@ -82,7 +83,7 @@ if manual_map:
 else:
     assert [event['key'] for event in events] == ['F6', 'Esc']
 assert [event['chinese'] for event in controls if event['action'] == 'language'] == [False, True]
-assert controls[0]['action'] == 'scale3' and all(event['hd'] is expected_hd for event in controls)
+assert next(event for event in controls if event['action'] != 'music')['action'] == 'scale3' and all(event['hd'] is expected_hd for event in controls)
 assert controls[-1]['action'] == 'screenshot'
 assert not counts.get('unexpected_owned_native_writes', 0) and counts['nonvideo_copy'] > 0
 assert sha(out / '05-chinese.png') == sha(out / '07-return.png')
@@ -140,6 +141,14 @@ if demo:
                 if x < 32 and y < 32:continue
                 assert expected.getpixel((x,y)) == actual.getpixel((x,y)), ('demo return',x,y)
     assert sha(out/'08-demo.png') != sha(out/'02-return.png'), '未進入示範'
+if music:
+    audio = read(out/'session/music-events.json')
+    assert audio['available'] and audio['enabled'] and not audio['errors']
+    assert [c['music'] for c in controls if c['action']=='music'] == [False,True,False,True]
+    assert all(not c['music'] for c in controls if c['action'] in ['scale3','language'])
+    assert len([c for c in audio['events'] if c['Kind']=='start']) == 1
+    assert audio['events'][0]['Key']=='RODQ1-0'
+    assert read(out/'session/preferences.json')['Music'] is True
 
 # 保留實際執行時的工具；舊批補檢查時不能用新runner覆寫來源快照。
 sources = out / 'source'
@@ -176,6 +185,15 @@ if guide:
         'independent map source pixel sampling', 'guest CPU paused during guide', 'index and game return']
     result['guide_events'] = diagnostics['guide_events']
     result['guide_map_source_sha256'] = sha(source_path)
+if music:
+    device_path=out/'audio-device.json'
+    device=read(device_path)['audio_device'] if device_path.exists() else 'null'
+    assert device in ('null','pulse')
+    result['scope'] += ['original title cue', 'F8 music off/on', 'music toolbar click', 'music preference independent of scale/language/HD', 'no cue restart on preference changes',
+                        'desktop PulseAudio socket accepts playback' if device=='pulse' else 'ALSA null device accepts playback']
+    result['audio_device']=device
+    result['not_verified'] += ['human listening', 'physical audio device']
+    result['music_events_sha256'] = sha(out/'session/music-events.json')
 (out / 'checks.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
 print(json.dumps({'passed': True, 'frames': len(differences), 'byte_differences': 0,
                   'open_render_transactions': 0, 'role_buttons': 12}))

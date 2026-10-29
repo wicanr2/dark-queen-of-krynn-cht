@@ -17,3 +17,4 @@
 | [005：文字候選與繁中譯表](005-translation-catalog.md) | [#7](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7) |
 | [006：README 圖文與原版圖庫](006-readme-gallery.md) | 使用者指定的故事、圖鑑、原版／HD 試繪、截圖及地圖 |
 | [007：繪圖層接管與提交邊界](007-render-ownership.md) | 使用者授權接管原版繪圖，沿 #7 |
+| [008：原譜音樂與播放時機](008-original-music.md) | [#8](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/8) |
