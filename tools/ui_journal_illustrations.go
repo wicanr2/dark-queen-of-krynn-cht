@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -227,13 +228,15 @@ func (g *liveGame) composeReaderImage(px []byte, p *readerPage) {
 // Ebitengine 每個程序擁有一個視窗。以同一執行檔開啟唯讀地圖程序，
 // 主遊戲保持閱讀暫停；子程序沒有 Oracle、遊戲輸入或存檔目錄。
 type readerMapProcess struct {
-	Command  *exec.Cmd
-	Input    io.WriteCloser
-	Done     chan error
-	Step     uint64
-	Exited   bool
-	Error    error
-	Runnable bool
+	Command       *exec.Cmd
+	Input         io.WriteCloser
+	Done          chan error
+	Step          uint64
+	Exited        bool
+	Error         error
+	Runnable      bool
+	Restoring     bool
+	RestoreFrames int
 }
 
 type readerMapRequest struct {
@@ -316,6 +319,16 @@ func (g *liveGame) tickReaderMapWindow() bool {
 	default:
 	}
 	if p.Exited {
+		if !p.Restoring {
+			if ebiten.IsWindowMinimized() {
+				ebiten.RestoreWindow()
+			}
+			p.Restoring, p.RestoreFrames = true, 2
+		}
+		if p.RestoreFrames > 0 {
+			p.RestoreFrames--
+			return true
+		}
 		// 子視窗關閉後焦點可能在按鍵放開前回到主視窗。先吞掉這個按住的
 		// 關閉鍵，避免同一次Esc又離開目錄，甚至送進原版遊戲。
 		if ebiten.IsKeyPressed(ebiten.KeyEscape) || ebiten.IsKeyPressed(ebiten.KeyF6) || ebiten.IsKeyPressed(ebiten.KeyF7) {
@@ -329,9 +342,6 @@ func (g *liveGame) tickReaderMapWindow() bool {
 		}
 		g.reader.UIEvents = append(g.reader.UIEvents, map[string]any{"step": g.o.Steps(), "action": "map-window-close"})
 		g.mapWindow = nil
-		if ebiten.IsWindowMinimized() {
-			ebiten.RestoreWindow()
-		}
 		g.readerKey("Esc", "map-window", 0)
 		g.reader.WaitDraw = true
 		g.mapResumeRunnable = &p.Runnable // 第一張還原畫格提交後才恢復原本的失焦設定。
@@ -348,6 +358,7 @@ type readerMapGame struct {
 	MouseX, MouseY         int
 	Closing                bool
 	CloseKey               ebiten.Key
+	CloseDeadline          time.Time
 }
 
 func mapWindowText(text string, glyphs map[string][]byte, ink [3]byte) (*ebiten.Image, error) {
@@ -440,7 +451,7 @@ func (g *readerMapGame) Update() error {
 	// 在仍持有焦點的子視窗等關閉鍵放開。父視窗未聚焦時查不到按住的
 	// 鍵，不能靠父視窗的IsKeyPressed阻止這次按鍵穿透。
 	if g.Closing {
-		if !ebiten.IsKeyPressed(g.CloseKey) {
+		if !ebiten.IsKeyPressed(g.CloseKey) || time.Now().After(g.CloseDeadline) {
 			return ebiten.Termination
 		}
 		return nil
@@ -448,6 +459,7 @@ func (g *readerMapGame) Update() error {
 	for _, key := range []ebiten.Key{ebiten.KeyEscape, ebiten.KeyF6, ebiten.KeyF7} {
 		if inpututil.IsKeyJustPressed(key) {
 			g.Closing, g.CloseKey = true, key
+			g.CloseDeadline = time.Now().Add(750 * time.Millisecond) // Wine失焦時可能漏掉keyup，不能永久卡住。
 			return nil
 		}
 	}
