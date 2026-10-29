@@ -317,6 +317,17 @@
         1200
       ],
       "bytes": 245129
+    },
+    {
+      "file": "party-names-zh.png",
+      "source": "workplace/probe/finish-scene-party-names-complete-20261029/session/screenshots/DQK-20261029-134501.342351582.png",
+      "sha256": "f121745e56710c3c1ecee9157d8f458a9a81670c49d4c802c881c83ef04090ac",
+      "size": [
+        1920,
+        1200
+      ],
+      "bytes": 335027,
+      "scope": "既有冒險快照續行，實際重畫六名隊員與戴諾船長；非冷啟動或完整遊玩"
     }
   ],
   "current_display_notes": "初始圖庫雜湊保留；更新展示圖以個別source與SHA為準。高清文字來源25c89ab，原版／HD歷史對照圖不改。"

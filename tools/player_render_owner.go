@@ -23,12 +23,13 @@ type renderPrimitive struct {
 }
 
 type renderTransaction struct {
-	Return paintReturn
-	Origin oracle.Addr
-	Step   uint64
-	Image  *renderImageSource
-	Owned  *ownedDriver
-	Kind   string
+	Return     paintReturn
+	Origin     oracle.Addr
+	Step       uint64
+	Image      *renderImageSource
+	Owned      *ownedDriver
+	Kind       string
+	TextCopies []*ownedPrint
 }
 
 type renderImageSource struct {
@@ -156,8 +157,12 @@ func (owner *playerRenderOwner) observeTransaction(entry oracle.Addr, kind strin
 			panic("繪圖交易超過有界容量，停止提交半成品")
 		}
 		target := mark.Addr
+		var textCopies []*ownedPrint
+		if owner.Text != nil && !owner.inReadback() {
+			textCopies = owner.Text.copyTransaction(entry.Linear() + 0xef00)
+		}
 		owner.Pending = append(owner.Pending, renderTransaction{
-			Return: mark, Origin: entry, Step: o.Steps(), Kind: kind})
+			Return: mark, Origin: entry, Step: o.Steps(), Kind: kind, TextCopies: textCopies})
 		if returns[target] {
 			return
 		}
@@ -168,6 +173,9 @@ func (owner *playerRenderOwner) observeTransaction(entry oracle.Addr, kind strin
 				p := owner.Pending[i].Return
 				if p.Addr == target && p.SS == r.SS && p.SP == r.SP {
 					owner.finishDriver(owner.Pending[i].Owned)
+					if owner.Text != nil {
+						owner.Text.finishCopies(owner.Pending[i].TextCopies)
+					}
 					// 同一返回點可被不同呼叫重用，以實際堆疊身分配對。
 					owner.Pending = append(owner.Pending[:i], owner.Pending[i+1:]...)
 					return

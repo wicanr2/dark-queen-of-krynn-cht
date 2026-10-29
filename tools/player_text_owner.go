@@ -2,7 +2,7 @@
 package main
 
 import (
-	"bytes"
+	"image"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -30,6 +30,7 @@ type ownedPrint struct {
 type playerTextOwner struct {
 	Oracle        *oracle.Oracle
 	Sources       map[string]string
+	NameKeys      map[string]string
 	Catalog       map[string]string
 	Glyphs        glyphSet
 	Runs          []*ownedPrint
@@ -44,7 +45,7 @@ type playerTextOwner struct {
 }
 
 func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Addr) *playerTextOwner {
-	p := &playerTextOwner{Oracle: o, Sources: map[string]string{}, Catalog: readLiveCatalog(filepath.Join(profile, "display.zh-TW.tsv"))}
+	p := &playerTextOwner{Oracle: o, Sources: map[string]string{}, NameKeys: map[string]string{}, Catalog: readLiveCatalog(filepath.Join(profile, "display.zh-TW.tsv"))}
 	p.Formats = map[string]*displayFormat{}
 	p.Counters = map[string]uint64{}
 	p.UnmatchedSeen = map[string]bool{}
@@ -71,6 +72,13 @@ func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Add
 			panic("短字串來源不符")
 		}
 		p.Sources[source] = key
+		if strings.HasPrefix(key, "name.") {
+			fold := strings.ToLower(source)
+			if previous := p.NameKeys[fold]; previous != "" && p.Catalog[previous] != p.Catalog[key] {
+				panic("姓名大小寫對應歧義")
+			}
+			p.NameKeys[fold] = key
+		}
 	}
 	p.FoldedSources = map[string]string{}
 	for source, key := range p.Sources {
@@ -121,9 +129,9 @@ func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Add
 		if ok {
 			run.Source = source
 		}
-		if ok && p.Sources[source] != "" {
+		if ok && p.sourceKey(source) != "" {
 			run.Source, run.Valid = source, true
-			run.Word.Key = p.Sources[source]
+			run.Word.Key = p.sourceKey(source)
 		} else if ok && p.Formats[source] != nil {
 			run.Source, run.Valid, run.Format = source, true, p.Formats[source]
 			run.Word.Key = run.Format.Key
@@ -340,6 +348,34 @@ func nativeDisplaySource(source string) bool {
 	return true
 }
 
+// 只在已證實的顯示出口辨識已知姓名的大小寫；不改客體字串。
+func (p *playerTextOwner) sourceKey(source string) string {
+	if key := p.Sources[source]; key != "" {
+		return key
+	}
+	return p.NameKeys[strings.ToLower(source)]
+}
+
+func (g *liveGame) drawKnownNamePrefix(px []byte, page *storyPage) bool {
+	if g.player == nil || page.Prefix == nil {
+		return false
+	}
+	owner := renderOwners[g.o]
+	if owner == nil || owner.Text == nil {
+		return false
+	}
+	p := owner.Text
+	source := page.Prefix.Text
+	key := p.sourceKey(strings.TrimSpace(source))
+	if !strings.HasPrefix(key, "name.") {
+		return false
+	}
+	w := listWord{X: page.Box[0] / 2, Y: page.Box[1] / 2, Width: len(source) * 8,
+		Key: key, Foreground: page.Foreground, Background: page.Background}
+	g.composeWords(px, []listWord{w}, map[string]string{key: p.translateValue(source)}, p.Glyphs)
+	return true
+}
+
 func (p *playerTextOwner) translateValue(value string) string {
 	return translateDisplayValue(value, func(source string) string {
 		if key := p.Sources[source]; key != "" {
@@ -352,11 +388,140 @@ func (p *playerTextOwner) translateValue(value string) string {
 func (p *playerTextOwner) prune() {
 	kept := p.Words[:0]
 	for _, run := range p.Words {
-		if bytes.Equal(run.Reference, nativeTextRegion(p.Oracle, run.Page, run.Word)) {
+		if p.referenceMatches(run) {
 			kept = append(kept, run)
 		}
 	}
 	p.Words = kept
+}
+
+// 游標暫存繪圖保留底層資產，只暫時遮住它；不能因此丟失中文命令。
+func (p *playerTextOwner) referenceMatches(run *ownedPrint) bool {
+	now := nativeTextRegion(p.Oracle, run.Page, run.Word)
+	if len(now) != len(run.Reference) || len(now) == 0 {
+		return false
+	}
+	owner := renderOwners[p.Oracle]
+	for i, value := range now {
+		if value == run.Reference[i] {
+			continue
+		}
+		if owner == nil {
+			return false
+		}
+		w := run.Word
+		cell := owner.Scene.page(run.Page, p.Oracle.PresentationPlane).Cells[(w.Y+i/w.Width)*320+w.X+i%w.Width]
+		if !retainedTextPixel(value, run.Reference[i], cell) {
+			return false
+		}
+	}
+	return true
+}
+
+func retainedTextPixel(value, reference byte, cell sceneCell) bool {
+	return value == reference || cell.Asset != nil && !cell.Visible && cell.Asset.Index[cell.Source] == reference
+}
+
+func (p *playerTextOwner) restoreOcclusion(px []byte, g *liveGame, run *ownedPrint) {
+	now := nativeTextRegion(p.Oracle, run.Page, run.Word)
+	w, pal := run.Word, p.Oracle.Palette()
+	for y := 0; y < 8; y++ {
+		for x := 0; x < w.Width; {
+			if now[y*w.Width+x] == run.Reference[y*w.Width+x] {
+				x++
+				continue
+			}
+			start := x
+			for x < w.Width && now[y*w.Width+x] != run.Reference[y*w.Width+x] {
+				color := pal[now[y*w.Width+x]]
+				for yy := 0; yy < 2; yy++ {
+					for xx := 0; xx < 2; xx++ {
+						at := (((w.Y+y)*2+yy)*640 + (w.X+x)*2 + xx) * 4
+						copy(px[at:at+3], color[:])
+					}
+				}
+				x++
+			}
+			g.sharpClear(image.Rect((w.X+start)*2, (w.Y+y)*2, (w.X+x)*2, (w.Y+y+1)*2))
+		}
+	}
+}
+
+// 畫面搬移也搬移完整文字命令。只接受來源及目的都完整、未折行的字框。
+func copiedDisplayWord(w listWord, source, destination, count int) (listWord, bool) {
+	first := w.Y*80 + w.X/4
+	last := (w.Y+7)*80 + (w.X+w.Width)/4
+	if w.X%4 != 0 || w.Width <= 0 || w.Width%4 != 0 || first < source || last > source+count {
+		return listWord{}, false
+	}
+	at := w.Y*320 + w.X + (destination-source)*4
+	if at < 0 || at >= 64000 {
+		return listWord{}, false
+	}
+	w.X, w.Y = at%320, at/320
+	return w, w.X+w.Width <= 320 && w.Y+8 <= 200
+}
+
+func (p *playerTextOwner) copyTransaction(origin uint32) []*ownedPrint {
+	if origin != 0x11632 && origin != 0x11688 {
+		return nil
+	}
+	o := p.Oracle
+	if !nativePageLayout(o) {
+		return nil
+	}
+	srcSeg, dstSeg := o.Arg(1), o.Arg(3)
+	source, destination, count := int(o.Arg(0)), int(o.Arg(2)), int(o.Arg(4))
+	if srcSeg < 0xa000 || srcSeg > 0xac00 || (srcSeg-0xa000)%0x400 != 0 ||
+		dstSeg < 0xa000 || dstSeg > 0xac00 || (dstSeg-0xa000)%0x400 != 0 ||
+		count == 0 || source+count > 16000 || destination+count > 16000 {
+		return nil
+	}
+	return p.copyCandidates(uint32(srcSeg-0xa000)*16, uint32(dstSeg-0xa000)*16, source, destination, count)
+}
+
+func (p *playerTextOwner) copyCandidates(from, to uint32, source, destination, count int) []*ownedPrint {
+	var result []*ownedPrint
+	for _, run := range p.Words {
+		if run.Page != from || !p.referenceMatches(run) {
+			continue
+		}
+		word, ok := copiedDisplayWord(run.Word, source, destination, count)
+		if !ok {
+			continue
+		}
+		copyOfRun := *run
+		copyOfRun.Word, copyOfRun.Page = word, to
+		result = append(result, &copyOfRun)
+	}
+	return result
+}
+
+func (p *playerTextOwner) finishCopies(copies []*ownedPrint) {
+	if len(copies) == 0 {
+		return
+	}
+	p.prune()
+	for _, run := range copies {
+		// Mode X可能分平面搬移；目的所有色號完整相同後才取得文字所有權。
+		if !p.referenceMatches(run) {
+			continue
+		}
+		replaced := false
+		for i, previous := range p.Words {
+			if previous.Page == run.Page && previous.Word.X == run.Word.X && previous.Word.Y == run.Word.Y {
+				p.Words[i], replaced = run, true
+				break
+			}
+		}
+		if !replaced {
+			if len(p.Words) >= 512 {
+				p.Words = p.Words[1:]
+			}
+			p.Words = append(p.Words, run)
+		}
+		p.Counters["copied_complete_words"]++
+	}
 }
 
 func (p *playerTextOwner) Compose(px []byte, g *liveGame, rgb []byte) {
@@ -374,6 +539,7 @@ func (p *playerTextOwner) Compose(px []byte, g *liveGame, rgb []byte) {
 		covered = ownedTextCovered(w, protected)
 		if !covered {
 			g.composeWords(px, []listWord{w}, map[string]string{w.Key: run.Text}, p.Glyphs)
+			p.restoreOcclusion(px, g, run)
 		}
 	}
 }

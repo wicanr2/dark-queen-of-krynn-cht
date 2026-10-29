@@ -213,6 +213,7 @@
 | `docs/re/README.md`、`docs/re/` | 研究索引與可公開的最小證據；私人原始輸出留 `workplace/` |
 | `docs/spec/README.md`、`docs/spec/` | 規格索引、狀態、依賴、驗收條件與 Issue 回鏈 |
 | `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，圖片內嵌文字由 [image-text.en.tsv](text/image-text.en.tsv) 與 [image-text.zh-TW.tsv](text/image-text.zh-TW.tsv) 成對保存。書籍正文仍留本機 |
+| [party-names.en.tsv](text/party-names.en.tsv)、[party-names.zh-TW.tsv](text/party-names.zh-TW.tsv) | 六名已知隊員的完整姓名及稱號；由 `player_inputs.py display` 接入完整顯示來源。已知姓名忽略英文字母大小寫，其他自訂姓名保留；不改角色資料或存檔。 |
 | `tools/` | 可重現的 Docker、盤點、驗證與打包入口 |
 | [music-hd.sh](tools/music-hd.sh)、[xmi_score.py](tools/xmi_score.py)、[製作器](tools/music_score_render.py)、[核對器](tools/music_score_check.py)、[音樂研究008](docs/re/008-original-music.md) | Docker內擷取XMI、原譜取樣合成及音符／控制事件核對；`prepare`、`render`、`check`、`probe`與`install`用法見研究008。8曲的原版、JSON、MIDI、WAV與Ogg只留本機。 |
 | [music_cues.go](tools/music_cues.go)、[原版探針](tools/music_cue_probe.go)、[player_music.go](tools/player_music.go)、[解碼與資料核對](tools/player_music_assets.go)、[音樂測試](tools/player_music_assets_test.go) | 原版遠呼叫的只讀開始／停止／音量觀察；音樂獨立於圖像HD、語言與縮放，正式TSV工具列及F8控制；證據與聽驗限制見規格006。 |

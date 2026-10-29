@@ -118,6 +118,23 @@ def display(root, output, font):
     formal_path = root / 'workplace/translation/zh-TW.tsv'
     source_path = root / 'workplace/translation/en.tsv'
     formal, sources = catalog(formal_path), catalog(source_path)
+    # 已知隊員姓名只增加顯示來源；不改原版姓名、角色檔及存檔。
+    name_paths = [root / 'text' / ('party-names.' + locale + '.tsv') for locale in ['en', 'zh-TW']]
+    name_catalogs = []
+    for path in name_paths:
+        with path.open(encoding='utf-8') as stream:
+            items = list(csv.DictReader(stream, delimiter='\t', quoting=csv.QUOTE_NONE))
+        assert items and all(set(item) == {'key', 'text'} and item['key'].startswith('name.party.')
+                             and item['text'] and not any(ch in item['text'] for ch in '\t\r\n%') for item in items)
+        assert len({item['key'] for item in items}) == len(items), path
+        name_catalogs.append({item['key']: item['text'] for item in items})
+    assert name_catalogs[0].keys() == name_catalogs[1].keys()
+    for key, source in name_catalogs[0].items():
+        assert source.isascii() and source == source.upper() and 2 <= len(source) <= 16
+        assert key not in sources and key not in formal
+        assert name_catalogs[1][key] != source and len(name_catalogs[1][key]) <= len(source)
+    sources.update(name_catalogs[0])
+    formal.update(name_catalogs[1])
     # 背包／商店的單複數名稱是既有正式資料，帶變數的句子也要使用同一份名稱。
     profile_sources, profile_text = catalog(output / 'en.tsv'), catalog(output / 'zh-TW.tsv')
     for key, source in profile_sources.items():
@@ -176,6 +193,7 @@ def display(root, output, font):
         assert len(pixels) == 320 and not any(pixels[256:]), '短標籤字墨超過原生八列'
     (output / 'display-glyphs-16.json').write_text(json.dumps(base, ensure_ascii=False, separators=(',', ':'))+'\n')
     provenance = {'formal_sha256': sha(formal_path), 'source_sha256': sha(source_path), 'font_sha256': sha(font),
+                  'party_name_catalogs': {str(path.relative_to(root)): sha(path) for path in name_paths},
                   'base_glyphs_sha256': sha(output / 'glyphs-16.json'), 'rows': len(rows),
                   'ambiguous_sources_skipped': len(ambiguous), 'new_glyphs': len(missing),
                   'format_sources': len(format_rows),
@@ -348,6 +366,8 @@ def refresh(root, output, font):
                     str(output / 'toolbar.zh-TW.tsv'), str(output / 'toolbar-glyphs-16.json'), '16'], check=True)
     fragments(root, output, font)
     display(root, output, font)
+    if (output / 'sharp-text.json.gz').exists():
+        subprocess.run([sys.executable, str(root / 'tools/text_hd_inputs.py'), str(output), str(font)], check=True)
     finish(root, output, replace=True)
     assert all(sha(output / name) == digest for name, digest in unchanged.items())
 

@@ -702,7 +702,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		}
 	}
 	if g.translate && g.page != nil && g.canTranslate([4]int{g.page.Box[0] / 2, g.page.Box[1] / 2, (g.page.Box[2] + 1) / 2, (g.page.Box[3] + 1) / 2}) {
-		if g.page.Prefix != nil && g.player != nil && g.player.SharpText != nil {
+		if g.drawKnownNamePrefix(px, g.page) {
+			// 只改顯示用姓名，段落來源、保留寬度及原版語意仍沿原資料。
+		} else if g.page.Prefix != nil && g.player != nil && g.player.SharpText != nil {
 			for i, ch := range g.page.Prefix.Text {
 				g.sharpGlyph(g.page.Box[0]+i*16, g.page.Box[1], 16, ch, g.o.Palette()[g.page.Foreground])
 			}

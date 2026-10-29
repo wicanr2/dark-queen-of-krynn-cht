@@ -1,4 +1,4 @@
-"""重跑受影響的24個介面子案例；原版IRQ根收據沿用，兩者分列。"""
+"""重跑受影響的介面子案例；原版IRQ根收據沿用，兩者分列。"""
 import hashlib
 import json
 from pathlib import Path
@@ -42,7 +42,7 @@ export DISPLAY=:92
 '''+shlex.join(args)+' >/out/ui-tests.json\n'
     (output/'ui-tests.sh').write_text(script)
 elif mode=='finish':
-    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace'}
+    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace','TestKnownPartyNamesStayInDisplayLayer','TestCopiedDisplayWordsRequireCompleteSource','TestTemporaryCursorKeepsKnownText'}
     old = json.loads((parent/'camp-save-contract.json').read_text())
     for name, digest in old['sources'].items():
         if name=='tools/ui_list_live.go':
@@ -58,6 +58,6 @@ elif mode=='finish':
                   parent_contract_sha256=sha(parent/'camp-save-contract.json'),
                   scope='原版IRQ根收據沿用；介面、音樂、地圖、原版模式及ASCII守衛重跑。列表只改文字合成，觀察器與其餘函式逐位元組保持')
     (output/'ui-contract.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
-    print(json.dumps(dict(passed=True,cases=24,contract_sha256=sha(output/'ui-contract.json'))))
+    print(json.dumps(dict(passed=True,passed_tests=len(passed(output/'ui-tests.json')),contract_sha256=sha(output/'ui-contract.json'))))
 else:
     raise ValueError(mode)
