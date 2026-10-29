@@ -23,6 +23,9 @@ if (out/'04-map-fullscreen.png').exists():
     assert events[0]['step']==events[1]['step'] and events[0]['fullscreen']
     assert [x['key'] for x in d['manual_events']]==['F6','Right','Down','Return','Esc']
     assert d['manual_events'][-1]['page']['Mode']=='manual-index'
-    result['scope']+=['packaged child process','independent fullscreen map','zoom','Esc returns to index','guest paused during map']
+    method=(out/'map-close-method.txt').read_text().strip() if (out/'map-close-method.txt').exists() else 'escape'
+    assert method in ('escape','window-close')
+    result['map_close_method']=method
+    result['scope']+=['packaged child process','independent fullscreen map','zoom',method+' returns to index','guest paused during map']
 (out/'checks.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
 print(json.dumps(dict(passed=True,platform=mode)))

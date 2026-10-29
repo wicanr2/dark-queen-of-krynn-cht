@@ -15,7 +15,9 @@ int main(int argc,char**argv){
         key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);
         Window mw=wait_map_window(d,w);capture(d,mw,argv[1],"04-map-fullscreen");
         key(d,mw,XK_equal);capture(d,mw,argv[1],"05-map-zoom");
-        close_map_key(d,mw,w);
+        int wm=getenv("DQK_MAP_CLOSE_WM")&&!strcmp(getenv("DQK_MAP_CLOSE_WM"),"1");
+        char method[4096];snprintf(method,sizeof(method),"%s/map-close-method.txt",argv[1]);FILE*mf=fopen(method,"w");if(!mf)return 5;fprintf(mf,"%s\n",wm?"window-close":"escape");fclose(mf);
+        if(wm){close_window(d,mw);XSetInputFocus(d,w,RevertToParent,CurrentTime);XSync(d,False);sleep(3);}else close_map_key(d,mw,w);
         capture(d,w,argv[1],"06-map-index");
         close_window(d,w);XCloseDisplay(d);return 0; /* 在前端目錄暫停時關窗，避免任意截斷DOS繪圖交易。 */
     }

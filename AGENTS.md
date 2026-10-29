@@ -224,6 +224,7 @@
 | [guide_inputs.py](tools/guide_inputs.py)、[guide-ui.zh-TW.tsv](text/guide-ui.zh-TW.tsv) | 編譯本機18章攻略與52張重繪閱讀圖，核對來源及增補字模；沿規格003的F7、工具列與原框查閱，全文及完整圖集不入Git |
 | [規格 004](docs/spec/004-hd-layer.md)、[player_hd.go](tools/player_hd.go) | HD 素材契約、完整可見來源比對與獨立開關；主題放 `workplace/probe/player-current/hd/`，視窗大小不控制 HD |
 | [hd_assets_test.py](tools/hd_assets_test.py) | 戰棋素材轉換的透明雜點與色條延展回歸；既有Pillow容器內執行 `python tools/hd_assets_test.py`，不代表遊戲場景驗收 |
+| [player_window_bridge.go](tools/player_window_bridge.go)、[windowbridge](tools/windowbridge/restore_windows.go) | 正式玩家的跨程序視窗恢復；Windows透過系統User32恢復本次啟動者，其他平台不呼叫Win32。模組由player_music_inputs.py寫入本機modfile，在既有Docker工具鏈編譯，不改SDK與原版資料 |
 | [hd_source_audit.py](tools/hd_source_audit.py) | Docker內以`--inventory`、`--theme`、`--original`及`--out`核對r3的1831筆來源、HD雜湊／遮罩及既定原生例外；來源與主題唯讀，輸出新收據。不是正常玩家路徑或全遊戲HD完成證據，未知來源明列失敗 |
 | [hd-scene-sample.sh](tools/hd-scene-sample.sh)、[hd_scene_probe.go](tools/hd_scene_probe.go) | Docker內依每個HD家族的鍵排序首／中／末與完整長邊框固定選樣，核對正式Go畫布的原版、HD、遮擋及色盤輸出。需既有合法來源產生的完整主題，命令為`bash tools/hd-scene-sample.sh scene-hd-新名稱`；屬素材布局抽驗，不是房間或結局流程證據 |
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | Go 命令畫布、交易及完整畫格提交；入口 `tools/player_render_owner.go`、`tools/player_owned_drivers.go`、`tools/render_scene_state.go`、`tools/player_scene_backend.go`。正式玩家不取原版整張 RGB；來源掛勾在規格目錄，不回寫原版。代表路徑零原版寫入與全場景覆蓋分開記錄 |

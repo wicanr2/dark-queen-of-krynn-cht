@@ -164,3 +164,5 @@ bash tools/player-sample.sh player-sample-demo-新的名稱 player-current demo
 - Esc或關閉地圖視窗回到原目錄，不結束遊戲。地圖程序只讀原圖並核SHA、尺寸、裁切及字型，不持有Oracle、原版輸入或存檔目錄。
 - 主程序等待子視窗結束期間不前進原版步數。父程序關閉時透過管線EOF關閉子視窗，不留下背景程序。啟動失敗回目錄並記錄原因。
 - [圖文元件](../../tools/ui_journal_illustrations.go)實作地圖程序與畫布；[正常介面抽驗](../../tools/player-sample.sh)的guide／manual-map分支驗獨立視窗、全螢幕、縮放、平移、復位、回目錄及原版暫停。這是使用者指定的呈現更改，不改地圖資料與遊戲規則。
+
+Windows的地圖程序透過[系統視窗橋接](../../tools/windowbridge/restore_windows.go)尋找本次啟動者PID的遊戲視窗，再送出非同步恢復及前景請求。主視窗在查閱期間持續處理程序結束訊息，原版保持暫停；恢復第一張完整畫格後再還原原有失焦設定。平台契約沿Microsoft的[EnumWindows](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumwindows)、[ShowWindowAsync](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindowasync)與[SetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow)，不逆向DOS繪圖驅動處理桌面問題。

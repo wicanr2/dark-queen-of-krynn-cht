@@ -40,7 +40,9 @@ def prepare(a):
             assert w==960 and h==600 and x>=0 and y>=0 and x+w<=1280 and y+h<=900
             metadata['window_rect']=geometry['rect']
             metadata['window_rect_evidence_sha256']=sha(sources[k]/'window-rect.json')
-    frozen={n:read(formal/'build-info.json')['sources'][n] for n in (a.root/'tools/player_sources.txt').read_text().splitlines()}
+    filmed_names=[p.name for p in (sources['exploration']/'code').glob('*.go') if not p.name.startswith('zz_')]
+    assert filmed_names
+    frozen={n:read(formal/'build-info.json')['sources'][n] for n in filmed_names}
     for k,metadata in inputs.items():
         assert metadata['edition']=='story' and metadata['mode']==k
         assert metadata['binary_sha256']==accepted['binary_sha256']

@@ -243,7 +243,10 @@ type readerMapRequest struct {
 	Path, SHA256, Heading, Footer string
 	Crop                          [4]int
 	Glyphs                        map[string][]byte
+	ParentPID                     int
 }
+
+var playerParentRestorer func(int)
 
 func readerSeparateMap(p *readerPage) bool {
 	return p != nil && p.Image != nil && p.Entry != 12
@@ -259,7 +262,7 @@ func (g *liveGame) openReaderMapWindow() {
 	}
 	item := g.reader.imageFor(p)
 	request := readerMapRequest{Path: item.Path, SHA256: item.SHA256, Crop: item.Crop,
-		Heading: p.Heading, Footer: p.Footer, Glyphs: map[string][]byte{}}
+		Heading: p.Heading, Footer: p.Footer, Glyphs: map[string][]byte{}, ParentPID: os.Getpid()}
 	if request.Footer == "" {
 		request.Footer = g.reader.UI["reader.image_hint"]
 	}
@@ -446,12 +449,18 @@ func (g *readerMapGame) Update() error {
 	default:
 	}
 	if ebiten.IsWindowBeingClosed() {
+		if playerParentRestorer != nil {
+			playerParentRestorer(g.Request.ParentPID)
+		}
 		return ebiten.Termination
 	}
 	// 在仍持有焦點的子視窗等關閉鍵放開。父視窗未聚焦時查不到按住的
 	// 鍵，不能靠父視窗的IsKeyPressed阻止這次按鍵穿透。
 	if g.Closing {
 		if !ebiten.IsKeyPressed(g.CloseKey) || time.Now().After(g.CloseDeadline) {
+			if playerParentRestorer != nil {
+				playerParentRestorer(g.Request.ParentPID)
+			}
 			return ebiten.Termination
 		}
 		return nil

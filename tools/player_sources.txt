@@ -24,3 +24,4 @@ ui_original_prefix.go
 music_cues.go
 player_music.go
 player_music_assets.go
+player_window_bridge.go
