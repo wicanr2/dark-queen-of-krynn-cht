@@ -23,8 +23,12 @@ if (out/'04-map-fullscreen.png').exists():
     assert events[0]['step']==events[1]['step'] and events[0]['fullscreen']
     assert [x['key'] for x in d['manual_events']]==['F6','Right','Down','Return','Esc']
     assert d['manual_events'][-1]['page']['Mode']=='manual-index'
+    with Image.open(out/'06-map-index.png') as restored:
+        scale=restored.width/640
+        header=restored.convert('RGB').crop(tuple(round(n*scale) for n in (32,16,624,32)))
+        assert sum(r>180 and g>160 and b<140 for r,g,b in header.getdata())>30, '返回後主視窗仍為黑畫面'
     method=(out/'map-close-method.txt').read_text().strip() if (out/'map-close-method.txt').exists() else 'escape'
-    assert method in ('escape','window-close')
+    assert method in ('escape','window-close','win32-close')
     result['map_close_method']=method
     result['scope']+=['packaged child process','independent fullscreen map','zoom',method+' returns to index','guest paused during map']
 (out/'checks.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')

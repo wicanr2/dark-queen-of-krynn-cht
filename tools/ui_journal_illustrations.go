@@ -362,6 +362,7 @@ type readerMapGame struct {
 	Closing                bool
 	CloseKey               ebiten.Key
 	CloseDeadline          time.Time
+	ReturnToParent         bool
 }
 
 func mapWindowText(text string, glyphs map[string][]byte, ink [3]byte) (*ebiten.Image, error) {
@@ -412,7 +413,7 @@ func runReaderMapWindow() error {
 	if crop.Empty() || !crop.In(decoded.Bounds()) {
 		return fmt.Errorf("地圖視窗內容框越界")
 	}
-	g := &readerMapGame{Request: request, Zoom: 1, Width: 1280, Height: 800, ParentClosed: make(chan struct{})}
+	g := &readerMapGame{Request: request, Zoom: 1, Width: 1280, Height: 800, ParentClosed: make(chan struct{}), ReturnToParent: true}
 	g.Image = ebiten.NewImageFromImage(decoded.(interface {
 		SubImage(image.Rectangle) image.Image
 	}).SubImage(crop))
@@ -431,7 +432,13 @@ func runReaderMapWindow() error {
 	ebiten.SetWindowClosingHandled(true)
 	ebiten.SetRunnableOnUnfocused(true) // 失焦後仍須處理放開關閉鍵及父程序EOF。
 	ebiten.SetFullscreen(true)
-	return ebiten.RunGame(g)
+	err = ebiten.RunGame(g)
+	// 全螢幕的顯示模式與視窗必須先由Ebitengine釋放，再恢復主視窗。
+	// 提早恢復會在Windows退出全螢幕時再次被縮小。
+	if g.ReturnToParent && playerParentRestorer != nil {
+		playerParentRestorer(request.ParentPID)
+	}
+	return err
 }
 
 func (g *readerMapGame) geometry() (float64, float64, float64) {
@@ -445,22 +452,17 @@ func (g *readerMapGame) geometry() (float64, float64, float64) {
 func (g *readerMapGame) Update() error {
 	select {
 	case <-g.ParentClosed:
+		g.ReturnToParent = false
 		return ebiten.Termination
 	default:
 	}
 	if ebiten.IsWindowBeingClosed() {
-		if playerParentRestorer != nil {
-			playerParentRestorer(g.Request.ParentPID)
-		}
 		return ebiten.Termination
 	}
 	// 在仍持有焦點的子視窗等關閉鍵放開。父視窗未聚焦時查不到按住的
 	// 鍵，不能靠父視窗的IsKeyPressed阻止這次按鍵穿透。
 	if g.Closing {
 		if !ebiten.IsKeyPressed(g.CloseKey) || time.Now().After(g.CloseDeadline) {
-			if playerParentRestorer != nil {
-				playerParentRestorer(g.Request.ParentPID)
-			}
 			return ebiten.Termination
 		}
 		return nil

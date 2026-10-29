@@ -21,7 +21,8 @@ set -euo pipefail
 mkdir "/out/$1";mkdir "/out/$1/session"
 cc -O2 /tools/package_smoke.c -lX11 -o "/out/$1/smoke-driver"
 go build -o "/out/$1/xtest-key" /tools/player_xtest_key.go
-' -- "$BATCH"
+if [[ "$2" = windows ]];then GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "/out/$1/native-close.exe" /tools/windows_native_close_windows.go;fi
+' -- "$BATCH" "$MODE"
 timeout --kill-after=5s 150s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 256 --label project=dark-queen-of-krynn-cht \
  -e HOME=/tmp -e LIBGL_ALWAYS_SOFTWARE=1 -e GOMAXPROCS=2 -e DQK_TRACE_PLAYER_UI=1 -e WINEPREFIX=/out/wine -e WINEDEBUG=-all -e WINEARCH=win64 -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 \
  -e DQK_VERIFY_MAP_WINDOW="${DQK_VERIFY_MAP_WINDOW:-0}" \

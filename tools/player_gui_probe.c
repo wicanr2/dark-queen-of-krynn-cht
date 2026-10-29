@@ -11,6 +11,15 @@
 
 static char key_helper[4096];
 static int reader_input=0;
+static int (*previous_xerror)(Display*,XErrorEvent*);
+static int xerror_installed=0;
+static int transient_window_error(Display*d,XErrorEvent*e){
+    if(e->error_code==BadWindow)return 0; /* Wine的暫時視窗可能在列舉期間消失。 */
+    return previous_xerror?previous_xerror(d,e):0;
+}
+static void tolerate_transient_windows(void){
+    if(!xerror_installed){previous_xerror=XSetErrorHandler(transient_window_error);xerror_installed=1;}
+}
 static void fake_key(unsigned code,const char *state) {
     char text[16];snprintf(text,sizeof(text),"%u",code);
     pid_t child=fork();if(child<0)exit(12);
@@ -19,6 +28,7 @@ static void fake_key(unsigned code,const char *state) {
 }
 
 static Window find_window(Display *d, Window root) {
+    tolerate_transient_windows();
     Window parent,actual,*children=NULL,result=0;unsigned n=0;
     char *name=NULL;
     if(XFetchName(d,root,&name)&&name){if(strstr(name,"黑暗之后"))result=root;XFree(name);}
