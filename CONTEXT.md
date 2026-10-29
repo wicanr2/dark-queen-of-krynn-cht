@@ -4,35 +4,36 @@
 
 | 項目 | 現況與證據 |
 |---|---|
-| 目前工作 | 使用者新增戰鬥資訊畫面回報，並要求提高畫布與文字解析度。正在核原版同場景、前端字型及訊息更新；現行已發布本機交付仍為v.1.0.1-20261029，不覆寫。新證據在battle-text-hidpi-20261029，僅重開回報範圍。 |
-| 工作順序 | 繁中、HD、閱讀、原譜音樂與交付已整合。288張戰棋素材重編，其他1200項保持；地圖只改前端呈現生命週期，原版規則、譯文、音樂及存檔保持。 |
+| 目前工作 | Issue14已完成戰鬥資訊黑塊修正與高清文字。正式畫布1920×1200，角色20／其餘16邏輯字級沿用，字模改由同圓體輪廓產生60／48像素。現行本機交付v.1.0.2-20261029；舊版與tag保持，未重開全程遊玩或全量審畫。 |
+| 工作順序 | 既有繁中、1488項HD、閱讀與原譜音樂保持；本輪只提高文字與畫布解析度、修戰鬥遮罩及相關交付。原版規則、譯文、存檔與舊兩輪完成基線保持，不因歷史缺項重新開工。 |
 | 繪圖結案驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/render-two-rounds-checks.json` SHA-256 `6483aea49598010f6cd46f2e2c0b72c91ed83c108c7eee01f6e8fd391ed5f97f`。第一輪17家族49固定來源、196項GPU／CPU比較零差異，另驗正式程式正常開場。第二輪洞穴及戰鬥快照重畫、HD關閉／開啟、2倍／3倍通過；實際原版像素寫入、圖片退路與未完成交易0。預先登記、第一輪、第二輪取樣時機修正及彙整器皆在同批，正式程式、93份輸入與素材保持。 |
 | 兩輪完成驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/two-round-checks.json` SHA-256 `a381d5b2f191d6f2aede57d48f9e1365f05d8d193144d0ac578e1a4008a849dd`。final-r1驗正常示範中斷、角色管理、語言、縮放及說明；final-r2驗音樂、工具列與桌面服務。探索／戰鬥沿相同Go來源快照收據，資料差額及針對修正另驗；正常入口與注入分開。實際原版像素寫入、圖片退路及未完成交易均0。 |
-| 正式交付 | `dist-all/v.1.0.1-20261029/`：Windows x86_64、Linux x86_64、macOS universal各一本機完整版與引擎包，共六個ZIP。逐檔SHA、ZIP UTF-8、Windows BOM／CRLF、來源commit、授權與資料排除已核對。SHA256SUMS.json SHA-256 `8bba450c38742fa0f43bab3ddac6d31b53c136325dd65f152cc04420b6b59f86`。完整素材、影片只留本機，沒有公開Release。 |
-| 交付再次核對 | 修正版`dist-all/v.1.0.1-20261029/smoke/delivery-checks.json`通過：六包整包與內含binary、profile、HD、音樂、圖片中文、原EXE及兩平台地圖啟動。來源固定`2df3222329567163acdb7c66291324b12d4f796f`；macOS雙切片與App結構已驗，未驗真機。舊版收據只作歷史證據。 |
-| 封包啟動 | 修正版Linux以Esc、Windows在Wine中以原生Win32 WM_CLOSE關閉獨立地圖，均返回有文字的閱讀目錄，原版步數保持、實際原版像素寫入與待辦0。收據在交付smoke/linux-map與windows-map-final；後者不等於Windows實機或Wine下Esc驗證。macOS未簽章、公證或真機驗收。 |
-| 推廣影片 | `dist-all/v.1.0.1-20261029/promo/黑暗之后-HD繁中推廣影片-故事與玩法篇.mp4`，86秒、12幕、6種版面、1080p／30fps、H.264／AAC與48kHz立體聲。SHA-256 `209007dfa854a55eaef9bed3f57735090a620bec8f0a62502dc7a3df1766bf27`。遊戲TITLE封面開場，接故事、玩法、原版／HD並列與全螢幕地圖。12幕目視、70文字安全框、無黑幀／長靜音／削波通過。錄影來源b0ce5488，後續只改視窗及自動地圖生命週期；保留實際來源，不宣稱影片build與最終程式相同。 |
-| 收尾清理 | `completion-20261029/reported-visual-fixes/cleanup-final-check.json` SHA-256 `579f4e8e08b0edd9c2560e999b1fae96121b01689403ff890d43d66f6fd6913c`。刪除與六個ZIP逐檔相符的解壓暫存、本專案Go快取及三份過期Wine環境，實釋單連結配置空間6.330GiB；7268個原始來源、現行素材、存檔及交付檔案保持。暫存可用restore-package-stage.sh還原。未清其他專案資源。 |
-| 正式程式 | `workplace/probe/player-current/dqk-player` SHA-256 `6740206b8bf7fbe4e7b73b07c77c0e269a98b1ee8e4208ba06283d84c65389a2`，來源`2df3222329567163acdb7c66291324b12d4f796f`，版號`v.1.0.1-20261029`。正式27份Go來源及平台橋接模組見build-info；93份輸入與profile `1d6036edbc7a12003671efd48491d09e3c721fc4a0e94c363395957c0cc9d03a`保持。 |
+| 正式交付 | `dist-all/v.1.0.2-20261029/`：Windows x86_64、Linux x86_64、macOS universal各一本機完整版與引擎包，共六個ZIP。逐檔SHA、ZIP UTF-8、Windows BOM／CRLF、來源及授權已核。SHA256SUMS.json SHA-256 `914e7f9213c0c5e63e304d04048f21c8a9565a725c2a031d3585c0e6acefa362`。完整素材與影片只留本機，無公開Release。 |
+| 交付再次核對 | 修正版smoke/delivery-checks.json SHA-256 `026656b47922148be67125fc163b9a541d33c1244f6ad257f70117d0e3e17247`。六包版本、程式、profile、高清字模、HD、音樂、圖片中文及原EXE核對通過；引擎來源固定25c89ab0992f5446af32193f83d061162e1529af。舊兩輪繪圖收據作歷史基線，未重跑父批。 |
+| 封包啟動 | 修正版Linux以Esc、Windows在Wine以原生WM_CLOSE關地圖，返回目錄字墨可見，原版步數保持、原版像素寫入與待辦0。有效收據在交付smoke/linux-map及windows-map-content-ready；後者先等圖稿就緒再送縮放，另等返回標題。初次固定等待擷取與空圖縮放斷言已勘誤保留。Windows／macOS真機及Wine下Esc未驗；macOS僅雙切片與App結構，未簽章或公證。 |
+| 推廣影片 | `dist-all/v.1.0.2-20261029/promo/黑暗之后-HD繁中推廣影片-故事與玩法篇.mp4`，86秒12幕、6種版面，1080p／30fps、H.264／AAC、48kHz立體聲。SHA-256 `498b9d8ba4d8d37f565e7720b7163a739bf1aa88a93345212693cb701f1812f9`。封面開場、故事、玩法、HD並列及全螢幕地圖沿用；整備段改實際F7法術提示頁。70文字安全框、逐幕目視及影音檢查通過；錄影及交付Go來源同為25c89ab，正常／快照分列，未宣稱新通關。 |
+| 收尾清理 | `battle-text-hidpi-20261029/cleanup-final-check.json`核六包及26202個可重建檔案後清暫存／Go快取，釋放約4.25GiB，7273個保護檔案保持。最後只還原Windows包驗圖稿就緒，逐檔核對後再刪，收據cleanup-after-map-check.json SHA-256 `73709ece6ab261dfb53b8a537484fba8c21768cb0c4b961a81c2f19e38aa02e5`；ZIP、正式程式與存檔保持。歷史版本及其他專案資源不動。 |
+| 正式程式 | `workplace/probe/player-current/dqk-player` SHA-256 `332f99cbfd595856b23417fccc72c8be4b9124970e16a8d11c89e6ae392af158`，來源25c89ab0992f5446af32193f83d061162e1529af，版號v.1.0.2-20261029。28份正式Go及平台橋接模組見build-info；舊93份輸入保持，只增字模兩檔至95份，profile `1c6109b651813b231294968463175c234d60bc52fbcb454ee41ce3f6356a0272`。 |
+| 高清文字證據 | battle-text-hidpi-20261029/font-checks.json核2896／33個字模及七個輪廓樣本，並非放大小字。compare-final/checks.json三個固定步數的原版／接管索引、色盤與暫存器相同；finish-scene-sharp-final-20261029-r1的防護間隙576像素回到原版底色。正常錄影promo-sharp-normal-20261029-r2已實際使用48／60字模並驗兩種地圖開關；圖稿內文字及未重新輸出的快照像素分列限制。 |
 | 音樂與證據 | `music-hd-20261029/evidence.json` SHA-256 `51266f251fb161f756c6cb743b9e04af2d518a4e65fc8f6c11244371709737d1`。8段Ogg、48kHz立體聲，保留三秒釋音；音樂manifest `0ec4b019fad2766cfa9a9ee1fed16deb4d1c3fdfc6115a78c7b30985ca7a1acb`。原版正常標題／展示命令、原版函式注入全8段、音量0／90／100及越界拒絕分開記錄。播放器已接原版只讀開始／停止／音量，音樂與HD／縮放／語言獨立；詳見研究008及規格006。 |
 | 音樂聽驗界線 | 本機逐曲入口`workplace/probe/player-current/music/index.html`。原譜8曲、取樣合成、非靜音、峰值及桌面服務連線均已有技術收據，人耳聽感與實體喇叭未驗。依使用者兩輪收尾契約，這是證據限制，不重新阻擋本機交付。 |
 | 攻略正文 | `guide-20261028/guide.zh-TW.tsv`保留40鍵、18章、導讀與法術提示，12573字元、292段圖號說明，對照23頁正常來源；兩頁修改資料排除。正文SHA-256 `7c40d160151125201ff8e73fcfb211a3a456d794d9320f77ef9b30e665fe2be3`。正式閱讀編譯後20分章、72項、121詞條。 |
 | 攻略地圖 | 52張、780圖號及樓梯標記，皆為獨立幾何與繁中標註，PNG／SVG不嵌掃描。原51圖區中的鷹峽第三層實含兩層，分列成52張。完整清單`guide-20261028/guide-map-delivery.json` SHA-256 `30a1224c7615f554595c4a44880ea487507e842e7e168fa9e3ee7bf9a75f45b8`。各批最多兩輪接受；圖稿、來源、私人重生腳本與證據入口見[研究002](docs/re/002-walkthrough-source.md#2026-10-28完整圖集與攻略接入)。紙色留白、密林與火焰色塊不表示原版通行或事件判定。 |
 | 攻略有效抽驗 | 原框歷史收據`player-sample-guide-20261028-r3/checks.json`保持。新視窗沿`player-sample-map-release-20261029-guide`、`player-sample-map-unfocus-20261029-manual`及實際影片UI事件驗來源圖、縮放／平移／復位與返回；最終兩平台封包另驗全螢幕、縮放、返回與原版暫停。快速guide腳本的未就緒及退出待辦失敗未列通過，不重跑已收斂父批。 |
 | 安裝與保持 | `guide-20261028/install-guide-check.json` SHA-256 `9605a64668ee0d53e6b144db3d66609c99047052e3a048eddf12cd888e9e5bee`。原2857字模逐字保持，只增14字至2871；36份舊輸入逐位元組相同，另更新來源紀錄的正式譯表雜湊。正式存檔、偏好、圖片中文及1487項HD保持。輸入差額另見`reader-input-check.json`。 |
-| 本輪安裝 | `completion-20261029/reported-visual-fixes/install-final-check.json` SHA-256 `8cd6eb816f2bb4185855d5571c7eae4abe44861176a364b708ff024dddd40157`。正式程式與建置資料更新至2df3222；109個受保護輸入、音樂、圖片中文與session逐檔保持，HD580主題保持。舊程式在同批before-final-player，初始版另存pre-visual-fix。 |
+| 本輪安裝 | `battle-text-hidpi-20261029/install-final-check.json` SHA-256 `c749a60b787729b67ade2e6e2d941e7a3f220384a4a9493d724b7e52a5f8b8dd`。正式程式、建置資料、UI契約與新profile／字模已更新；108個其他輸入、音樂、圖片中文與session保持，HD580主題保持。原程式及profile備份同批before-final-player。 |
 | 繁中與術語 | 正式主表7730筆全部有執行入口：7256直接、40來源別名、434完整組句，缺漏0。來源候選中的存檔A至J及未知位元串不硬譯。收尾另補三種完整戰鬥表形的23個既有譯文綁定，92份輸入保持；Quick反白先於首字形匹配，證據`completion-20261029/battle-menu-checks.json`。角色20px、其餘16px；武器、怪物及跨代人物沿幽靈騎士，箭矢三項回歸通過，數量及加值保持。 |
 | 內建閱讀 | 手札、3份重繪圖文、兩冊說明及附表共190項，另有說明世界圖與手動攻略。世界圖含13地名、8區域。手札25／64、說明與攻略地圖另開唯讀全螢幕視窗，正文及碎紙12保留原框。縮放、平移、Home復位，Esc／F6／F7或關窗回目錄；F11切視窗。自動引用狀態有單元回歸，未宣稱正常流程逐一觸發25／64。 |
 | Go繪圖接管 | 36交易、65內層／邊界點、3來源點，共104定位。Go命令畫布交給Ebitengine提交紋理與矩形，正式玩家不讀原版整張RGB，已接管命令跳過原版像素迴圈。原版保留規則、資源解析與必要機器效果；未知、環繞或越界命令只走原版一次，不疊HD。已依使用者最新兩輪抽驗門檻完成；未走訪及安全回退只列證據界線，見[規格005](docs/spec/005-render-owner.md)。 |
 | 繪圖有效證據 | v.1.0.0歷史基線，修正版未重跑本父批。新`render-abi-resume-20261028-r1/`的1652組及6項路由通過，含原1524組與新增128組透明續畫。CPU、完整RAM、四平面、控制器、事件畫面及時間一致。證據SHA-256 `8214b0ab6cc57123d3c9a99d8d8297b152522cf30409de99e1080545f4fb50cc`。窄函式對照64組，舊版60組撤回來源，新版全部保留；來源與原始位址見[研究007](docs/re/007-render-ownership.md#2026-10-28透明圖片事件續畫)。 |
-| UI觀察器 | `player-window-final-20261029/ui-contract.json` SHA-256 `3c346a4c3b14032bb45db9dc1c0b1358221a9a137b433c8193031e191bd49ef6`。既有介面、音樂與新增兩項地圖狀態回歸通過；自動引用關圖只撤除前端頁，保留原版引用及已讀。碎紙12留原閱讀器。IRQ／繪圖機器效果沿用既有證據，未重跑1652組父批。 |
+| UI觀察器 | `player-sharp-text-20261029/ui-contract.json` SHA-256 `15d9f6c8b50f522ca21af75507dfe4904d9355de0d0dadd30b4505ada124615f`。既有介面、音樂、地圖及新原版模式、ASCII守衛與AC部分重疊三項回歸通過。列表除合成及image匯入外逐位元組保持，IRQ根收據沿用，未重跑1652組。 |
 | HD | 正式1488項：CBODY98、CPIC190、人物31、背景插畫49、動畫11、戰場地形280、牆面環境583、SPRIT96、COMSPR42、世界地圖2、局部覆片36、TITLE9、FINAL47、介面14。manifest SHA-256 `5800979005b277314016c255e1f4fd14b2be4754a000445f614b250383a60448`。288張CBODY／CPIC改以alpha至少32裁主圖、原版輪廓內黑底合成，移除邊緣RGB色條，原版遮罩及主圖保持；其他1200項保持，沒有新增生成或審畫輪次。HD與視窗大小獨立；PICC15沿兩次拒絕保留原版。 |
 | HD來源處置 | [核對器](tools/hd_source_audit.py)逐項核19份TLB、1831區塊、1488項HD來源／主圖雜湊與原版遮罩，未分類0。新收據`completion-20261029/reported-visual-fixes/hd-source-audit.json` SHA-256 `03083ffbbb129d50a0bd8a7e1676a89a4e2b1267626cec870e1855d974a8a444`；兩項轉換回歸與同戰鬥快照另驗，已接管命令原版寫入／待辦0。分類與原生例外沿[規格004](docs/spec/004-hd-layer.md)，不代表全遊戲正常走訪。 |
 | 圖片文字 | 24來源、43文字框、28個雙語TSV鍵，資料於正式入口`picture-text/`。保留繪製前Go底圖，中文與HD獨立；公司及製作者姓名保留原文。30項來源／排版檢查與a7c6b78d的HD關閉正常收據保持，見研究007及規格005。 |
 | 正常示範與中斷 | `player-sample-cold-return-20261028-r2/checks.json` SHA-256 `494552b1fbb1c8f0aac31f67e6ccaf2ecf1cf11cf175207f854cdd618299503c`。5e63e50f已含交易去重及填色修正，D進森林、Esc返回、P角色管理、語言／縮放／F6／截圖／關窗通過，五張基準差異0、未完成交易0。其後僅補查驗交接及診斷，以新冒險收據驗證，不重跑示範父批。 |
 | 正常冒險與存讀 | `player-sample-exploration-20261029-r1/`由正常A隊伍走到帕蘭薩斯、旅店及營地，寫C槽並正常退出。9df4cac9的`player-sample-exploration-20261029-r4/checks.json` SHA-256 `9e1f2ca9d87a45f1695ced329acc00d3050ea4408c4349be606ebb4388890007`由冷啟動讀回同一C槽，再存D槽、返回營地、進王宮與自動手札54。2倍視窗HD關閉／開啟、隊伍區保持、槽位及右邊框保持、手札無紅色姓名遮擋與返回恢復通過。繪圖／UI待辦0、已接管命令原版寫入0、圖片身分退路0；未注入場景或代答。原r7的入城與地名勘誤沿規格005保留，不重跑父批。未新增自由移動或戰鬥。 |
 | 場景類型抽驗 | v.1.0.0歷史基線，修正版未重跑本父批。[規格004](docs/spec/004-hd-layer.md#conformed使用者授權的場景類型抽驗)保存使用者接受門檻。`scene-hd-20261029-final/checks.json` SHA-256 `0a2eae7e4a6f9595327b72136792b162350f88b55b9d05f4845ceb2c6caf4290`為17家族、49樣本、196項Go畫布／GPU與CPU參考比較。`scene-sample-20261029/checks.json` SHA-256 `f7775aee0f0478a73ed959f26d4b6ba7e9e2025dfd3928de793077c6a5d672ab`為兩組原版快照注入：洞穴移動／轉向、營地返回、區域圖、2倍／3倍及戰鬥續行、武器／生命力欄、HD切換。待辦與已接管命令原版寫入皆0。研究入口、來源副本、檢查器與完整證據在該批次，正式程式沒有注入捷徑。 |
-| README | 故事、機制、怪物／人物原版與HD總覽、截圖及操作已整理。說明與攻略圖已換成獨立全螢幕截圖，28張展示圖在docs/images可由GitHub直接閱讀，個別來源與SHA見manifest；完整素材、影片及書籍全文不入Git。 |
+| README | 故事、機制及原版／HD圖庫保持，角色、閱讀與地圖展示圖更新為高清文字，新增1920×1200戰鬥畫布。29張選定展示圖可在GitHub直接閱讀；來源、尺寸及SHA在docs/images/manifest.json。快照與正常畫面分列，完整素材、影片與書籍全文不入Git。 |
 | 尚未證實與可選項 | 完整遊玩驗證不列本輪條件，繪圖經最後兩輪抽驗結案。未知輸出、未走訪場景、正常結局與跨作匯入不宣稱已證實，亦不因這些範圍重開本輪。Windows原生與macOS真機、人工聽感仍未驗；額外美化不列阻塞，未公開Release或上傳影片。 |
 | 工具鏈 | SDK隔離來源`f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`唯讀，Go1.24.13及Pillow r2保持。取樣沿既有wasteland-media映像與FluidSynth 2.3.1、FluidR3_GM 3.1。桌面執行映像`dqk-player-audio:1.24-r1` ID `70a02710cbba9dee61c8f56893fee51ea9ea55db7ef9fd79678dac602da589f9`，只補ALSA至PulseAudio橋接；Go建置仍用原8ed6bdee映像。新解碼依賴保存在本作music-go-deps，SDK及共用快取唯讀，原EXE保持。 |
 | 儲存與Docker | 使用者授權僅清本專案。先前81份歷史重播已無損封存，實釋8.430GiB，清理證據`cleanup-20261028-result.json` SHA-256 `76b1858e765f1bb115accb5e8059214ea956426588fc06025b173769783a96db`。目前批次、原始資料、HD與存檔保留；不全域清其他專案。每批使用非root、離線、有界且自動刪除容器。 |
@@ -160,6 +161,7 @@
 | 2026-10-25 | 繼續中文化與 HD，完全接管繪圖層，必要時反組譯找掛勾，避免原圖／英文先顯示 | 使用者明確新增授權；規格 005，完整接管仍在進行 |
 | 2026-10-29 | 繪圖代表抽驗兩輪通過即結案，免完整遊玩；三平台本機完整版與推廣影片 | 使用者指示；規格007及歷史驗收 |
 | 2026-10-29 | 結案後只修戰棋HD色條，影片由遊戲封面開場，地圖另開獨立全螢幕視窗 | 使用者畫面回報；Issue13，現行v.1.0.1 |
+| 2026-10-29 | 修正新回報的戰鬥資訊畫面，放大畫布並提高文字解析度；原版規則與已定字級比例保持 | 使用者新增要求；Issue14，現行v.1.0.2 |
 
 ## 待定
 
@@ -170,10 +172,10 @@
 
 ## 結案後的封包暫存
 
-現行ZIP在`dist-all/v.1.0.1-20261029/`，同版package暫存已刪除以節省空間。只有需要重跑封包啟動驗收時，先從專案根目錄執行：
+現行ZIP在`dist-all/v.1.0.2-20261029/`，同版package暫存已刪除以節省空間。只有需要重跑封包啟動驗收時，先從專案根目錄執行：
 
 ```sh
-bash tools/restore-package-stage.sh v.1.0.1-20261029
+bash tools/restore-package-stage.sh v.1.0.2-20261029
 ```
 
-入口為[還原器](tools/restore-package-stage.sh)。它在離線Docker核ZIP SHA後重建暫存並恢復可執行權限，不覆寫已有暫存，不改正式ZIP與存檔；還原會重新占用約3.7GiB。修正版暫存manifest、清理計畫與結果在本機completion-20261029/reported-visual-fixes的cleanup-final-stage-manifests.json、cleanup-final-plan.json與cleanup-final-check.json，保留同目錄重現腳本。v.1.0.0的ZIP、tag及歷史清理證據保持。
+入口為[還原器](tools/restore-package-stage.sh)。它在離線Docker核ZIP SHA後重建暫存並恢復可執行權限，不覆寫已有暫存，不改正式ZIP與存檔；還原會重新占用約3.7GiB。本輪暫存manifest、清理計畫與結果在本機battle-text-hidpi-20261029的cleanup-final-stage-manifests.json、cleanup-final-plan.json、cleanup-final-check.json及cleanup-after-map-check.json，保留同目錄重現腳本。v.1.0.0的ZIP、tag及歷史清理證據保持。

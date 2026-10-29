@@ -4,8 +4,8 @@ story-call	故事背景	戰火之後，危機未歇	長槍之役後，克萊恩�
 story-voyage	故事背景	跨海追查黑暗勢力	隨戴諾船長跨海前往泰勒達斯。	追查失蹤者，阻止塔克西絲重返克萊恩。	8	exploration:cave
 party	遊戲特點	組建你的冒險隊伍	組建六人隊伍，搭配職業與裝備。	沿用進階龍與地下城規則，讓隊員各司其職。	8	normal:role
 exploration	遊戲特點	第一人稱探索	以第一人稱穿行城鎮與地城。	調查線索、交涉與選擇，讓手札接起整段冒險。	10	exploration:cave-motion
-combat	遊戲特點	回合制戰術戰鬥	走位、近戰、遠射、施法與守衛。	在方格戰場上安排隊形，保護施法者。	10	combat:battle
-magic	遊戲特點	法術與出發前的整備	法術需要記憶，施放後透過休息補回。	出發前整備裝備、彈藥與傷勢。	6	exploration:camp
+combat	遊戲特點	回合制戰術戰鬥	走位、近戰、遠射、施法與守衛。	在方格戰場上安排隊形，保護施法者。	10	combat:battle-after
+magic	遊戲特點	法術與出發前的整備	法術需要記憶，施放後透過休息補回。	出發前整備裝備、彈藥與傷勢。	6	normal:spell-notes
 art-original	本作呈現	繁體中文與HD美術	保留原版構圖與配色，換上細緻HD素材。	HD開關獨立，縮放不會改變美術偏好。	4	exploration:cave-native
 art-hd	本作呈現	繁體中文與HD美術	保留原版構圖與配色，換上細緻HD素材。	HD開關獨立，縮放不會改變美術偏好。	4	exploration:cave-hd
 manual	本作呈現	隨時查閱手札與說明	手札、說明手冊與附表，整合在遊戲內。	查完再回到原畫面，接著冒險。	8	normal:manual

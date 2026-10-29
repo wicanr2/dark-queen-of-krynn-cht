@@ -44,10 +44,11 @@ int main(int argc,char**argv){
             key(d,w,XK_Return);mark(d,w,out,"guide-chapter");sleep(4);
             key(d,w,XK_Escape);key(d,w,XK_Down);key(d,w,XK_Return);
             mw=wait_map_window(d,w);mark(d,mw,out,"guide-map");sleep(10);close_map_key(d,mw,w);
+            key(d,w,XK_Right);key(d,w,XK_Right);key(d,w,XK_Return);mark(d,w,out,"spell-notes");sleep(8);
         }
     }else if(!strcmp(mode,"exploration")){
         key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);
-        key(d,w,XK_e);if(story){mark(d,w,out,"camp");sleep(8);}key(d,w,XK_Escape);sleep(3);mark(d,w,out,"cave");
+        key(d,w,XK_e);key(d,w,XK_Escape);sleep(3);mark(d,w,out,"cave");
         if(story){
             sleep(8);mark(d,w,out,"cave-motion");
             key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);sleep(2);

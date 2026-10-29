@@ -6,23 +6,25 @@
   "files": [
     {
       "file": "character-management-zh.png",
-      "source": "workplace/probe/readme-gallery-portraits-20261026/player-chinese.png",
-      "sha256": "047ceaa5501fbd5b32e1eb1cbaa67496194dd9d15e5c9c0c02de459fa9f8bc6d",
+      "source": "workplace/probe/promo-sharp-normal-20261029-r2/role.ppm",
+      "sha256": "dee2345cd8804465fcdb500a0b7cfce821fee01b7ea0b424e14e64506987840f",
       "size": [
         960,
         600
       ],
-      "bytes": 51510
+      "bytes": 64030,
+      "scope": "正常冷啟動與角色管理；20邏輯字級使用60像素輪廓字模"
     },
     {
       "file": "manual-reader-zh.png",
-      "source": "workplace/probe/readme-gallery-portraits-20261026/player-manual.png",
-      "sha256": "942f1df4e5259e2d60c6b876a19bac4648969eb93af6857892bc2d70f13a330d",
+      "source": "workplace/probe/promo-sharp-normal-20261029-r2/manual.ppm",
+      "sha256": "72fee1048cae84d2345826a89883ff6dcd126f3ac9119dde36a92c706d3e6427",
       "size": [
         960,
         600
       ],
-      "bytes": 106903
+      "bytes": 160342,
+      "scope": "正常操作的繁中說明目錄；16邏輯字級使用48像素字模"
     },
     {
       "file": "combat-sprites-original.png",
@@ -187,14 +189,14 @@
     },
     {
       "file": "manual-world-map-zh.png",
-      "source": "dist-all/v.1.0.1-20261029/smoke/windows-map-final/04-map-fullscreen.png",
-      "sha256": "6573cad251d923b3f1da8c5d80f99c7ec7921b00066b8471342f5eb26a744d44",
+      "source": "workplace/probe/promo-sharp-normal-20261029-r2/map.ppm",
+      "sha256": "d4cbc511aa8cd13a53d69475d4e852e181f099b9758596561fe8838b4c810986",
       "size": [
         1280,
         900
       ],
-      "bytes": 572250,
-      "scope": "修正版Windows封包在Wine中由正常介面開啟獨立全螢幕世界地圖；地形示意，不代表逐格通行或實機驗收"
+      "bytes": 565646,
+      "scope": "正常冷啟動後開啟獨立全螢幕說明世界圖；48像素輪廓字模繪製標題，圖稿內文字保持"
     },
     {
       "file": "guide-index-zh.png",
@@ -209,14 +211,14 @@
     },
     {
       "file": "guide-map-zh.png",
-      "source": "workplace/probe/promo-visual-verified-normal-20261029/guide-map.ppm",
-      "sha256": "782c2348a99f15472cf4da030bbe4b9a2c5062ffbd8892439097b078a0c47ae5",
+      "source": "workplace/probe/promo-sharp-normal-20261029-r2/guide-map.ppm",
+      "sha256": "2ee568b80371de5f4996e9a292daacca074cb0af0870790d1e857127fcd7fa4c",
       "size": [
         1280,
         900
       ],
-      "bytes": 177413,
-      "scope": "遊戲中查閱重繪火焰塔，原尺寸視圖；非遊戲通行座標"
+      "bytes": 170221,
+      "scope": "正常操作開啟獨立全螢幕火焰塔圖；圖稿原有文字保持"
     },
     {
       "file": "guide-toolbar-zh.png",
@@ -304,6 +306,18 @@
       ],
       "bytes": 58458,
       "scope": "正常冷啟動、角色管理及頂端工具列；獨立音樂開關。非狀態注入，桌面音訊服務技術驗證不等於聽驗"
+    },
+    {
+      "file": "combat-text-hd.png",
+      "source": "workplace/probe/finish-scene-sharp-final-20261029-r1/session/screenshots/DQK-20261029-115355.498029647.png",
+      "scope": "同戰鬥快照續行的1920×1200實際Go畫布，防護黑塊修正及高清文字；非正常冷啟動或全程通關",
+      "sha256": "ff23f4631e1f3aae5ebba1ffe8f5d05611319837a6e44c1f3d3618afa869908b",
+      "size": [
+        1920,
+        1200
+      ],
+      "bytes": 245129
     }
-  ]
+  ],
+  "current_display_notes": "初始圖庫雜湊保留；更新展示圖以個別source與SHA為準。高清文字來源25c89ab，原版／HD歷史對照圖不改。"
 }

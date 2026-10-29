@@ -7,7 +7,7 @@ EDITION="${4:-short}"
 [[ "$NAME" =~ ^promo-[a-zA-Z0-9-]+$ && "$PLAYER" =~ ^player-[a-zA-Z0-9-]+$ ]]
 case "$MODE" in normal) STATE="";DURATION=75;;exploration) STATE=voyage-text-20261025/ashore-control-r3/final.state;DURATION=40;;combat) STATE=battle-continuation-20261025/control-r1/final.state;DURATION=55;;*)exit 2;;esac
 if [[ "$EDITION" = story ]];then
- case "$MODE" in normal) DURATION=150;;exploration) DURATION=90;;combat) DURATION=65;;esac
+ case "$MODE" in normal) DURATION=165;;exploration) DURATION=70;;combat) DURATION=65;;esac
 fi
 BASE="$ROOT/workplace/probe/$NAME";SOURCE="$ROOT/workplace/probe/$PLAYER"
 GAME_CONTAINER="dqk-$NAME-game";VIDEO_CONTAINER="dqk-$NAME-video"

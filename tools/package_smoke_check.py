@@ -17,6 +17,9 @@ assert 'panic:' not in (out/'player.log').read_text(errors='replace')
 result=dict(passed=True,platform=mode,execution='Linux native in container' if mode=='linux' else 'Windows executable under Wine; not Windows hardware',state_injection=False,scope=['packaged executable','cold title','normal role management','manual','clean close','zero original pixel writes'],counts=c,screenshots={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in out.glob('*.png')})
 if (out/'04-map-fullscreen.png').exists():
     assert Image.open(out/'04-map-fullscreen.png').size==(1280,900)
+    for name in ['04-map-fullscreen.png','05-map-zoom.png']:
+        with Image.open(out/name) as picture:
+            assert sum(r>100 and g>100 and b>50 for r,g,b in picture.convert('RGB').getdata())>10000, '地圖圖稿尚未提交，不能用空視窗與載入完成的差異當縮放證據'
     assert ImageChops.difference(Image.open(out/'04-map-fullscreen.png'),Image.open(out/'05-map-zoom.png')).getbbox()
     events=[x for x in d['reader_events'] if x.get('action') in ('map-window-open','map-window-close')]
     assert [x['action'] for x in events]==['map-window-open','map-window-close']

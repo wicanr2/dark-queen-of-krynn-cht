@@ -218,7 +218,7 @@
 | [music_cues.go](tools/music_cues.go)、[原版探針](tools/music_cue_probe.go)、[player_music.go](tools/player_music.go)、[解碼與資料核對](tools/player_music_assets.go)、[音樂測試](tools/player_music_assets_test.go) | 原版遠呼叫的只讀開始／停止／音量觀察；音樂獨立於圖像HD、語言與縮放，正式TSV工具列及F8控制；證據與聽驗限制見規格006。 |
 | [player_music_inputs.py](tools/player_music_inputs.py)、`workplace/probe/music-go-deps/` | 固定oggvorbis v1.0.5及vorbis v1.0.2；`music-hd.sh deps`首次建立，建置前核zip與每個解壓成員。只產生本作modfile，不修改SDK或共用模組快取。 |
 | [player-audio-image.sh](tools/player-audio-image.sh)、[Dockerfile.player-audio](tools/Dockerfile.player-audio)、[asound-pulse.conf](tools/asound-pulse.conf) | 固定Go映像的桌面音訊延伸，只補ALSA至PulseAudio橋接；使用`bash tools/player-audio-image.sh`，既存映像先驗。啟動只連目前UID的socket；無裝置保留遊戲。 |
-| [player_ui_contract.py](tools/player_ui_contract.py) | `bash tools/player.sh check-ui player-整合目錄`重跑24個受影響介面子案例及2項音樂測試；沿用原版IRQ根收據，輸出本機ui-contract.json，不重新執行全量繪圖父批。 |
+| [player_ui_contract.py](tools/player_ui_contract.py)、[高清文字守衛](tools/player_text_hd_test.go) | `bash tools/player.sh check-ui player-整合目錄`重跑既有介面、音樂、地圖及高清文字／遮罩守衛；沿用原版IRQ根收據，輸出本機ui-contract.json，不重新執行全量繪圖父批。 |
 | [圖片文字規格](docs/spec/005-render-owner.md#ready圖片文字的語言獨立替換)、[picture_text.go](tools/picture_text.go)、[picture_text_inputs.py](tools/picture_text_inputs.py) | 圖片文字的來源核對、繪製前底圖保存、Go文字安全框及獨立於HD的繁中替換；接入在[player_picture_text.go](tools/player_picture_text.go)，本機資料為正式入口的picture-text目錄 |
 | [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD與說明世界地圖已接入；目前數量與限制見CONTEXT |
 | [guide_inputs.py](tools/guide_inputs.py)、[guide-ui.zh-TW.tsv](text/guide-ui.zh-TW.tsv) | 編譯本機18章攻略與52張重繪閱讀圖，核對來源及增補字模；沿規格003的F7、工具列與原框查閱，全文及完整圖集不入Git |
