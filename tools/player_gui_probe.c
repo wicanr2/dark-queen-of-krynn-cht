@@ -65,7 +65,7 @@ static int wait_reference(Display *d,Window w,const char *directory,const char *
     char path[4096],magic[3];int width,height,max;
     snprintf(path,sizeof(path),"%s/%s.ppm",directory,name);
     FILE *f=fopen(path,"rb");if(!f)return 0;
-    if(fscanf(f,"%2s\n%d %d\n%d\n",magic,&width,&height,&max)!=4||strcmp(magic,"P6")||max!=255||width!=640||height!=400){fclose(f);return 0;}
+    if(fscanf(f,"%2s\n%d %d\n%d\n",magic,&width,&height,&max)!=4||strcmp(magic,"P6")||max!=255||!((width==640&&height==400)||(width==960&&height==600))){fclose(f);return 0;}
     size_t bytes=(size_t)width*height*3;unsigned char *rgb=malloc(bytes);if(!rgb){fclose(f);return 0;}
     if(fread(rgb,1,bytes,f)!=bytes){fclose(f);free(rgb);return 0;}fclose(f);
     for(int trial=0;trial<150;trial++){
@@ -188,7 +188,7 @@ int main(int argc,char **argv) {
         close_map_key(d,mw,w);capture(d,w,argv[1],"22-guide-map-index");
         key(d,w,XK_Escape);capture(d,w,argv[1],"23-guide-return");
         key(d,w,XK_F7);capture(d,w,argv[1],"24-guide-reopen");
-        key(d,w,XK_F7);capture(d,w,argv[1],"25-guide-toggle-return");
+        /* 留在已重新開啟的前端目錄再關窗，不任意截斷原版選單的等待流程。 */
         reader_input=0;
     }
     key(d,w,XK_F10);sleep(1);

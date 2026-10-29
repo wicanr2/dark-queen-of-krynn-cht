@@ -227,12 +227,13 @@ func (g *liveGame) composeReaderImage(px []byte, p *readerPage) {
 // Ebitengine 每個程序擁有一個視窗。以同一執行檔開啟唯讀地圖程序，
 // 主遊戲保持閱讀暫停；子程序沒有 Oracle、遊戲輸入或存檔目錄。
 type readerMapProcess struct {
-	Command *exec.Cmd
-	Input   io.WriteCloser
-	Done    chan error
-	Step    uint64
-	Exited  bool
-	Error   error
+	Command  *exec.Cmd
+	Input    io.WriteCloser
+	Done     chan error
+	Step     uint64
+	Exited   bool
+	Error    error
+	Runnable bool
 }
 
 type readerMapRequest struct {
@@ -280,8 +281,11 @@ func (g *liveGame) openReaderMapWindow() {
 		g.readerKey("Esc", "map-window-error", 0)
 		return
 	}
-	pending := &readerMapProcess{Command: command, Input: input, Done: make(chan error, 1), Step: g.o.Steps()}
+	pending := &readerMapProcess{Command: command, Input: input, Done: make(chan error, 1), Step: g.o.Steps(), Runnable: ebiten.IsRunnableOnUnfocused()}
 	g.mapWindow = pending
+	// 主視窗即使因另一個全螢幕視窗而失焦／縮小，仍須收取子程序結束。
+	// tickReaderMapWindow維持原版暫停，這裡不讓遊戲在背景前進。
+	ebiten.SetRunnableOnUnfocused(true)
 	go func() {
 		if err := json.NewEncoder(input).Encode(request); err != nil {
 			input.Close()
@@ -325,8 +329,12 @@ func (g *liveGame) tickReaderMapWindow() bool {
 		}
 		g.reader.UIEvents = append(g.reader.UIEvents, map[string]any{"step": g.o.Steps(), "action": "map-window-close"})
 		g.mapWindow = nil
+		if ebiten.IsWindowMinimized() {
+			ebiten.RestoreWindow()
+		}
 		g.readerKey("Esc", "map-window", 0)
 		g.reader.WaitDraw = true
+		g.mapResumeRunnable = &p.Runnable // 第一張還原畫格提交後才恢復原本的失焦設定。
 	}
 	return true
 }

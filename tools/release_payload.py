@@ -91,7 +91,10 @@ def notices(root,player,modules,deps,font,base,full):
 def archive(base,path):
     with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=1) as z:
         for p in sorted(base.rglob('*')):
-            if p.is_file():z.write(p,str(Path(base.name)/p.relative_to(base)))
+            if p.is_file():
+                # PNG／Ogg已自行壓縮。直接封存，避免三平台反覆壓縮同一批美術及音樂。
+                method=zipfile.ZIP_STORED if p.suffix.lower() in {'.png','.jpg','.jpeg','.ogg'} else zipfile.ZIP_DEFLATED
+                z.write(p,str(Path(base.name)/p.relative_to(base)),compress_type=method,compresslevel=1)
     with zipfile.ZipFile(path) as z:
         for info in z.infolist():
             assert not info.filename.startswith('/') and '..' not in Path(info.filename).parts

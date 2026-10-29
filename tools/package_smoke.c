@@ -17,6 +17,7 @@ int main(int argc,char**argv){
         key(d,mw,XK_equal);capture(d,mw,argv[1],"05-map-zoom");
         close_map_key(d,mw,w);
         capture(d,w,argv[1],"06-map-index");
+        close_window(d,w);XCloseDisplay(d);return 0; /* 在前端目錄暫停時關窗，避免任意截斷DOS繪圖交易。 */
     }
     key(d,w,XK_Escape);close_window(d,w);XCloseDisplay(d);return 0;
 }

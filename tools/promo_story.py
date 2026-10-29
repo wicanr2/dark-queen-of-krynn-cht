@@ -33,6 +33,13 @@ def prepare(a):
     assert accepted['passed'] and sha(formal/'dqk-player')==accepted['binary_sha256']
     sources={k:getattr(a,k) for k in ['normal','exploration','combat']}
     inputs={k:read(p/'capture-inputs.json') for k,p in sources.items()}
+    for k,metadata in inputs.items():
+        if metadata.get('full_screen_capture'):
+            geometry=read(sources[k]/'window-rect.json')
+            x,y,w,h=geometry['rect']
+            assert w==960 and h==600 and x>=0 and y>=0 and x+w<=1280 and y+h<=900
+            metadata['window_rect']=geometry['rect']
+            metadata['window_rect_evidence_sha256']=sha(sources[k]/'window-rect.json')
     frozen={n:read(formal/'build-info.json')['sources'][n] for n in (a.root/'tools/player_sources.txt').read_text().splitlines()}
     for k,metadata in inputs.items():
         assert metadata['edition']=='story' and metadata['mode']==k
@@ -95,6 +102,7 @@ def prepare(a):
             assert segment['source_start']>=0
             segment['state_injection']=family!='normal'
             segment['full_screen_capture']=inputs[family].get('full_screen_capture',False)
+            segment['window_rect']=inputs[family].get('window_rect')
             segment['full_screen_map']=event in ('map','guide-map')
             badge='正常操作錄影' if family=='normal' else '場景快照續行'
             if key=='art-original':badge+='｜原版美術'
@@ -155,7 +163,8 @@ def render(a):
             inputs=['-ss',str(s['source_start']),'-i',s['source']]
             crop=''
             if s.get('full_screen_capture') and not s.get('full_screen_map'):
-                crop='crop=960:600:160:150,'
+                x,y,w,h=s['window_rect']
+                crop=f'crop={w}:{h}:{x}:{y},'
             if s.get('full_screen_map'):
                 vf='crop=1280:796:0:48,scale=1280:796:flags=lanczos,pad=1920:1080:320:104:color=0x211710'
             else:
@@ -163,7 +172,8 @@ def render(a):
             if s['layout']=='map-and-story':
                 vf='crop=1280:796:0:48,scale=900:560:flags=lanczos,pad=1920:1080:64:230:color=0x211710'
             elif s['layout']=='tactical-closeup':
-                vf='crop=540:510:160:150,scale=860:812:flags=lanczos,pad=1920:1080:64:104:color=0x211710'
+                x,y,_,_=s['window_rect']
+                vf=f'crop=540:510:{x}:{y},scale=860:812:flags=lanczos,pad=1920:1080:64:104:color=0x211710'
             elif s['layout']=='split-comparison':
                 starts=s['comparison_starts']
                 inputs=['-ss',str(starts[0]),'-i',s['source'],'-ss',str(starts[1]),'-i',s['source']]

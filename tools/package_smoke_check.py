@@ -21,8 +21,8 @@ if (out/'04-map-fullscreen.png').exists():
     events=[x for x in d['reader_events'] if x.get('action') in ('map-window-open','map-window-close')]
     assert [x['action'] for x in events]==['map-window-open','map-window-close']
     assert events[0]['step']==events[1]['step'] and events[0]['fullscreen']
-    assert [x['key'] for x in d['manual_events']]==['F6','Right','Down','Return','Esc','Esc']
-    assert d['manual_events'][-2]['page']['Mode']=='manual-index'
+    assert [x['key'] for x in d['manual_events']]==['F6','Right','Down','Return','Esc']
+    assert d['manual_events'][-1]['page']['Mode']=='manual-index'
     result['scope']+=['packaged child process','independent fullscreen map','zoom','Esc returns to index','guest paused during map']
 (out/'checks.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
 print(json.dumps(dict(passed=True,platform=mode)))

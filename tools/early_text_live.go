@@ -62,42 +62,43 @@ type storyPage struct {
 	Prefix                 *originalPrefix `json:"Prefix,omitempty"`
 }
 type liveGame struct {
-	o             *oracle.Oracle
-	out           string
-	translate     bool
-	fine          bool
-	catalog       map[string]string
-	glyphs        glyphSet
-	events        []liveEvent
-	active        map[[2]int]liveEvent
-	frames        []liveFrame
-	texture       *ebiten.Image
-	textureHash   string
-	uploads       int
-	finished      bool
-	lifecycle     bool
-	transition    bool
-	renderDepth   int
-	paints        []paintReturn
-	lastPixels    []byte
-	boundaries    []map[string]any
-	checkpoints   []map[string]any
-	story         bool
-	storySequence bool
-	page          *storyPage
-	pages         []storyPage
-	sources       map[string]string
-	interactive   bool
-	inputs        []map[string]any
-	escapePending bool
-	escapeStep    uint64
-	camp          bool
-	campPositions map[[2]int]string
-	list          *listState
-	reader        *journalReader
-	cold          *coldLoad
-	player        *playerSession
-	mapWindow     *readerMapProcess
+	o                 *oracle.Oracle
+	out               string
+	translate         bool
+	fine              bool
+	catalog           map[string]string
+	glyphs            glyphSet
+	events            []liveEvent
+	active            map[[2]int]liveEvent
+	frames            []liveFrame
+	texture           *ebiten.Image
+	textureHash       string
+	uploads           int
+	finished          bool
+	lifecycle         bool
+	transition        bool
+	renderDepth       int
+	paints            []paintReturn
+	lastPixels        []byte
+	boundaries        []map[string]any
+	checkpoints       []map[string]any
+	story             bool
+	storySequence     bool
+	page              *storyPage
+	pages             []storyPage
+	sources           map[string]string
+	interactive       bool
+	inputs            []map[string]any
+	escapePending     bool
+	escapeStep        uint64
+	camp              bool
+	campPositions     map[[2]int]string
+	list              *listState
+	reader            *journalReader
+	cold              *coldLoad
+	player            *playerSession
+	mapWindow         *readerMapProcess
+	mapResumeRunnable *bool
 }
 
 // 研究限定的冷讀重播。角色管理沿用 20px，讀回後才切換既有 16px 列表原型。
@@ -744,6 +745,10 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 			g.savePlayerScreenshot(screen)
 		}
 		g.drawPlayerToolbar(screen)
+		if g.mapResumeRunnable != nil {
+			ebiten.SetRunnableOnUnfocused(*g.mapResumeRunnable)
+			g.mapResumeRunnable = nil
+		}
 		if g.reader != nil {
 			g.reader.WaitDraw = false
 		}

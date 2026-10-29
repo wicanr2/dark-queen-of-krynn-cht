@@ -22,6 +22,10 @@ int main(int argc,char**argv){
     Display*d=XOpenDisplay(NULL);if(!d)return 6;Window w=0;
     for(int i=0;i<200&&!w;i++){w=find_window(d,DefaultRootWindow(d));usleep(100000);}if(!w)return 7;
     sleep(2);char path[4096];snprintf(path,sizeof(path),"%s/window-id",out);FILE*f=fopen(path,"w");if(!f)return 5;fprintf(f,"%lu\n",w);fclose(f);
+    XWindowAttributes geometry;Window child;int gx,gy;
+    if(!XGetWindowAttributes(d,w,&geometry)||!XTranslateCoordinates(d,w,DefaultRootWindow(d),0,0,&gx,&gy,&child))return 21;
+    snprintf(path,sizeof(path),"%s/window-rect.json",out);f=fopen(path,"w");if(!f)return 5;
+    fprintf(f,"{\"rect\":[%d,%d,%d,%d],\"method\":\"X11 client coordinates before capture\"}\n",gx,gy,geometry.width,geometry.height);fclose(f);
     snprintf(path,sizeof(path),"%s/recording",out);
     for(int i=0;i<600&&access(path,F_OK);i++)usleep(100000);
     if(access(path,F_OK))return 18;
@@ -33,13 +37,13 @@ int main(int argc,char**argv){
         XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);
         key(d,w,XK_F6);mark(d,w,out,"manual");sleep(story?8:4);
         key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);Window mw=wait_map_window(d,w);mark(d,mw,out,"map");sleep(story?10:4);
-        key(d,mw,XK_Escape);key(d,w,XK_Escape);key(d,w,XK_F7);mark(d,w,out,"guide");sleep(4);
+        close_map_key(d,mw,w);key(d,w,XK_Escape);key(d,w,XK_F7);mark(d,w,out,"guide");sleep(4);
         key(d,w,XK_Return);mark(d,w,out,"guide-body");sleep(story?6:4);
         if(story){
             key(d,w,XK_Escape);key(d,w,XK_Left);key(d,w,XK_Left);key(d,w,XK_Left);
             key(d,w,XK_Return);mark(d,w,out,"guide-chapter");sleep(4);
             key(d,w,XK_Escape);key(d,w,XK_Down);key(d,w,XK_Return);
-            mw=wait_map_window(d,w);mark(d,mw,out,"guide-map");sleep(10);key(d,mw,XK_Escape);
+            mw=wait_map_window(d,w);mark(d,mw,out,"guide-map");sleep(10);close_map_key(d,mw,w);
         }
     }else if(!strcmp(mode,"exploration")){
         key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);

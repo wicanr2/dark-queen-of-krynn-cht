@@ -89,7 +89,9 @@ elif manual_map:
     folder=next(p.parent for p in (root/'workplace/probe').glob('player-*/inputs/player-profile.json') if sha(p)==build['profile_sha256'])
     map_file=folder/'manual-world-map.png'
 else:
-    assert [event['key'] for event in events] == ['F6', 'Esc']
+    expected_manual=['F6','Esc']
+    if guide and diagnostics['reader_mode']=='manual': expected_manual+=['F6']
+    assert [event['key'] for event in events] == expected_manual
 assert [event['chinese'] for event in controls if event['action'] == 'language'] == [False, True]
 assert next(event for event in controls if event['action'] != 'music')['action'] == 'scale3' and all(event['hd'] is expected_hd for event in controls)
 assert controls[-1]['action'] == 'screenshot'
@@ -99,12 +101,14 @@ assert sha(out / '06-manual.png') != sha(out / '05-chinese.png')
 assert 'panic' not in (out / 'player.log').read_text()
 if guide:
     events = diagnostics['guide_events']
+    close_in_reader=windowed_maps and diagnostics['reader_mode']=='guide'
     expected=['F7','Return','Esc','Left','Left','Left','Return','PgDn','Esc','Down','Return']
     if not windowed_maps: expected+=['ZoomIn','ZoomIn','PanRight','PanDown','Home']
     expected+=['Esc','Esc','F7','F7']
+    if close_in_reader: expected.pop()
     assert [e['key'] for e in events] == expected
-    assert len({e['step'] for e in events[:-2]}) == 1, '攻略查閱期間原版不應前進'
-    assert events[-2]['step'] == events[-1]['step']
+    assert len({e['step'] for e in (events[:-1] if close_in_reader else events[:-2])}) == 1, '攻略查閱期間原版不應前進'
+    if not close_in_reader: assert events[-2]['step'] == events[-1]['step']
     assert events[6]['page']['Number'] == 1 and events[7]['page']['Number'] == 2
     assert events[10]['book'] == 'chapter-17' and events[10]['page']['Mode'] == 'guide-map'
     assert events[10]['page']['SourceKey'] == 'guide.map.flame-0'
@@ -114,7 +118,7 @@ if guide:
         assert events[14]['page']['Image']['x'] > events[12]['page']['Image']['x']
         assert events[14]['page']['Image']['y'] > events[12]['page']['Image']['y']
         assert events[15]['page']['Image'] == dict(zoom=0,x=0,y=0)
-    for name in ['23-guide-return','25-guide-toggle-return']:
+    for name in (['23-guide-return'] if close_in_reader else ['23-guide-return','25-guide-toggle-return']):
         assert sha(out/(name+'.png')) == sha(out/'07a-guide-base.png')
     assert sha(out/'17-guide-map-fit.png') == sha(out/'21-guide-map-reset.png')
     assert sha(out/'22-guide-map-index.png') == sha(out/'24-guide-reopen.png')
@@ -217,7 +221,7 @@ if demo:
     if read(build).get('transparent_resume_verified'):
         result['scope'] += ['transparent image source retained after event boundary in forest demo']
 if guide:
-    result['scope'] += ['guide toolbar click and F7 toggle', '20 guide sections and 52 maps loaded',
+    result['scope'] += ['guide toolbar click, Esc close and F7 reopen' if close_in_reader else 'guide toolbar click and F7 toggle', '20 guide sections and 52 maps loaded',
         'guide body paging', 'chapter navigation', 'map fit/native/double and pan/reset',
         'independent map source pixel sampling', 'guest CPU paused during guide', 'index and game return']
     result['guide_events'] = diagnostics['guide_events']
