@@ -4,6 +4,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"image"
 	"os"
 	"sort"
 	"strconv"
@@ -285,6 +286,12 @@ func (g *liveGame) composeReader(px []byte) {
 
 func (g *liveGame) composeReaderPage(px []byte, p *readerPage) {
 	pal := g.o.Palette()
+	if p.Box[0] < 32 && p.Box[1] < 32 {
+		g.sharpClear(image.Rect(32, p.Box[1], p.Box[2], min(32, p.Box[3])))
+		g.sharpClear(image.Rect(p.Box[0], 32, p.Box[2], p.Box[3]))
+	} else {
+		g.sharpClear(image.Rect(p.Box[0], p.Box[1], p.Box[2], p.Box[3]))
+	}
 	for y := p.Box[1]; y < p.Box[3]; y++ {
 		for x := p.Box[0]; x < p.Box[2]; x++ {
 			if x < 32 && y < 32 {
@@ -312,6 +319,9 @@ func (g *liveGame) composeReaderPage(px []byte, p *readerPage) {
 		}
 		fg := pal[color]
 		for col, ch := range []rune(text) {
+			if g.sharpGlyph(left+col*16, p.Box[1]+row*16, 16, ch, fg) {
+				continue
+			}
 			for off, a := range g.glyphs.Glyphs[string(ch)][:256] {
 				if a == 0 {
 					continue

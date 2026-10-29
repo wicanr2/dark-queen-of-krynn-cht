@@ -47,7 +47,7 @@ int main(int argc,char**argv){
         }
     }else if(!strcmp(mode,"exploration")){
         key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);
-        key(d,w,XK_e);key(d,w,XK_Escape);sleep(3);mark(d,w,out,"cave");
+        key(d,w,XK_e);if(story){mark(d,w,out,"camp");sleep(8);}key(d,w,XK_Escape);sleep(3);mark(d,w,out,"cave");
         if(story){
             sleep(8);mark(d,w,out,"cave-motion");
             key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);sleep(2);

@@ -61,8 +61,9 @@ func (b *sceneBackend) submit(dst *ebiten.Image, rects []sceneRect, pal [256][3]
 		}
 		source := texture.SubImage(image.Rect(r.SX*scale, r.SY*scale, (r.SX+r.W)*scale, (r.SY+r.H)*scale)).(*ebiten.Image)
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(float64(3/scale), float64(3/scale))
-		op.GeoM.Translate(float64(r.X*3), float64(r.Y*3))
+		targetScale := float64(dst.Bounds().Dx()) / 320
+		op.GeoM.Scale(targetScale/float64(scale), targetScale/float64(scale))
+		op.GeoM.Translate(float64(r.X)*targetScale, float64(r.Y)*targetScale)
 		dst.DrawImage(source, op)
 		draws++
 	}

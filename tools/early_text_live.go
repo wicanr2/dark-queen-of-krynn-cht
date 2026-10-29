@@ -551,11 +551,14 @@ func (g *liveGame) Update() error {
 }
 func (g *liveGame) Layout(_, _ int) (int, int) {
 	if g.player != nil {
-		return 960, 600
+		return 320 * g.playerCanvasScale(), 200 * g.playerCanvasScale()
 	}
 	return 640, 400
 }
 func (g *liveGame) Draw(screen *ebiten.Image) {
+	if g.player != nil && g.player.SharpText != nil {
+		g.player.SharpText.Reset()
+	}
 	var w, h int
 	var rgb []byte
 	if g.player != nil {
@@ -597,6 +600,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 				panic("原型文字框越界")
 			}
 			bg, fg := pal[(e.Color>>4)&15], pal[e.Color&15]
+			g.sharpClear(image.Rect(x, y, x+width, y+16))
 			for yy := y; yy < y+16; yy++ {
 				for xx := x; xx < x+width; xx++ {
 					d := (yy*640 + xx) * 4
@@ -607,6 +611,13 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 				panic("譯文超出安全框")
 			}
 			for i, ch := range []rune(e.Text) {
+				textY := y - 2
+				if g.camp {
+					textY = y
+				}
+				if g.sharpGlyph(x+i*g.glyphs.Size, textY, g.glyphs.Size, ch, fg) {
+					continue
+				}
 				alpha, ok := g.glyphs.Glyphs[string(ch)]
 				if !ok || len(alpha) != g.glyphs.Size*g.glyphs.Height {
 					panic("字型缺字")
@@ -654,6 +665,7 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 					panic("段落文字與字色長度不符")
 				}
 			}
+			g.sharpClear(image.Rect(p.Box[0], p.Box[1], p.Box[2], p.Box[3]))
 			for y := p.Box[1]; y < p.Box[3]; y++ {
 				for x := p.Box[0]; x < p.Box[2]; x++ {
 					copy(px[(y*640+x)*4:][:3], bg[:])
@@ -667,6 +679,9 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 					}
 					glyphIndex++
 					if p.Prefix != nil && glyphIndex <= len(p.Prefix.Text) {
+						continue
+					}
+					if g.sharpGlyph(p.Box[0]+col*g.glyphs.Size, p.Box[1]+row*g.glyphs.Height, g.glyphs.Size, ch, fg) {
 						continue
 					}
 					alpha, ok := g.glyphs.Glyphs[string(ch)]
@@ -687,7 +702,13 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		}
 	}
 	if g.translate && g.page != nil && g.canTranslate([4]int{g.page.Box[0] / 2, g.page.Box[1] / 2, (g.page.Box[2] + 1) / 2, (g.page.Box[3] + 1) / 2}) {
-		drawOriginalPrefix(px, g.page)
+		if g.page.Prefix != nil && g.player != nil && g.player.SharpText != nil {
+			for i, ch := range g.page.Prefix.Text {
+				g.sharpGlyph(g.page.Box[0]+i*16, g.page.Box[1], 16, ch, g.o.Palette()[g.page.Foreground])
+			}
+		} else {
+			drawOriginalPrefix(px, g.page)
+		}
 	}
 	if g.translate && g.list != nil {
 		g.composeList(px)
@@ -1313,6 +1334,7 @@ type playerSession struct {
 	Music             playerMusicRenderer
 	MusicEnabled      bool
 	Screenshot        bool
+	SharpText         playerSharpText
 	Renderer          playerFrameRenderer
 	Controls          []map[string]any
 }
@@ -1324,6 +1346,37 @@ type playerFrameRenderer interface {
 	ComposeText([]byte, *liveGame, []byte)
 	CanTranslate([4]int) bool
 	Close(string)
+}
+
+// 歷史研究清單可不連入高清字模模組，維持原有畫布及收據。
+type playerSharpText interface {
+	Reset()
+	Clear(image.Rectangle)
+	Glyph(int, int, int, rune, [3]byte)
+	Alpha(rune) ([]byte, int, int)
+	Draw(*ebiten.Image)
+	Diagnostics() any
+}
+
+var playerSharpTextLoader func(string) playerSharpText
+
+func (g *liveGame) playerCanvasScale() int {
+	if g.player != nil && g.player.SharpText != nil {
+		return 6
+	}
+	return 3
+}
+func (g *liveGame) sharpClear(r image.Rectangle) {
+	if g.player != nil && g.player.SharpText != nil && g.translate {
+		g.player.SharpText.Clear(r)
+	}
+}
+func (g *liveGame) sharpGlyph(x, y, size int, ch rune, fg [3]byte) bool {
+	if g.player == nil || g.player.SharpText == nil || !g.translate {
+		return false
+	}
+	g.player.SharpText.Glyph(x, y, size, ch, fg)
+	return true
 }
 
 // 舊研究來源清單仍可編譯，正式玩家入口必須連入完整畫格提交模組。
@@ -1404,6 +1457,9 @@ func runPlayer(profile, original, saves string) {
 	o.SetCmdLine("SB220 SI7 RB330")
 	o.SetScratch(filepath.Join(saves, "saves"))
 	p := &playerSession{Directory: saves, Scale: 2, Mouse: [2]int{-1, -1}, HDEnabled: true, MusicEnabled: true}
+	if playerSharpTextLoader != nil {
+		p.SharpText = playerSharpTextLoader(profile)
+	}
 	if playerHDLoader != nil {
 		p.HD = playerHDLoader(filepath.Join(profile, "..", "hd"))
 	}
@@ -1470,6 +1526,11 @@ func runPlayer(profile, original, saves string) {
 	ebiten.SetWindowTitle("黑暗之后：繁體中文版 " + playerVersion)
 	ebiten.SetTPS(60)
 	must(ebiten.RunGame(g))
+	if p.SharpText != nil {
+		data, err := json.MarshalIndent(p.SharpText.Diagnostics(), "", "  ")
+		must(err)
+		must(os.WriteFile(filepath.Join(saves, "sharp-text-stats.json"), append(data, '\n'), 0644))
+	}
 	controlLog, err := json.MarshalIndent(p.Controls, "", "  ")
 	must(err)
 	must(os.WriteFile(filepath.Join(saves, "controls.json"), append(controlLog, '\n'), 0644))
@@ -1786,7 +1847,7 @@ func playerText(px []byte, stride, x, y int, text string, glyphs glyphSet, fg [3
 
 func (g *liveGame) playerCursor() (int, int) {
 	x, y := ebiten.CursorPosition()
-	return x * 2 / 3, y * 2 / 3
+	return x * 2 / g.playerCanvasScale(), y * 2 / g.playerCanvasScale()
 }
 
 func (g *liveGame) savePlayerScreenshot(screen *ebiten.Image) {
@@ -1880,8 +1941,12 @@ func (g *liveGame) canTranslate(r [4]int) bool {
 
 func (g *liveGame) drawPlayerToolbar(screen *ebiten.Image) {
 	p := g.player
+	if p.SharpText != nil {
+		p.SharpText.Reset()
+	}
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(1.5, 1.5)
+	scale := float64(g.playerCanvasScale()) / 2
+	op.GeoM.Scale(scale, scale)
 	if p.Toolbar {
 		px := make([]byte, 640*24*4)
 		for i := 0; i < len(px); i += 4 {
@@ -1897,7 +1962,13 @@ func (g *liveGame) drawPlayerToolbar(screen *ebiten.Image) {
 			} else if (b.Action == "scale2" && p.Scale == 2) || (b.Action == "scale3" && p.Scale == 3) || b.Action == "language" || (b.Action == "hd" && p.HDEnabled) {
 				fg = [3]byte{102, 230, 235}
 			}
-			playerText(px, 640, b.X+8, 4, p.Text[b.Key], p.ToolbarGlyphs, fg)
+			if p.SharpText != nil {
+				for i, ch := range []rune(p.Text[b.Key]) {
+					p.SharpText.Glyph(b.X+8+i*16, 4, 16, ch, fg)
+				}
+			} else {
+				playerText(px, 640, b.X+8, 4, p.Text[b.Key], p.ToolbarGlyphs, fg)
+			}
 		}
 		p.BarTexture.WritePixels(px)
 		screen.DrawImage(p.BarTexture, op)
@@ -1907,11 +1978,20 @@ func (g *liveGame) drawPlayerToolbar(screen *ebiten.Image) {
 		for i := 0; i < len(px); i += 4 {
 			px[i+3] = 255
 		}
-		playerText(px, 640, 8, 4, p.Notice, p.ToolbarGlyphs, [3]byte{220, 220, 220})
+		if p.SharpText != nil {
+			for i, ch := range []rune(p.Notice) {
+				p.SharpText.Glyph(8+i*16, 380, 16, ch, [3]byte{220, 220, 220})
+			}
+		} else {
+			playerText(px, 640, 8, 4, p.Notice, p.ToolbarGlyphs, [3]byte{220, 220, 220})
+		}
 		p.BarTexture.WritePixels(px)
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(0, 376)
-		op.GeoM.Scale(1.5, 1.5)
+		op.GeoM.Scale(scale, scale)
 		screen.DrawImage(p.BarTexture, op)
+	}
+	if p.SharpText != nil {
+		p.SharpText.Draw(screen)
 	}
 }

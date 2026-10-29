@@ -241,6 +241,11 @@ func (p *playerRenderOwner) Diagnostics() any {
 	if p.Text != nil {
 		result["text_commands"] = p.Text.Counters
 		result["text_unclaimed"] = p.Text.Unmatched
+		var words []map[string]any
+		for _, w := range p.Text.Words {
+			words = append(words, map[string]any{"source": w.Source, "text": w.Text, "word": w.Word, "page": w.Page})
+		}
+		result["text_words"] = words
 	}
 	result["native_pixel_writes"] = p.Counters["native_writes"]
 	result["image_native_fallback"] = p.Counters["image_native_fallback"]
@@ -270,7 +275,7 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 					}
 				}
 				p.Text.prune()
-				for _, r := range append(g.playerProtectedRectangles(), p.Text.Rectangles()...) {
+				for _, r := range append(g.playerProtectedRectangles(), p.Text.Rectangles(g.playerProtectedRectangles())...) {
 					if r[0] < 0 || r[1] < 0 || r[2] > 320 || r[3] > 200 {
 						panic("不透明中文框越界")
 					}
@@ -283,7 +288,7 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 			}
 			pictureProtected := [][4]int(nil)
 			if g.translate {
-				pictureProtected = append(g.playerProtectedRectangles(), p.Text.Rectangles()...)
+				pictureProtected = append(g.playerProtectedRectangles(), p.Text.Rectangles(g.playerProtectedRectangles())...)
 				pictureProtected = append(pictureProtected, g.playerTextInkRectangles()...)
 			}
 			p.preparePictureText(g, page, pictureProtected)
@@ -312,21 +317,32 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 }
 
 func (p *playerRenderOwner) ComposeText(px []byte, g *liveGame, rgb []byte) {
-	if !p.Busy() {
+	if g.translate && !p.Busy() {
 		p.Text.Compose(px, g, rgb)
 	}
 }
 
 func (p *playerRenderOwner) Present(screen *ebiten.Image, g *liveGame, rgb []byte, held bool) {
+	scale := g.playerCanvasScale()
+	if p.Front.Bounds().Dx() != 320*scale {
+		front, back := ebiten.NewImage(320*scale, 200*scale), ebiten.NewImage(320*scale, 200*scale)
+		op := &ebiten.DrawImageOptions{}
+		factor := float64(320*scale) / float64(p.Front.Bounds().Dx())
+		op.GeoM.Scale(factor, factor)
+		front.DrawImage(p.Front, op)
+		p.Front.Dispose()
+		p.Back.Dispose()
+		p.Front, p.Back = front, back
+	}
 	if !held && !p.Busy() {
 		p.Back.Clear()
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(1.5, 1.5)
+		op.GeoM.Scale(float64(scale)/2, float64(scale)/2)
 		p.Back.DrawImage(g.texture, op)
 		if page, ok := nativeVisiblePage(p.Oracle); ok {
 			protected := [][4]int(nil)
 			if g.translate {
-				protected = append(g.playerProtectedRectangles(), p.Text.Rectangles()...)
+				protected = append(g.playerProtectedRectangles(), p.Text.Rectangles(g.playerProtectedRectangles())...)
 				protected = append(protected, g.playerTextInkRectangles()...)
 				protected = append(protected, p.PictureBoxes...)
 			}
@@ -345,6 +361,9 @@ func (p *playerRenderOwner) Present(screen *ebiten.Image, g *liveGame, rgb []byt
 			p.Counters["scene_texture_builds"] += uint64(builds)
 			p.Counters["scene_rectangle_draws"] += uint64(draws)
 			p.Counters["scene_submissions"]++
+		}
+		if g.player.SharpText != nil {
+			g.player.SharpText.Draw(p.Back)
 		}
 		p.Front, p.Back = p.Back, p.Front
 	}

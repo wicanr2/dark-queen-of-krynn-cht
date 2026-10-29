@@ -30,7 +30,7 @@ if mode=='prepare':
     i = args.index('-o')
     del args[i:i+2]
     args[1:2] = ['test','-json','-count=1']
-    args += ['/tools/ui_cold_fill_test.go','/tools/player_music_assets_test.go','/tools/player_map_test.go']
+    args += ['/tools/ui_cold_fill_test.go','/tools/player_music_assets_test.go','/tools/player_map_test.go','/tools/player_text_hd_test.go']
     script = '''#!/usr/bin/env bash
 set -euo pipefail
 Xvfb :92 -screen 0 1280x900x24 -nolisten tcp >/out/ui-xvfb.log 2>&1 &
@@ -42,15 +42,21 @@ export DISPLAY=:92
 '''+shlex.join(args)+' >/out/ui-tests.json\n'
     (output/'ui-tests.sh').write_text(script)
 elif mode=='finish':
-    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader'}
+    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace'}
     old = json.loads((parent/'camp-save-contract.json').read_text())
     for name, digest in old['sources'].items():
+        if name=='tools/ui_list_live.go':
+            # 只允許合成函式與image匯入變更。來源觀察器及其餘函式逐位元組保持。
+            s=(root/name).read_text().replace('\t"image"\n','')
+            protected=s.split('func (g *liveGame) composeWords(')[0]+s.split('func (g *liveGame) listReceipt(')[1]
+            assert hashlib.sha256(protected.encode()).hexdigest()=='8d1018c663dd0f05c2bb6491709fdea5962766fe5168874f9c59a087abd58ffa'
+            continue
         if name not in ('tools/early_text_live.go','tools/player_render_owner.go'):
             assert sha(root/name)==digest, name
     result = dict(old)
     result.update(sources={name:sha(root/name) for name in old['sources']},tests_sha256=sha(output/'ui-tests.json'),
                   parent_contract_sha256=sha(parent/'camp-save-contract.json'),
-                  scope='原版IRQ根收據沿用；本次重跑24個介面子案例，新增音樂欄位及工具列不改既有UI觀察器')
+                  scope='原版IRQ根收據沿用；介面、音樂、地圖、原版模式及ASCII守衛重跑。列表只改文字合成，觀察器與其餘函式逐位元組保持')
     (output/'ui-contract.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(dict(passed=True,cases=24,contract_sha256=sha(output/'ui-contract.json'))))
 else:

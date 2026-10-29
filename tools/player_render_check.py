@@ -48,6 +48,7 @@ sources = [p for p in (root / "tools").glob("*.go") if p.name.startswith(("playe
 sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go", "picture_text_inputs.py", "manual_world_map.py", "manual_map_inputs.py", "guide_inputs.py", "player.sh", "player_inputs.py", "player_video_overlay.py", "player_render_check.py"]]
 sources += [root / "tools" / n for n in ["music_cues.go", "player_music_inputs.py", "player_ui_contract.py"]]
 sources += [root / "tools" / n for n in ["completion_audit.py", "player_sources.txt"]]
+sources += [root / "tools/text_hd_inputs.py"]
 abi_root = root / "workplace/probe/render-abi-resume-20261028-r1"
 abi_path = abi_root / "evidence.json"
 verified = False

@@ -11,19 +11,20 @@ import (
 )
 
 type ownedPrint struct {
-	Return       paintReturn
-	Source       string
-	Word         listWord
-	Color        uint16
-	Next         int
-	Valid        bool
-	Reference    []byte
-	Page         uint32
-	Format       *displayFormat
-	Printed      []byte
-	Text         string
-	Layout       displayTextLayout
-	LastX, LastY int
+	Return         paintReturn
+	Source         string
+	Word           listWord
+	Color          uint16
+	Next           int
+	Valid          bool
+	Reference      []byte
+	Page           uint32
+	Format         *displayFormat
+	Printed        []byte
+	Text           string
+	Layout         displayTextLayout
+	LastX, LastY   int
+	PreserveNative bool
 }
 
 type playerTextOwner struct {
@@ -105,6 +106,13 @@ func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Add
 		}
 		r := o.Regs()
 		target := o.Caller()
+		mark := paintReturn{target, r.SS, r.SP + 4}
+		for _, active := range p.Runs {
+			if active.Return == mark {
+				p.Counters["entry_revisit"]++
+				return
+			}
+		}
 		run := &ownedPrint{Return: paintReturn{target, r.SS, r.SP + 4}, Color: o.StackWord(4)}
 		source, ok := listString(o, o.StackWord(6), o.StackWord(5))
 		if ok && source == p.FormatText {
@@ -127,6 +135,12 @@ func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Add
 					break
 				}
 			}
+		}
+		// 已知顯示出口的未知姓名／數字僅保留原版實際印出的字元，
+		// 不解析varargs，不翻譯或改寫原版字串。完整返回後才提交高清字。
+		if ok && !run.Valid && nativeDisplaySource(source) {
+			run.Valid, run.PreserveNative = true, true
+			run.Word.Key = "native-display." + digest([]byte(source))[:20]
 		}
 		p.Runs = append(p.Runs, run)
 		if returns[target] {
@@ -162,7 +176,7 @@ func (p *playerTextOwner) glyph() {
 	x, y, ch := int(int16(word(8))), int(int16(word(6))), byte(word(10))
 	page, known := nativeRenderPage(o)
 	if !known || run.Next >= 128 || ch < 32 || ch > 126 || word(12) != run.Color ||
-		(run.Format == nil && (run.Next >= len(run.Source) || ch != run.Source[run.Next])) ||
+		(run.Format == nil && !run.PreserveNative && (run.Next >= len(run.Source) || ch != run.Source[run.Next])) ||
 		(run.Next > 0 && page != run.Page) {
 		run.Valid = false
 		return
@@ -182,7 +196,7 @@ func (p *playerTextOwner) glyph() {
 		if text == "" {
 			text = p.Catalog[run.Word.Key]
 		}
-		if run.Format == nil {
+		if run.Format == nil && !run.PreserveNative {
 			initial = max(len(run.Source)*8, len([]rune(text))*8)
 			if initial > 320-x {
 				initial = 8
@@ -219,7 +233,7 @@ func (p *playerTextOwner) glyph() {
 			return
 		}
 	}
-	if run.Format != nil {
+	if run.Format != nil || run.PreserveNative {
 		run.Printed = append(run.Printed, ch)
 	}
 	run.Next++
@@ -227,7 +241,7 @@ func (p *playerTextOwner) glyph() {
 }
 
 func (p *playerTextOwner) finish(run *ownedPrint) {
-	if !run.Valid || run.Next == 0 || (run.Format == nil && run.Next != len(run.Source)) {
+	if !run.Valid || run.Next == 0 || (run.Format == nil && !run.PreserveNative && run.Next != len(run.Source)) {
 		// 未取得本層所有權不等同漏譯；列表、段落及冷啟動可由其他層承接。
 		// 只保存有界來源，供抽驗核對，不改原版執行或強行套譯。
 		if source := strings.TrimSpace(run.Source); len(source) > 1 && strings.Trim(source, " 0123456789+-.,()%:") != "" {
@@ -244,6 +258,9 @@ func (p *playerTextOwner) finish(run *ownedPrint) {
 	}
 	if run.Text == "" {
 		run.Text = p.Catalog[run.Word.Key]
+	}
+	if run.PreserveNative {
+		run.Text = string(run.Printed)
 	}
 	if run.Format != nil {
 		text, ok := run.Format.Render(string(run.Printed), p.translateValue)
@@ -311,6 +328,18 @@ func (p *playerTextOwner) finish(run *ownedPrint) {
 	}
 }
 
+func nativeDisplaySource(source string) bool {
+	if len(source) < 1 || len(source) > 128 {
+		return false
+	}
+	for _, ch := range []byte(source) {
+		if ch < 32 || ch > 126 {
+			return false
+		}
+	}
+	return true
+}
+
 func (p *playerTextOwner) translateValue(value string) string {
 	return translateDisplayValue(value, func(source string) string {
 		if key := p.Sources[source]; key != "" {
@@ -342,19 +371,23 @@ func (p *playerTextOwner) Compose(px []byte, g *liveGame, rgb []byte) {
 			continue
 		}
 		w, covered := run.Word, false
-		for _, r := range protected {
-			if w.X < r[2] && w.X+w.Width > r[0] && w.Y < r[3] && w.Y+8 > r[1] {
-				covered = true
-				break
-			}
-		}
+		covered = ownedTextCovered(w, protected)
 		if !covered {
 			g.composeWords(px, []listWord{w}, map[string]string{w.Key: run.Text}, p.Glyphs)
 		}
 	}
 }
 
-func (p *playerTextOwner) Rectangles() [][4]int {
+func ownedTextCovered(w listWord, protected [][4]int) bool {
+	for _, r := range protected {
+		if w.X < r[2] && w.X+w.Width > r[0] && w.Y < r[3] && w.Y+8 > r[1] {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *playerTextOwner) Rectangles(protected [][4]int) [][4]int {
 	result := make([][4]int, 0, len(p.Words))
 	page, ok := nativeVisiblePage(p.Oracle)
 	if !ok {
@@ -365,6 +398,9 @@ func (p *playerTextOwner) Rectangles() [][4]int {
 			continue
 		}
 		w := run.Word
+		if ownedTextCovered(w, protected) {
+			continue
+		}
 		r := [4]int{w.X, w.Y, w.X + w.Width, w.Y + 8}
 		if owner := renderOwners[p.Oracle]; owner != nil && owner.CanTranslate(r) {
 			result = append(result, r)

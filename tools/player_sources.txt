@@ -25,3 +25,4 @@ music_cues.go
 player_music.go
 player_music_assets.go
 player_window_bridge.go
+player_text_hd.go

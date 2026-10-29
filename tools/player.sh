@@ -34,12 +34,20 @@ python3 /project/tools/player_inputs.py fragments /project "/output/$1/inputs" -
 python3 /project/tools/player_inputs.py display /project "/output/$1/inputs" --font /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/manual_map_inputs.py /project "/output/$1/inputs" /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/guide_inputs.py /project "/output/$1/inputs" /font/jf-openhuninn-2.1.ttf
+python3 /project/tools/text_hd_inputs.py "/output/$1/inputs" /font/jf-openhuninn-2.1.ttf
 python3 /project/tools/player_inputs.py finish /project "/output/$1/inputs"
 python3 /project/tools/picture_text_inputs.py /project "/output/$1/picture-text" --font /font/jf-openhuninn-2.1.ttf
 mkdir "/output/$1/session"
 mkdir "/output/$1/hd"
 find "/output/$1" -user root -o -type d -name "*.md"
 ' -- "$NAME"
+  ;;
+ sharp-text)
+  test -d "$BASE/inputs";test -f "$FONT/jf-openhuninn-2.1.ttf"
+  timeout 60s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 512m --cpus 1 --pids-limit 64 \
+    --label project=dark-queen-of-krynn-cht -e PYTHONDONTWRITEBYTECODE=1 \
+    -v "$ROOT/tools:/tools:ro" -v "$BASE/inputs:/inputs" -v "$FONT:/font:ro" \
+    --entrypoint python3 "$PIL" /tools/text_hd_inputs.py /inputs /font/jf-openhuninn-2.1.ttf
   ;;
  refresh-ui|refresh-toolbar)
   INPUT_MODE=refresh

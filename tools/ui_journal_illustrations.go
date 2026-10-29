@@ -243,6 +243,7 @@ type readerMapRequest struct {
 	Path, SHA256, Heading, Footer string
 	Crop                          [4]int
 	Glyphs                        map[string][]byte
+	GlyphSize                     int
 	ParentPID                     int
 }
 
@@ -262,12 +263,15 @@ func (g *liveGame) openReaderMapWindow() {
 	}
 	item := g.reader.imageFor(p)
 	request := readerMapRequest{Path: item.Path, SHA256: item.SHA256, Crop: item.Crop,
-		Heading: p.Heading, Footer: p.Footer, Glyphs: map[string][]byte{}, ParentPID: os.Getpid()}
+		Heading: p.Heading, Footer: p.Footer, Glyphs: map[string][]byte{}, GlyphSize: 16, ParentPID: os.Getpid()}
 	if request.Footer == "" {
 		request.Footer = g.reader.UI["reader.image_hint"]
 	}
 	for _, ch := range request.Heading + request.Footer {
 		request.Glyphs[string(ch)] = g.glyphs.Glyphs[string(ch)]
+		if g.player.SharpText != nil {
+			request.Glyphs[string(ch)], request.GlyphSize, _ = g.player.SharpText.Alpha(ch)
+		}
 	}
 	executable, err := os.Executable()
 	if err != nil {
@@ -375,16 +379,19 @@ type readerMapGame struct {
 	ReturnToParent         bool
 }
 
-func mapWindowText(text string, glyphs map[string][]byte, ink [3]byte) (*ebiten.Image, error) {
+func mapWindowText(text string, glyphs map[string][]byte, ink [3]byte, size int) (*ebiten.Image, error) {
+	if size != 16 && size != 48 {
+		return nil, fmt.Errorf("地圖視窗字型尺寸不符")
+	}
 	chars := []rune(text)
-	px := image.NewRGBA(image.Rect(0, 0, max(1, len(chars)*16), 16))
+	px := image.NewRGBA(image.Rect(0, 0, max(1, len(chars)*size), size))
 	for i, ch := range chars {
 		alpha := glyphs[string(ch)]
-		if len(alpha) < 256 {
+		if len(alpha) < size*size {
 			return nil, fmt.Errorf("地圖視窗缺少字型：%c", ch)
 		}
-		for n, a := range alpha[:256] {
-			at := px.PixOffset(i*16+n%16, n/16)
+		for n, a := range alpha[:size*size] {
+			at := px.PixOffset(i*size+n%size, n/size)
 			for c := 0; c < 3; c++ {
 				px.Pix[at+c] = byte((uint32(ink[c])*uint32(a) + 127) / 255)
 			}
@@ -427,11 +434,15 @@ func runReaderMapWindow() error {
 	g.Image = ebiten.NewImageFromImage(decoded.(interface {
 		SubImage(image.Rectangle) image.Image
 	}).SubImage(crop))
-	g.Heading, err = mapWindowText(request.Heading, request.Glyphs, [3]byte{243, 216, 157})
+	if request.GlyphSize == 0 {
+		request.GlyphSize = 16
+		g.Request.GlyphSize = 16
+	}
+	g.Heading, err = mapWindowText(request.Heading, request.Glyphs, [3]byte{243, 216, 157}, request.GlyphSize)
 	if err != nil {
 		return err
 	}
-	g.Footer, err = mapWindowText(request.Footer, request.Glyphs, [3]byte{235, 235, 235})
+	g.Footer, err = mapWindowText(request.Footer, request.Glyphs, [3]byte{235, 235, 235}, request.GlyphSize)
 	if err != nil {
 		return err
 	}
@@ -542,7 +553,7 @@ func (g *readerMapGame) Draw(screen *ebiten.Image) {
 		Image *ebiten.Image
 		Y     int
 	}{{g.Heading, 14}, {g.Footer, g.Height - 36}} {
-		factor := math.Min(1.5, float64(g.Width-32)/float64(row.Image.Bounds().Dx()))
+		factor := math.Min(24/float64(g.Request.GlyphSize), float64(g.Width-32)/float64(row.Image.Bounds().Dx()))
 		t := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
 		t.GeoM.Scale(factor, factor)
 		t.GeoM.Translate((float64(g.Width)-float64(row.Image.Bounds().Dx())*factor)/2, float64(row.Y))

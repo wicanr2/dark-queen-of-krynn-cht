@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1817,6 +1818,7 @@ func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]
 			textY -= 2
 		}
 		bg, fg := pal[w.Background], pal[w.Foreground]
+		g.sharpClear(image.Rect(x, y, x+w.Width*2, y+w.height()*2))
 		for yy := 0; yy < w.height()*2; yy++ {
 			for xx := 0; xx < w.Width*2; xx++ {
 				copy(px[((y+yy)*640+x+xx)*4:][:3], bg[:])
@@ -1831,6 +1833,9 @@ func (g *liveGame) composeWords(px []byte, words []listWord, catalog map[string]
 			}
 		}
 		for i, ch := range []rune(text) {
+			if g.sharpGlyph(x+i*glyphs.Size, textY, glyphs.Size, ch, fg) {
+				continue
+			}
 			alpha, ok := glyphs.Glyphs[string(ch)]
 			if !ok || len(alpha) != glyphs.Size*glyphs.Height {
 				panic("列表字型缺字")
