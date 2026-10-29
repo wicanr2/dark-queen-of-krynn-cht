@@ -2,8 +2,13 @@
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 NAME="${1:?新錄影批次}";MODE="${2:?normal、exploration或combat}";PLAYER="${3:-player-finish-20261029}"
+EDITION="${4:-short}"
+[[ "$EDITION" = short || "$EDITION" = story ]]
 [[ "$NAME" =~ ^promo-[a-zA-Z0-9-]+$ && "$PLAYER" =~ ^player-[a-zA-Z0-9-]+$ ]]
 case "$MODE" in normal) STATE="";DURATION=75;;exploration) STATE=voyage-text-20261025/ashore-control-r3/final.state;DURATION=40;;combat) STATE=battle-continuation-20261025/control-r1/final.state;DURATION=55;;*)exit 2;;esac
+if [[ "$EDITION" = story ]];then
+ case "$MODE" in normal) DURATION=150;;exploration) DURATION=70;;combat) DURATION=65;;esac
+fi
 BASE="$ROOT/workplace/probe/$NAME";SOURCE="$ROOT/workplace/probe/$PLAYER"
 GAME_CONTAINER="dqk-$NAME-game";VIDEO_CONTAINER="dqk-$NAME-video"
 trap 'docker rm -f "$GAME_CONTAINER" "$VIDEO_CONTAINER" >/dev/null 2>&1 || true' EXIT
@@ -15,19 +20,23 @@ MEDIA=sha256:1c99728881f2cbcb54bfef0c1621968e59e32d6102e1b924db9d17a8a8713465
 timeout 30s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
  -v "$ROOT:/project:ro" -v "$ROOT/workplace/probe:/probe" --entrypoint python3 "$PIL" -c '
 from pathlib import Path
-import json,shutil,sys
+import json,shutil,sys,hashlib
 p=Path("/probe")/sys.argv[1];p.mkdir();(p/"x11").mkdir();(p/"x11").chmod(0o1777);(p/"session").mkdir()
 (p/"session/preferences.json").write_text(json.dumps(dict(Scale=3,HD=True,Music=True)))
 s=Path("/probe")/sys.argv[2]
+sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+shutil.copy2(s/"build-info.json",p/"source-build-info.json")
+metadata=dict(binary_sha256=sha(s/"dqk-player"),profile_sha256=sha(s/"inputs/player-profile.json"),hd_sha256=sha(Path("/probe/player-current/hd/hd.json")),edition=sys.argv[4],mode=sys.argv[3])
+(p/"capture-inputs.json").write_text(json.dumps(metadata,indent=2)+"\n")
 if sys.argv[3]!="normal":
     (p/"code").mkdir()
     for n in Path("/project/tools/player_sources.txt").read_text().splitlines():shutil.copy2(Path("/project/tools")/n,p/"code"/n)
     shutil.copy2("/project/tools/finish_scene_inject.go",p/"code/zz_finish_scene_inject.go")
     shutil.copytree(s/"build-overlay",p/"build-overlay")
     for n in ["audio-go.mod","audio-go.sum"]:shutil.copy2(s/n,p/n)
-' "$NAME" "$PLAYER" "$MODE"
-timeout --kill-after=5s 180s docker run --rm --name "$GAME_CONTAINER" --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 --label project=dark-queen-of-krynn-cht \
- -e HOME=/tmp -e GOPROXY=off -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOMAXPROCS=2 -e LIBGL_ALWAYS_SOFTWARE=1 -e DQK_TRACE_PLAYER_UI=1 \
+' "$NAME" "$PLAYER" "$MODE" "$EDITION"
+timeout --kill-after=5s 260s docker run --rm --name "$GAME_CONTAINER" --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 --label project=dark-queen-of-krynn-cht \
+ -e HOME=/tmp -e GOPROXY=off -e GOCACHE=/gocache -e GOMODCACHE=/modules -e GOMAXPROCS=2 -e LIBGL_ALWAYS_SOFTWARE=1 -e DQK_TRACE_PLAYER_UI=1 -e DQK_PROMO_EDITION="$EDITION" \
  -e DQK_SAMPLE_STATE="/project/workplace/probe/$STATE" -e DQK_SAMPLE_OUT=/out/session \
  -v "$ROOT:/project:ro" -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" \
  -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro -v "$ROOT/workplace/probe/music-go-deps:/music-deps:ro" -v "$ROOT/workplace/probe/gocache:/gocache" \
@@ -48,7 +57,7 @@ echo "pcm.!default { type null }" >/tmp/asound-null.conf;export ALSA_CONFIG_PATH
 wait "$APP_PID";APP_PID=""
 ' -- "$MODE" &
 GAME_JOB=$!
-timeout --kill-after=5s 165s docker run --rm --name "$VIDEO_CONTAINER" --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 96 --label project=dark-queen-of-krynn-cht \
+timeout --kill-after=5s 245s docker run --rm --name "$VIDEO_CONTAINER" --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 96 --label project=dark-queen-of-krynn-cht \
  -e HOME=/tmp -v "$BASE:/out" -v "$BASE/x11:/tmp/.X11-unix:ro" --entrypoint bash "$MEDIA" -c '
 set -euo pipefail
 for i in {1..600};do [[ -s /out/window-id ]] && break;sleep .1;done
