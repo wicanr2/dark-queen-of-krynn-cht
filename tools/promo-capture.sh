@@ -26,7 +26,7 @@ p=Path("/probe")/sys.argv[1];p.mkdir();(p/"x11").mkdir();(p/"x11").chmod(0o1777)
 s=Path("/probe")/sys.argv[2]
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 shutil.copy2(s/"build-info.json",p/"source-build-info.json")
-metadata=dict(binary_sha256=sha(s/"dqk-player"),profile_sha256=sha(s/"inputs/player-profile.json"),hd_sha256=sha(Path("/probe/player-current/hd/hd.json")),edition=sys.argv[4],mode=sys.argv[3])
+metadata=dict(binary_sha256=sha(s/"dqk-player"),profile_sha256=sha(s/"inputs/player-profile.json"),hd_sha256=sha(s/"hd/hd.json"),edition=sys.argv[4],mode=sys.argv[3],capture_canvas=[1280,900],full_screen_capture=True)
 (p/"capture-inputs.json").write_text(json.dumps(metadata,indent=2)+"\n")
 if sys.argv[3]!="normal":
     (p/"code").mkdir()
@@ -40,7 +40,7 @@ timeout --kill-after=5s 260s docker run --rm --name "$GAME_CONTAINER" --init --n
  -e DQK_SAMPLE_STATE="/project/workplace/probe/$STATE" -e DQK_SAMPLE_OUT=/out/session \
  -v "$ROOT:/project:ro" -v "$ROOT/workplace/dosgolem:/src:ro" -v "$ROOT/tools:/tools:ro" \
  -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro -v "$ROOT/workplace/probe/music-go-deps:/music-deps:ro" -v "$ROOT/workplace/probe/gocache:/gocache" \
- -v "$BASE:/out" -v "$BASE/x11:/tmp/.X11-unix" -v "$SOURCE:/player:ro" -v "$ROOT/workplace/probe/player-current/hd:/player/hd:ro" \
+ -v "$BASE:/out" -v "$BASE/x11:/tmp/.X11-unix" -v "$SOURCE:/player:ro" \
  -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" -w /src --entrypoint bash "$GO" -c '
 set -euo pipefail
 APP=/player/dqk-player
@@ -62,7 +62,7 @@ timeout --kill-after=5s 245s docker run --rm --name "$VIDEO_CONTAINER" --init --
 set -euo pipefail
 for i in {1..600};do [[ -s /out/window-id ]] && break;sleep .1;done
 read -r WINDOW_ID </out/window-id;[[ "$WINDOW_ID" =~ ^[0-9]+$ ]]
-ffmpeg -nostdin -v warning -y -f x11grab -draw_mouse 0 -framerate 30 -window_id "$WINDOW_ID" -i :94 -t "$1" -an -c:v libx264 -preset veryfast -crf 17 -pix_fmt yuv420p /out/raw.mp4 >/out/encoder.log 2>&1 & ENCODER=$!
+ffmpeg -nostdin -v warning -y -f x11grab -draw_mouse 0 -framerate 30 -video_size 1280x900 -i :94 -t "$1" -an -c:v libx264 -preset veryfast -crf 17 -pix_fmt yuv420p /out/raw.mp4 >/out/encoder.log 2>&1 & ENCODER=$!
 touch /out/recording
 wait "$ENCODER";touch /out/stop
 ' -- "$DURATION"

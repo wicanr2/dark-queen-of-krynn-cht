@@ -31,7 +31,7 @@ timeout --kill-after=5s 150s docker run --rm --init --network none --user "$(id 
  -v "$ROOT:/project:ro" -v "$ROOT/tools:/tools:ro" -v "$ROOT/workplace/dosgolem:/src:ro" \
  -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro -v "$ROOT/workplace/probe/music-go-deps:/music-deps:ro" \
  -v "$ROOT/workplace/probe/gocache:/gocache" -v "$BASE:/out" -v "$SOURCE:/player:ro" \
- -v "$ROOT/workplace/probe/player-current/hd:/player/hd:ro" -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" -w /src --entrypoint bash "$GO" -c '
+ -v "$SOURCE/hd:/player/hd:ro" -v "$ROOT/workplace/input/dos/drkqueen:/orig:ro" -w /src --entrypoint bash "$GO" -c '
 set -euo pipefail
 go build -modfile /out/audio-go.mod -overlay /out/build-overlay/overlay.json -o /out/scene-player /out/code/*.go
 cc -O2 /tools/finish_scene_probe.c -lX11 -o /out/scene-driver

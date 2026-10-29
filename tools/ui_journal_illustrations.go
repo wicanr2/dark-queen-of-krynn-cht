@@ -9,9 +9,15 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
+	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
 type readerImageView struct {
@@ -26,6 +32,7 @@ type readerIllustration struct {
 	SHA256 string      `json:"sha256"`
 	Crop   [4]int      `json:"crop"`
 	Pixels *image.RGBA `json:"-"`
+	Path   string      `json:"-"`
 }
 
 func (g *liveGame) loadReaderIllustrations(r *journalReader, path string) {
@@ -69,6 +76,7 @@ func (g *liveGame) loadReaderIllustrations(r *journalReader, path string) {
 			panic("圖文內容框不符")
 		}
 		item.Pixels = image.NewRGBA(image.Rect(0, 0, crop.Dx(), crop.Dy()))
+		item.Path = filepath.Join(filepath.Dir(path), item.File)
 		draw.Draw(item.Pixels, item.Pixels.Bounds(), decoded, crop.Min, draw.Src)
 		for i := 3; i < len(item.Pixels.Pix); i += 4 {
 			if item.Pixels.Pix[i] != 255 {
@@ -213,5 +221,289 @@ func (g *liveGame) composeReaderImage(px []byte, p *readerPage) {
 			src, dst := item.Pixels.PixOffset(sx, sy), ((32+y)*640+16+x)*4
 			copy(px[dst:dst+3], item.Pixels.Pix[src:src+3])
 		}
+	}
+}
+
+// Ebitengine 每個程序擁有一個視窗。以同一執行檔開啟唯讀地圖程序，
+// 主遊戲保持閱讀暫停；子程序沒有 Oracle、遊戲輸入或存檔目錄。
+type readerMapProcess struct {
+	Command *exec.Cmd
+	Input   io.WriteCloser
+	Done    chan error
+	Step    uint64
+	Exited  bool
+	Error   error
+}
+
+type readerMapRequest struct {
+	Path, SHA256, Heading, Footer string
+	Crop                          [4]int
+	Glyphs                        map[string][]byte
+}
+
+func readerSeparateMap(p *readerPage) bool {
+	return p != nil && p.Image != nil && p.Entry != 12
+}
+
+func (g *liveGame) openReaderMapWindow() {
+	if g.player == nil || g.mapWindow != nil || g.reader == nil {
+		return
+	}
+	p := g.reader.currentPage()
+	if !readerSeparateMap(p) {
+		return
+	}
+	item := g.reader.imageFor(p)
+	request := readerMapRequest{Path: item.Path, SHA256: item.SHA256, Crop: item.Crop,
+		Heading: p.Heading, Footer: p.Footer, Glyphs: map[string][]byte{}}
+	if request.Footer == "" {
+		request.Footer = g.reader.UI["reader.image_hint"]
+	}
+	for _, ch := range request.Heading + request.Footer {
+		request.Glyphs[string(ch)] = g.glyphs.Glyphs[string(ch)]
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	command := exec.Command(executable, "--map-viewer")
+	command.Stderr = os.Stderr
+	input, err := command.StdinPipe()
+	if err == nil {
+		err = command.Start()
+	}
+	if err != nil {
+		if input != nil {
+			input.Close()
+		}
+		fmt.Fprintln(os.Stderr, "無法開啟地圖視窗：", err)
+		g.readerKey("Esc", "map-window-error", 0)
+		return
+	}
+	pending := &readerMapProcess{Command: command, Input: input, Done: make(chan error, 1), Step: g.o.Steps()}
+	g.mapWindow = pending
+	go func() {
+		if err := json.NewEncoder(input).Encode(request); err != nil {
+			input.Close()
+		}
+	}()
+	go func() {
+		err := command.Wait()
+		input.Close()
+		pending.Done <- err
+	}()
+	g.reader.UIEvents = append(g.reader.UIEvents, map[string]any{"step": pending.Step, "action": "map-window-open", "source": p.SourceKey, "pid": command.Process.Pid, "fullscreen": true})
+}
+
+func (g *liveGame) closeReaderMapWindow() {
+	if g.mapWindow != nil {
+		g.mapWindow.Input.Close() // EOF 使子程序自行關閉，避免殘留視窗。
+	}
+}
+
+func (g *liveGame) tickReaderMapWindow() bool {
+	p := g.mapWindow
+	if p == nil {
+		return false
+	}
+	select {
+	case err := <-p.Done:
+		p.Exited, p.Error = true, err
+	default:
+	}
+	if p.Exited {
+		// 子視窗關閉後焦點可能在按鍵放開前回到主視窗。先吞掉這個按住的
+		// 關閉鍵，避免同一次Esc又離開目錄，甚至送進原版遊戲。
+		if ebiten.IsKeyPressed(ebiten.KeyEscape) || ebiten.IsKeyPressed(ebiten.KeyF6) || ebiten.IsKeyPressed(ebiten.KeyF7) {
+			return true
+		}
+		if p.Error != nil {
+			fmt.Fprintln(os.Stderr, "地圖視窗結束：", p.Error)
+		}
+		if g.o.Steps() != p.Step {
+			panic("地圖查閱期間原版狀態曾前進")
+		}
+		g.reader.UIEvents = append(g.reader.UIEvents, map[string]any{"step": g.o.Steps(), "action": "map-window-close"})
+		g.mapWindow = nil
+		g.readerKey("Esc", "map-window", 0)
+		g.reader.WaitDraw = true
+	}
+	return true
+}
+
+type readerMapGame struct {
+	Request                readerMapRequest
+	Image, Heading, Footer *ebiten.Image
+	ParentClosed           chan struct{}
+	Width, Height          int
+	Zoom, PanX, PanY       float64
+	MouseX, MouseY         int
+	Closing                bool
+	CloseKey               ebiten.Key
+}
+
+func mapWindowText(text string, glyphs map[string][]byte, ink [3]byte) (*ebiten.Image, error) {
+	chars := []rune(text)
+	px := image.NewRGBA(image.Rect(0, 0, max(1, len(chars)*16), 16))
+	for i, ch := range chars {
+		alpha := glyphs[string(ch)]
+		if len(alpha) < 256 {
+			return nil, fmt.Errorf("地圖視窗缺少字型：%c", ch)
+		}
+		for n, a := range alpha[:256] {
+			at := px.PixOffset(i*16+n%16, n/16)
+			for c := 0; c < 3; c++ {
+				px.Pix[at+c] = byte((uint32(ink[c])*uint32(a) + 127) / 255)
+			}
+			px.Pix[at+3] = a
+		}
+	}
+	return ebiten.NewImageFromImage(px), nil
+}
+
+func runReaderMapWindow() error {
+	decoder := json.NewDecoder(io.LimitReader(os.Stdin, 16<<20))
+	decoder.DisallowUnknownFields()
+	var request readerMapRequest
+	if err := decoder.Decode(&request); err != nil {
+		return err
+	}
+	encoded, err := os.ReadFile(request.Path)
+	if err != nil {
+		return err
+	}
+	if len(encoded) > 16<<20 || digest(encoded) != request.SHA256 {
+		return fmt.Errorf("地圖視窗來源雜湊不符")
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(encoded))
+	if err != nil {
+		return err
+	}
+	if config.Width < 1 || config.Height < 1 || config.Width > 4096 || config.Height > 4096 {
+		return fmt.Errorf("地圖視窗尺寸不符")
+	}
+	decoded, err := png.Decode(bytes.NewReader(encoded))
+	if err != nil {
+		return err
+	}
+	crop := image.Rect(request.Crop[0], request.Crop[1], request.Crop[2], request.Crop[3])
+	if crop.Empty() || !crop.In(decoded.Bounds()) {
+		return fmt.Errorf("地圖視窗內容框越界")
+	}
+	g := &readerMapGame{Request: request, Zoom: 1, Width: 1280, Height: 800, ParentClosed: make(chan struct{})}
+	g.Image = ebiten.NewImageFromImage(decoded.(interface {
+		SubImage(image.Rectangle) image.Image
+	}).SubImage(crop))
+	g.Heading, err = mapWindowText(request.Heading, request.Glyphs, [3]byte{243, 216, 157})
+	if err != nil {
+		return err
+	}
+	g.Footer, err = mapWindowText(request.Footer, request.Glyphs, [3]byte{235, 235, 235})
+	if err != nil {
+		return err
+	}
+	go func() { var extra any; decoder.Decode(&extra); close(g.ParentClosed) }()
+	ebiten.SetWindowTitle("黑暗之后 · " + strings.TrimSpace(request.Heading))
+	ebiten.SetWindowSize(1280, 800)
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	ebiten.SetWindowClosingHandled(true)
+	ebiten.SetFullscreen(true)
+	return ebiten.RunGame(g)
+}
+
+func (g *readerMapGame) geometry() (float64, float64, float64) {
+	scale := math.Min(float64(g.Width-32)/float64(g.Image.Bounds().Dx()), float64(g.Height-104)/float64(g.Image.Bounds().Dy())) * g.Zoom
+	w, h := float64(g.Image.Bounds().Dx())*scale, float64(g.Image.Bounds().Dy())*scale
+	g.PanX = math.Max(-math.Max(0, (w-float64(g.Width-32))/2), math.Min(g.PanX, math.Max(0, (w-float64(g.Width-32))/2)))
+	g.PanY = math.Max(-math.Max(0, (h-float64(g.Height-104))/2), math.Min(g.PanY, math.Max(0, (h-float64(g.Height-104))/2)))
+	return scale, (float64(g.Width)-w)/2 + g.PanX, 48 + (float64(g.Height-104)-h)/2 + g.PanY
+}
+
+func (g *readerMapGame) Update() error {
+	select {
+	case <-g.ParentClosed:
+		return ebiten.Termination
+	default:
+	}
+	if ebiten.IsWindowBeingClosed() {
+		return ebiten.Termination
+	}
+	// 在仍持有焦點的子視窗等關閉鍵放開。父視窗未聚焦時查不到按住的
+	// 鍵，不能靠父視窗的IsKeyPressed阻止這次按鍵穿透。
+	if g.Closing {
+		if !ebiten.IsKeyPressed(g.CloseKey) {
+			return ebiten.Termination
+		}
+		return nil
+	}
+	for _, key := range []ebiten.Key{ebiten.KeyEscape, ebiten.KeyF6, ebiten.KeyF7} {
+		if inpututil.IsKeyJustPressed(key) {
+			g.Closing, g.CloseKey = true, key
+			return nil
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
+	_, wheel := ebiten.Wheel()
+	if inpututil.IsKeyJustPressed(ebiten.KeyEqual) || inpututil.IsKeyJustPressed(ebiten.KeyNumpadAdd) {
+		wheel++
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyMinus) || inpututil.IsKeyJustPressed(ebiten.KeyNumpadSubtract) {
+		wheel--
+	}
+	if wheel != 0 {
+		factor := math.Pow(1.25, wheel)
+		next := math.Max(1, math.Min(16, g.Zoom*factor))
+		g.PanX *= next / g.Zoom
+		g.PanY *= next / g.Zoom
+		g.Zoom = next
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyHome) {
+		g.Zoom, g.PanX, g.PanY = 1, 0, 0
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyArrowLeft) {
+		g.PanX += 12
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyArrowRight) {
+		g.PanX -= 12
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyArrowUp) {
+		g.PanY += 12
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyArrowDown) {
+		g.PanY -= 12
+	}
+	x, y := ebiten.CursorPosition()
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && !inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		g.PanX += float64(x - g.MouseX)
+		g.PanY += float64(y - g.MouseY)
+	}
+	g.MouseX, g.MouseY = x, y
+	g.geometry()
+	return nil
+}
+
+func (g *readerMapGame) Layout(w, h int) (int, int) {
+	g.Width, g.Height = max(320, w), max(240, h)
+	return g.Width, g.Height
+}
+
+func (g *readerMapGame) Draw(screen *ebiten.Image) {
+	scale, x, y := g.geometry()
+	op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
+	op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(x, y)
+	// 裁切只作用於地圖區，標題與操作提示固定可見。
+	screen.SubImage(image.Rect(0, 48, g.Width, g.Height-56)).(*ebiten.Image).DrawImage(g.Image, op)
+	for _, row := range []struct {
+		Image *ebiten.Image
+		Y     int
+	}{{g.Heading, 14}, {g.Footer, g.Height - 36}} {
+		factor := math.Min(1.5, float64(g.Width-32)/float64(row.Image.Bounds().Dx()))
+		t := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
+		t.GeoM.Scale(factor, factor)
+		t.GeoM.Translate((float64(g.Width)-float64(row.Image.Bounds().Dx())*factor)/2, float64(row.Y))
+		screen.DrawImage(row.Image, t)
 	}
 }

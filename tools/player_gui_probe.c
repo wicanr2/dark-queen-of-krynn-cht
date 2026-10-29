@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 
 static char key_helper[4096];
+static int reader_input=0;
 static void fake_key(unsigned code,const char *state) {
     char text[16];snprintf(text,sizeof(text),"%u",code);
     pid_t child=fork();if(child<0)exit(12);
@@ -42,7 +43,7 @@ static Window find_window(Display *d, Window root) {
 static void key(Display *d,Window w,KeySym sym) {
     XSetInputFocus(d,w,RevertToParent,CurrentTime);
     XSync(d,False);unsigned code=XKeysymToKeycode(d,sym);
-    fake_key(code,"down");usleep(3000000);fake_key(code,"up");
+    fake_key(code,"down");usleep(reader_input?250000:3000000);fake_key(code,"up");if(reader_input)usleep(250000);
 }
 static unsigned component(unsigned long pixel,unsigned long mask) {
     if(!mask)return 0;
@@ -89,6 +90,25 @@ static void close_window(Display *d,Window w) {
     close.xclient.data.l[0]=XInternAtom(d,"WM_DELETE_WINDOW",False);close.xclient.data.l[1]=CurrentTime;
     XSendEvent(d,w,False,NoEventMask,&close);XFlush(d);
 }
+static Window find_map_window(Display *d,Window root) {
+    Atom type;int format;unsigned long count,remaining;unsigned char *data=NULL;
+    Window result=0,parent,actual,*children=NULL;unsigned n=0;
+    if(XGetWindowProperty(d,root,XInternAtom(d,"_NET_WM_NAME",False),0,1024,False,AnyPropertyType,&type,&format,&count,&remaining,&data)==Success&&data){
+        if(strstr((char*)data,"黑暗之后 · "))result=root;
+        XFree(data);
+    }
+    if(!result&&XQueryTree(d,root,&actual,&parent,&children,&n)){
+        for(unsigned i=0;i<n&&!result;i++)result=find_map_window(d,children[i]);
+        if(children)XFree(children);
+    }
+    return result;
+}
+static Window wait_map_window(Display*d,Window main) {
+    Window w=0;
+    for(int i=0;i<100&&!w;i++){w=find_map_window(d,DefaultRootWindow(d));usleep(100000);}
+    if(!w||w==main)exit(19);
+    sleep(2);return w;
+}
 int main(int argc,char **argv) {
     if(argc!=3&&argc!=4)return 2;
     if(argc==4&&strcmp(argv[3],"manual-map")&&strcmp(argv[3],"demo")&&strcmp(argv[3],"guide")&&strcmp(argv[3],"music"))return 2;
@@ -117,16 +137,19 @@ int main(int argc,char **argv) {
         key(d,w,XK_F8);capture(d,w,argv[1],"09-music-on");
     }
     key(d,w,XK_F6);sleep(1);capture(d,w,argv[1],"06-manual");
+    reader_input=1; /* 純Go閱讀器已暫停原版，不需要DOS迴圈的三秒按鍵窗口。 */
     if(argc==4&&!strcmp(argv[3],"manual-map")){
         key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);
-        capture(d,w,argv[1],"08-map-fit");
-        key(d,w,XK_equal);capture(d,w,argv[1],"09-map-native");
-        key(d,w,XK_equal);capture(d,w,argv[1],"10-map-double");
-        key(d,w,XK_d);key(d,w,XK_s);capture(d,w,argv[1],"11-map-pan");
-        key(d,w,XK_Home);capture(d,w,argv[1],"12-map-reset");
-        key(d,w,XK_Escape);capture(d,w,argv[1],"13-map-index");
+        Window mw=wait_map_window(d,w);
+        capture(d,mw,argv[1],"08-map-fit");
+        key(d,mw,XK_equal);capture(d,mw,argv[1],"09-map-native");
+        key(d,mw,XK_equal);capture(d,mw,argv[1],"10-map-double");
+        key(d,mw,XK_d);key(d,mw,XK_s);capture(d,mw,argv[1],"11-map-pan");
+        key(d,mw,XK_Home);capture(d,mw,argv[1],"12-map-reset");
+        key(d,mw,XK_Escape);XSetInputFocus(d,w,RevertToParent,CurrentTime);XSync(d,False);sleep(2);capture(d,w,argv[1],"13-map-index");
     }
     key(d,w,XK_Escape);sleep(1);capture(d,w,argv[1],"07-return");
+    reader_input=0;
     if(argc==4&&!strcmp(argv[3],"music")){
         XWarpPointer(d,None,w,0,0,0,0,774,2);XSync(d,False);usleep(500000);
         capture(d,w,argv[1],"10-music-toolbar");
@@ -136,6 +159,7 @@ int main(int argc,char **argv) {
         key(d,w,XK_F8);capture(d,w,argv[1],"12-music-resume");
     }
     if(argc==4&&!strcmp(argv[3],"guide")){
+        reader_input=1;
         XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);usleep(1000000);
         capture(d,w,argv[1],"07a-guide-base");
         XWarpPointer(d,None,w,0,0,0,0,522,2);XSync(d,False);usleep(500000);
@@ -149,15 +173,16 @@ int main(int argc,char **argv) {
         key(d,w,XK_Return);capture(d,w,argv[1],"15a-guide-body");
         key(d,w,XK_Page_Down);capture(d,w,argv[1],"16-guide-page");
         key(d,w,XK_Escape);
-        key(d,w,XK_Down);key(d,w,XK_Return);capture(d,w,argv[1],"17-guide-map-fit");
-        key(d,w,XK_equal);capture(d,w,argv[1],"18-guide-map-native");
-        key(d,w,XK_equal);capture(d,w,argv[1],"19-guide-map-double");
-        key(d,w,XK_d);key(d,w,XK_s);capture(d,w,argv[1],"20-guide-map-pan");
-        key(d,w,XK_Home);capture(d,w,argv[1],"21-guide-map-reset");
-        key(d,w,XK_Escape);capture(d,w,argv[1],"22-guide-map-index");
+        key(d,w,XK_Down);key(d,w,XK_Return);Window mw=wait_map_window(d,w);capture(d,mw,argv[1],"17-guide-map-fit");
+        key(d,mw,XK_equal);capture(d,mw,argv[1],"18-guide-map-native");
+        key(d,mw,XK_equal);capture(d,mw,argv[1],"19-guide-map-double");
+        key(d,mw,XK_d);key(d,mw,XK_s);capture(d,mw,argv[1],"20-guide-map-pan");
+        key(d,mw,XK_Home);capture(d,mw,argv[1],"21-guide-map-reset");
+        key(d,mw,XK_Escape);XSetInputFocus(d,w,RevertToParent,CurrentTime);XSync(d,False);sleep(2);capture(d,w,argv[1],"22-guide-map-index");
         key(d,w,XK_Escape);capture(d,w,argv[1],"23-guide-return");
         key(d,w,XK_F7);capture(d,w,argv[1],"24-guide-reopen");
         key(d,w,XK_F7);capture(d,w,argv[1],"25-guide-toggle-return");
+        reader_input=0;
     }
     key(d,w,XK_F10);sleep(1);
     close_window(d,w);XCloseDisplay(d);return 0;

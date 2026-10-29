@@ -27,12 +27,13 @@ def prepare(a):
     from PIL import ImageFont
     assert a.output.is_dir() and not (a.output/'story-plan.json').exists()
     assert re.fullmatch(r'v\.\d+\.\d+\.\d+-\d{8}',a.version)
-    formal=a.root/'workplace/probe/player-current'
-    accepted=read(a.root/'workplace/probe/completion-20261029/render-two-rounds-checks.json')
+    formal=a.player or a.root/'workplace/probe/player-current'
+    acceptance=a.acceptance or a.root/'workplace/probe/completion-20261029/render-two-rounds-checks.json'
+    accepted=read(acceptance)
     assert accepted['passed'] and sha(formal/'dqk-player')==accepted['binary_sha256']
     sources={k:getattr(a,k) for k in ['normal','exploration','combat']}
     inputs={k:read(p/'capture-inputs.json') for k,p in sources.items()}
-    frozen=read(a.root/'workplace/probe/completion-20261029/render-two-rounds-plan.json')['go_sources']
+    frozen={n:read(formal/'build-info.json')['sources'][n] for n in (a.root/'tools/player_sources.txt').read_text().splitlines()}
     for k,metadata in inputs.items():
         assert metadata['edition']=='story' and metadata['mode']==k
         assert metadata['binary_sha256']==accepted['binary_sha256']
@@ -67,30 +68,43 @@ def prepare(a):
     for i,row in enumerate(rows):
         key=row['key'];duration=int(row['duration']);family,event=row['source'].split(':')
         segment=dict(key=key,section=row['section'],title=row['title'],lines=[row['line1'],row['line2']],start=cursor,end=cursor+duration,duration=duration,source_id=row['source'])
+        side=key in ('story-call','combat')
+        segment['layout']='cover' if key=='opening' else 'map-and-story' if key=='story-call' else 'tactical-closeup' if key=='combat' else 'split-comparison' if key.startswith('art-') else 'ending-card' if key=='ending' else 'gameplay'
         segment['text']={
             'section':text(key+'-section',row['section'],27,[64,40,260,40],'left'),
-            'title':text(key+'-title',row['title'],44,[290,30,1330,60],'center'),
-            'line1':text(key+'-line1',row['line1'],38,[120,928,1680,50],'center'),
-            'line2':text(key+'-line2',row['line2'],38,[120,982,1680,50],'center'),
+            'title':text(key+'-title',row['title'],44,[1040,270,824,60] if side else [290,30,1330,60],'left' if side else 'center'),
+            'line1':text(key+'-line1',row['line1'],32 if side else 38,[1040,430,824,50] if side else [120,928,1680,50],'left' if side else 'center'),
+            'line2':text(key+'-line2',row['line2'],32 if side else 38,[1040,500,824,50] if side else [120,982,1680,50],'left' if side else 'center'),
         }
-        if family!='card':
+        if family=='cover':
+            cover=formal/'hd/references/title-final-20261026/TITLE-cover-r1.png'
+            assert cover.is_file()
+            segment.update(source=str(cover),source_sha256=sha(cover),state_injection=False)
+        elif family!='card':
             segment['source']=str(sources[family]/'raw.mp4')
             # spell是剪輯點，並非遊戲事件：取實際戰鬥錄影第14秒。
             segment['source_start']=events[family].get(event,14.0 if event=='spell' else -1)
             assert segment['source_start']>=0
             segment['state_injection']=family!='normal'
+            segment['full_screen_capture']=inputs[family].get('full_screen_capture',False)
+            segment['full_screen_map']=event in ('map','guide-map')
             badge='正常操作錄影' if family=='normal' else '場景快照續行'
             if key=='art-original':badge+='｜原版美術'
             if key=='art-hd':badge+='｜HD美術'
+            if key=='combat':badge+='｜戰鬥局部'
             segment['text']['badge']=text(key+'-badge',badge,24,[1450,44,410,38],'right')
+            if key.startswith('art-'):
+                segment['comparison_starts']=[events['exploration']['cave-native'],events['exploration']['cave-hd']]
+                for label,value in [('native','原版美術'),('hd','HD美術')]:
+                    segment['text'][label]=text(key+'-'+label,value,32,[64 if label=='native' else 992,160,864,50],'center')
         else:
             segment['state_injection']=False
         if key in ['opening','ending']:
             segment['card_text']={
-                'title':text(key+'-large',row['title'],72 if key=='opening' else 60,[100,340,1720,100],'center'),
-                'line1':text(key+'-middle',row['line1'],42,[100,470,1720,70],'center'),
-                'line2':text(key+'-bottom',row['line2'],38,[100,555,1720,70],'center'),
-                'version':text(key+'-version',a.version,28,[100,665,1720,50],'center'),
+                'title':text(key+'-large',row['title'],72 if key=='opening' else 60,[100,770 if key=='opening' else 340,1720,100],'center'),
+                'line1':text(key+'-middle',row['line1'],42,[100,875 if key=='opening' else 470,1720,70],'center'),
+                'line2':text(key+'-bottom',row['line2'],38,[100,940 if key=='opening' else 555,1720,70],'center'),
+                'version':text(key+'-version',a.version,28,[100,1010 if key=='opening' else 665,1720,50],'center'),
             }
         srt.append(f'{i+1}\n{stamp(cursor)} --> {stamp(cursor+duration)}\n{row["title"]}\n{row["line1"]}\n{row["line2"]}\n')
         segments.append(segment);cursor+=duration
@@ -98,7 +112,9 @@ def prepare(a):
     (a.output/'故事與玩法字幕.srt').write_text('\n'.join(srt),encoding='utf-8-sig')
     (a.output/'subtitle-layout.json').write_text(json.dumps(dict(passed=True,font_sha256=sha(a.font),canvas=[1920,1080],game_rect=[320,104,1280,800],metrics=metrics),ensure_ascii=False,indent=2)+'\n')
     music=formal/'music'
-    plan=dict(schema=1,version=a.version,seconds=cursor,font='/font/'+a.font.name,segments=segments,source_inputs=inputs,source_hashes={str(p/'raw.mp4'):sha(p/'raw.mp4') for p in sources.values()},music=[str(music/'RODQ1-0.ogg'),str(music/'RODQ3-0.ogg')],music_hashes={n:sha(music/n) for n in ['RODQ1-0.ogg','RODQ3-0.ogg']},render_acceptance_sha256=sha(a.root/'workplace/probe/completion-20261029/render-two-rounds-checks.json'),catalog_sha256=sha(catalog),story_source=dict(path='README.md',sha256=sha(a.root/'README.md'),sections=['故事背景','遊戲機制','中文介面與工具列','遊戲內地圖與攻略重繪']),rights='local-only-original-and-derived-assets',public_upload=False)
+    hashes={str(p/'raw.mp4'):sha(p/'raw.mp4') for p in sources.values()}
+    hashes.update({s['source']:s['source_sha256'] for s in segments if s['source_id'].startswith('cover:')})
+    plan=dict(schema=1,version=a.version,seconds=cursor,font='/font/'+a.font.name,segments=segments,source_inputs=inputs,source_hashes=hashes,music=[str(music/'RODQ1-0.ogg'),str(music/'RODQ3-0.ogg')],music_hashes={n:sha(music/n) for n in ['RODQ1-0.ogg','RODQ3-0.ogg']},render_acceptance_sha256=sha(acceptance),catalog_sha256=sha(catalog),story_source=dict(path='README.md',sha256=sha(a.root/'README.md'),sections=['故事背景','遊戲機制','中文介面與工具列','遊戲內地圖與攻略重繪']),rights='local-only-original-and-derived-assets',public_upload=False)
     (a.output/'story-plan.json').write_text(json.dumps(plan,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(dict(prepared=True,segments=len(segments),seconds=cursor,text_fields=len(metrics)),ensure_ascii=False))
 
@@ -120,25 +136,49 @@ def render(a):
     assert all(sha(Path(p))==h for p,h in plan['source_hashes'].items())
     for i,s in enumerate(plan['segments']):
         video=a.output/f'segment-{i:02}.mp4'
+        complex_prefix=None
         if s['key']=='ending':
-            inputs=['-f','lavfi','-i',f'color=c=0x172332:s=1920x1080:r=30:d={s["duration"]}']
+            inputs=['-f','lavfi','-i',f'color=c=0x211710:s=1920x1080:r=30:d={s["duration"]}']
             vf='null'
+        elif s['key']=='opening':
+            inputs=['-loop','1','-i',s['source']]
+            vf='scale=1920:1080:force_original_aspect_ratio=decrease:flags=lanczos,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x211710,drawbox=x=0:y=752:w=1920:h=328:color=black@0.72:t=fill'
         else:
             inputs=['-ss',str(s['source_start']),'-i',s['source']]
-            vf='scale=1280:800:flags=lanczos,pad=1920:1080:320:104:color=0x172332'
-            if s['key']=='opening':vf+=',eq=brightness=-0.25:saturation=0.5'
+            crop=''
+            if s.get('full_screen_capture') and not s.get('full_screen_map'):
+                crop='crop=960:600:160:150,'
+            if s.get('full_screen_map'):
+                vf='crop=1280:796:0:48,scale=1280:796:flags=lanczos,pad=1920:1080:320:104:color=0x211710'
+            else:
+                vf=crop+'scale=1280:800:flags=lanczos,pad=1920:1080:320:104:color=0x211710'
+            if s['layout']=='map-and-story':
+                vf='crop=1280:796:0:48,scale=900:560:flags=lanczos,pad=1920:1080:64:230:color=0x211710'
+            elif s['layout']=='tactical-closeup':
+                vf='crop=540:510:160:150,scale=860:812:flags=lanczos,pad=1920:1080:64:104:color=0x211710'
+            elif s['layout']=='split-comparison':
+                starts=s['comparison_starts']
+                inputs=['-ss',str(starts[0]),'-i',s['source'],'-ss',str(starts[1]),'-i',s['source']]
+                complex_prefix=f'[0:v]{crop}scale=864:540,pad=1920:1080:64:220:color=0x211710[left];[1:v]{crop}scale=864:540[right];[left][right]overlay=992:220'
+                vf='null'
         if s['key'] in ['opening','ending']:
             t=s['card_text']
             for key,size,y in [('title',72 if s['key']=='opening' else 60,340),('line1',42,470),('line2',38,555),('version',28,665)]:
+                if s['key']=='opening':y={'title':770,'line1':875,'line2':940,'version':1010}[key]
                 vf+=','+overlay(font,t[key],size,'(w-text_w)/2',y,'0xf3d89d' if key=='title' else 'white')
         else:
             t=s['text']
+            side=s['layout'] in ('map-and-story','tactical-closeup')
             vf+=','+overlay(font,t['section'],27,64,40,'0xdac28c')
-            vf+=','+overlay(font,t['title'],44,'(w-text_w)/2',30,'0xf3d89d')
+            vf+=','+overlay(font,t['title'],44,1040 if side else '(w-text_w)/2',270 if side else 30,'0xf3d89d')
             vf+=','+overlay(font,t['badge'],24,'w-text_w-60',44,'0xc3cbd1')
-            vf+=','+overlay(font,t['line1'],38,'(w-text_w)/2',928)
-            vf+=','+overlay(font,t['line2'],38,'(w-text_w)/2',982)
-        run(['ffmpeg','-nostdin','-v','warning','-y']+inputs+['-t',str(s['duration']),'-vf',vf,'-an','-r','30','-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p',str(video)],a.output/f'encode-{i:02}.log')
+            vf+=','+overlay(font,t['line1'],32 if side else 38,1040 if side else '(w-text_w)/2',430 if side else 928)
+            vf+=','+overlay(font,t['line2'],32 if side else 38,1040 if side else '(w-text_w)/2',500 if side else 982)
+            if s['layout']=='split-comparison':
+                vf+=','+overlay(font,t['native'],32,'64+(864-text_w)/2',160,'0xf3d89d')
+                vf+=','+overlay(font,t['hd'],32,'992+(864-text_w)/2',160,'0xf3d89d')
+        filters=['-vf',vf] if complex_prefix is None else ['-filter_complex',complex_prefix+','+vf+'[frame]','-map','[frame]']
+        run(['ffmpeg','-nostdin','-v','warning','-y']+inputs+['-t',str(s['duration'])]+filters+['-an','-r','30','-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p',str(video)],a.output/f'encode-{i:02}.log')
         generated.append(video)
     concat=a.output/'concat.txt';concat.write_text(''.join("file '"+str(p)+"'\n" for p in generated))
     music=plan['music'];duration=plan['seconds']
@@ -169,5 +209,5 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('mode',choices=['prepare','render']);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--root',type=Path);p.add_argument('--normal',type=Path);p.add_argument('--exploration',type=Path);p.add_argument('--combat',type=Path)
-    p.add_argument('--font',type=Path);p.add_argument('--version')
+    p.add_argument('--font',type=Path);p.add_argument('--version');p.add_argument('--player',type=Path);p.add_argument('--acceptance',type=Path)
     a=p.parse_args();globals()[a.mode](a)

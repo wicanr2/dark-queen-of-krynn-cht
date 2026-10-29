@@ -277,6 +277,9 @@ func (g *liveGame) composeReader(px []byte) {
 	if p == nil {
 		return
 	}
+	if g.player != nil && readerSeparateMap(p) {
+		return // 地圖由獨立視窗繪製，不塞入遊戲的閱讀框。
+	}
 	g.composeReaderPage(px, p)
 }
 

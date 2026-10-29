@@ -47,10 +47,12 @@ controls = read(out / 'session/controls.json')
 counts = read(out / 'session/render-counts.json')['Counts']
 diagnostics_path = out / 'session/ui-diagnostics.json'
 diagnostics = read(diagnostics_path)
+map_windows = [e for e in diagnostics.get('reader_events', []) if e.get('action') in ('map-window-open', 'map-window-close')]
+windowed_maps = bool(map_windows)
 assert not diagnostics['renderer']['pending'] and diagnostics['reader_stable']
 assert len(diagnostics['words']) == 12
 events = diagnostics['manual_events']
-if manual_map:
+if manual_map and not windowed_maps:
     assert [event['key'] for event in events] == ['F6', 'Right', 'Down', 'Return', 'ZoomIn', 'ZoomIn', 'PanRight', 'PanDown', 'Home', 'Esc', 'Esc']
     assert len({e['step'] for e in events}) == 1, '手動查閱期間原版不應前進'
     views = [events[n]['page']['Image'] for n in [3,4,5,7,8]]
@@ -80,6 +82,12 @@ if manual_map:
                             px,py=view['x']+lx//div,view['y']+ly//div
                         assert screenshot.getpixel((sx,sy))[:3] == source.getpixel((px,py)),(name,sx,sy,px,py)
     assert sha(map_file) == json.loads((map_file.parent/'manual-map-provenance.json').read_text())['map_sha256']
+elif manual_map:
+    assert [e['key'] for e in events] == ['F6','Right','Down','Return','Esc','Esc']
+    assert len({e['step'] for e in events}) == 1
+    build=read(out/'build-info-at-start.json')
+    folder=next(p.parent for p in (root/'workplace/probe').glob('player-*/inputs/player-profile.json') if sha(p)==build['profile_sha256'])
+    map_file=folder/'manual-world-map.png'
 else:
     assert [event['key'] for event in events] == ['F6', 'Esc']
 assert [event['chinese'] for event in controls if event['action'] == 'language'] == [False, True]
@@ -91,18 +99,21 @@ assert sha(out / '06-manual.png') != sha(out / '05-chinese.png')
 assert 'panic' not in (out / 'player.log').read_text()
 if guide:
     events = diagnostics['guide_events']
-    assert [e['key'] for e in events] == ['F7','Return','Esc','Left','Left','Left','Return','PgDn','Esc','Down','Return',
-        'ZoomIn','ZoomIn','PanRight','PanDown','Home','Esc','Esc','F7','F7']
-    assert len({e['step'] for e in events[:18]}) == 1, '攻略查閱期間原版不應前進'
-    assert events[18]['step'] == events[19]['step']
+    expected=['F7','Return','Esc','Left','Left','Left','Return','PgDn','Esc','Down','Return']
+    if not windowed_maps: expected+=['ZoomIn','ZoomIn','PanRight','PanDown','Home']
+    expected+=['Esc','Esc','F7','F7']
+    assert [e['key'] for e in events] == expected
+    assert len({e['step'] for e in events[:-2]}) == 1, '攻略查閱期間原版不應前進'
+    assert events[-2]['step'] == events[-1]['step']
     assert events[6]['page']['Number'] == 1 and events[7]['page']['Number'] == 2
     assert events[10]['book'] == 'chapter-17' and events[10]['page']['Mode'] == 'guide-map'
     assert events[10]['page']['SourceKey'] == 'guide.map.flame-0'
     assert events[10]['page']['Image'] == dict(zoom=0,x=0,y=0)
-    assert events[11]['page']['Image']['zoom'] == 1 and events[12]['page']['Image']['zoom'] == 2
-    assert events[14]['page']['Image']['x'] > events[12]['page']['Image']['x']
-    assert events[14]['page']['Image']['y'] > events[12]['page']['Image']['y']
-    assert events[15]['page']['Image'] == dict(zoom=0,x=0,y=0)
+    if not windowed_maps:
+        assert events[11]['page']['Image']['zoom'] == 1 and events[12]['page']['Image']['zoom'] == 2
+        assert events[14]['page']['Image']['x'] > events[12]['page']['Image']['x']
+        assert events[14]['page']['Image']['y'] > events[12]['page']['Image']['y']
+        assert events[15]['page']['Image'] == dict(zoom=0,x=0,y=0)
     for name in ['23-guide-return','25-guide-toggle-return']:
         assert sha(out/(name+'.png')) == sha(out/'07a-guide-base.png')
     assert sha(out/'17-guide-map-fit.png') == sha(out/'21-guide-map-reset.png')
@@ -118,7 +129,8 @@ if guide:
     assert sum(len(b['documents']) for b in index['books']) == 72
     source_path = folder/'guide-map-flame-0.png'
     assert sha(source_path) == read(profiles[0])['Files'][source_path.name]
-    with Image.open(source_path) as original:
+    if not windowed_maps:
+      with Image.open(source_path) as original:
         original = original.convert('RGB');w,h = original.size
         for name, e in zip(['17-guide-map-fit','18-guide-map-native','19-guide-map-double','20-guide-map-pan','21-guide-map-reset'],[events[i] for i in (10,11,12,14,15)]):
             view=e['page']['Image'];n,d=(208,h) if view['zoom']==0 else (view['zoom'],1)
@@ -131,6 +143,31 @@ if guide:
                         if not (left<=lx<min(608,left+w*n//d) and top<=ly<min(208,top+h*n//d)):continue
                         px,py=view['x']+(lx-left)*d//n,view['y']+(ly-top)*d//n
                         assert picture.getpixel((sx,sy))[:3] == original.getpixel((px,py)),(name,sx,sy,px,py)
+if windowed_maps:
+    assert [e['action'] for e in map_windows] == ['map-window-open','map-window-close']
+    assert map_windows[0]['fullscreen'] and map_windows[0]['pid'] > 0
+    assert map_windows[0]['step'] == map_windows[1]['step'], '獨立視窗不能推進原版'
+    names=(['17-guide-map-fit','18-guide-map-native','19-guide-map-double','20-guide-map-pan','21-guide-map-reset'] if guide else
+           ['08-map-fit','09-map-native','10-map-double','11-map-pan','12-map-reset'])
+    for name in names:
+        with Image.open(out/(name+'.png')) as picture: assert picture.size==(1280,900), (name,picture.size)
+    assert sha(out/(names[0]+'.png'))==sha(out/(names[-1]+'.png'))
+    assert len({sha(out/(name+'.png')) for name in names[:-1]})==4
+    source=source_path if guide else map_file
+    index=read(source.parent/('guide-index.json' if guide else 'manual-index.json'))
+    docs=[d for b in index['books'] for d in b['documents'] if d.get('image',{}).get('file')==source.name]
+    assert len(docs)==1
+    crop=docs[0]['image']['crop']
+    with Image.open(source) as original, Image.open(out/(names[0]+'.png')) as screenshot:
+        original=original.crop(crop).convert('RGB');w,h=original.size
+        scale=min(1248/w,796/h);dw,dh=int(w*scale),int(h*scale)
+        left,top=int((1280-w*scale)/2),int(48+(796-h*scale)/2)
+        expected=original.resize((dw,dh),Image.Resampling.BILINEAR)
+        actual=screenshot.crop((left,top,left+dw,top+dh)).convert('RGB')
+        # GPU線性取樣與Pillow的中心對齊略有差異；整張來源獨立核對，不只驗尺寸。
+        error=sum(abs(a-b) for a,b in zip(actual.tobytes(),expected.tobytes()))/(dw*dh*3)
+        assert error<10, ('fullscreen map source comparison',error)
+    assert not any(x.get('key') in ('ZoomIn','PanRight','PanDown') for x in diagnostics['manual_events']+(diagnostics.get('guide_events') or []))
 if demo:
     if read(out/'build-info-at-start.json').get('transparent_resume_verified'):
         assert not counts.get('image_native_fallback',0), '森林示範仍丟失完整圖片身分'
@@ -194,6 +231,9 @@ if music:
     result['audio_device']=device
     result['not_verified'] += ['human listening', 'physical audio device']
     result['music_events_sha256'] = sha(out/'session/music-events.json')
+if windowed_maps:
+    result['map_window'] = dict(events=map_windows,canvas=[1280,900],source_mean_error=error,
+                              zoom_pan_reset=True,separate_process=True,guest_steps_unchanged=True)
 (out / 'checks.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
 print(json.dumps({'passed': True, 'frames': len(differences), 'byte_differences': 0,
                   'open_render_transactions': 0, 'role_buttons': 12}))

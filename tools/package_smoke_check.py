@@ -15,5 +15,14 @@ assert d['reader_stable'] and not d['renderer']['pending'] and not any(d['list_p
 assert all(c.get(n,0)==0 for n in ['native_writes','unexpected_owned_native_writes','image_native_fallback'])
 assert 'panic:' not in (out/'player.log').read_text(errors='replace')
 result=dict(passed=True,platform=mode,execution='Linux native in container' if mode=='linux' else 'Windows executable under Wine; not Windows hardware',state_injection=False,scope=['packaged executable','cold title','normal role management','manual','clean close','zero original pixel writes'],counts=c,screenshots={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in out.glob('*.png')})
+if (out/'04-map-fullscreen.png').exists():
+    assert Image.open(out/'04-map-fullscreen.png').size==(1280,900)
+    assert ImageChops.difference(Image.open(out/'04-map-fullscreen.png'),Image.open(out/'05-map-zoom.png')).getbbox()
+    events=[x for x in d['reader_events'] if x.get('action') in ('map-window-open','map-window-close')]
+    assert [x['action'] for x in events]==['map-window-open','map-window-close']
+    assert events[0]['step']==events[1]['step'] and events[0]['fullscreen']
+    assert [x['key'] for x in d['manual_events']]==['F6','Right','Down','Return','Esc','Esc']
+    assert d['manual_events'][-2]['page']['Mode']=='manual-index'
+    result['scope']+=['packaged child process','independent fullscreen map','zoom','Esc returns to index','guest paused during map']
 (out/'checks.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
 print(json.dumps(dict(passed=True,platform=mode)))

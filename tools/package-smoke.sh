@@ -24,6 +24,7 @@ go build -o "/out/$1/xtest-key" /tools/player_xtest_key.go
 ' -- "$BATCH"
 timeout --kill-after=5s 150s docker run --rm --init --network none --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 256 --label project=dark-queen-of-krynn-cht \
  -e HOME=/tmp -e LIBGL_ALWAYS_SOFTWARE=1 -e GOMAXPROCS=2 -e DQK_TRACE_PLAYER_UI=1 -e WINEPREFIX=/out/wine -e WINEDEBUG=-all -e WINEARCH=win64 -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 \
+ -e DQK_VERIFY_MAP_WINDOW="${DQK_VERIFY_MAP_WINDOW:-0}" \
  -v "$STAGE:/packages:ro" -v "$OUT:/out" --entrypoint bash "$IMAGE" -c '
 set -euo pipefail
 Xvfb :95 -screen 0 1280x900x24 -nolisten tcp >/out/xvfb.log 2>&1 & XVFB_PID=$!

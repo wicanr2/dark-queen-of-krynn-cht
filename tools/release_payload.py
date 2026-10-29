@@ -137,7 +137,7 @@ def main(args):
             if kind=='full-local':
                 data=resource/'data';data.mkdir()
                 for directory in ['inputs','picture-text','music']:copy_tree(player/directory,data/directory)
-                copy_tree(root/'workplace/probe/player-current/hd',data/'hd')
+                copy_tree(player/'hd',data/'hd')
                 copy_tree(root/'workplace/input/dos/drkqueen',resource/'original')
             else:
                 (resource/'import-local.py').write_text(IMPORTER)

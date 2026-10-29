@@ -32,14 +32,14 @@ int main(int argc,char**argv){
         XWarpPointer(d,None,w,0,0,0,0,774,2);XSync(d,False);sleep(1);mark(d,w,out,"toolbar");sleep(story?8:3);
         XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);
         key(d,w,XK_F6);mark(d,w,out,"manual");sleep(story?8:4);
-        key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);mark(d,w,out,"map");sleep(story?10:4);
-        key(d,w,XK_Escape);key(d,w,XK_Escape);key(d,w,XK_F7);mark(d,w,out,"guide");sleep(4);
+        key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);Window mw=wait_map_window(d,w);mark(d,mw,out,"map");sleep(story?10:4);
+        key(d,mw,XK_Escape);key(d,w,XK_Escape);key(d,w,XK_F7);mark(d,w,out,"guide");sleep(4);
         key(d,w,XK_Return);mark(d,w,out,"guide-body");sleep(story?6:4);
         if(story){
             key(d,w,XK_Escape);key(d,w,XK_Left);key(d,w,XK_Left);key(d,w,XK_Left);
             key(d,w,XK_Return);mark(d,w,out,"guide-chapter");sleep(4);
             key(d,w,XK_Escape);key(d,w,XK_Down);key(d,w,XK_Return);
-            mark(d,w,out,"guide-map");sleep(10);
+            mw=wait_map_window(d,w);mark(d,mw,out,"guide-map");sleep(10);key(d,mw,XK_Escape);
         }
     }else if(!strcmp(mode,"exploration")){
         key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);

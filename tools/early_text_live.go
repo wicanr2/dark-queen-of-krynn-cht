@@ -97,6 +97,7 @@ type liveGame struct {
 	reader        *journalReader
 	cold          *coldLoad
 	player        *playerSession
+	mapWindow     *readerMapProcess
 }
 
 // 研究限定的冷讀重播。角色管理沿用 20px，讀回後才切換既有 16px 列表原型。
@@ -843,6 +844,10 @@ var playerVersion = "development"
 var playerCommit = "unreleased"
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--map-viewer" {
+		must(runReaderMapWindow())
+		return
+	}
 	versionOnly := flag.Bool("version", false, "顯示版本與來源提交")
 	playerPath := flag.String("player", "", "中文整合入口的資料目錄；接受一般鍵盤，不執行重播")
 	playerOriginal := flag.String("original", "/orig", "唯讀原版資料目錄")
@@ -1649,7 +1654,11 @@ func (g *liveGame) tickPlayerToolbar() bool {
 
 func (g *liveGame) updatePlayer() error {
 	if ebiten.IsWindowBeingClosed() {
+		g.closeReaderMapWindow()
 		return ebiten.Termination
+	}
+	if g.tickReaderMapWindow() {
+		return nil
 	}
 	consumed := g.tickPlayerToolbar()
 	g.playerMouse()
@@ -1657,6 +1666,7 @@ func (g *liveGame) updatePlayer() error {
 		return nil
 	}
 	if g.translate && g.tickReader() {
+		g.openReaderMapWindow()
 		return nil
 	}
 	alt := ebiten.IsKeyPressed(ebiten.KeyAltLeft) || ebiten.IsKeyPressed(ebiten.KeyAltRight)

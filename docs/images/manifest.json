@@ -187,13 +187,13 @@
     },
     {
       "file": "manual-world-map-zh.png",
-      "source": "workplace/probe/player-sample-manual-map-20261027-r1/09-map-native.png",
-      "sha256": "eacbecd463ebd911d01f76402af1d0efd935ff919340bb2583bc1fa6563969bc",
+      "source": "workplace/probe/player-sample-map-release-20261029-manual/08-map-fit.png",
+      "sha256": "9ff20d7d9bde775724748f784240d1077557e6b9e2f1a18822a99a25f0949024",
       "size": [
-        960,
-        600
+        1280,
+        900
       ],
-      "bytes": 118685,
+      "bytes": 572552,
       "scope": "正常冷啟動後開啟冒險手冊第2頁的原尺寸查閱，地形示意，非逐格通行或全程冒險驗收"
     },
     {
@@ -209,13 +209,13 @@
     },
     {
       "file": "guide-map-zh.png",
-      "source": "workplace/probe/player-sample-guide-20261028-r3/18-guide-map-native.png",
-      "sha256": "a8cd1dafa9fd6f29de66f28d8bda057bb5a7dba58b36ca84e0c9116be705f54b",
+      "source": "workplace/probe/player-sample-map-release-20261029-guide/17-guide-map-fit.png",
+      "sha256": "782c2348a99f15472cf4da030bbe4b9a2c5062ffbd8892439097b078a0c47ae5",
       "size": [
-        960,
-        600
+        1280,
+        900
       ],
-      "bytes": 61015,
+      "bytes": 177413,
       "scope": "遊戲中查閱重繪火焰塔，原尺寸視圖；非遊戲通行座標"
     },
     {

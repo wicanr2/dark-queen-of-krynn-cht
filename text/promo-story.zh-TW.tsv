@@ -1,5 +1,5 @@
 key	section	title	line1	line2	duration	source
-opening	作品介紹	黑暗之后	克萊恩三部曲終章	HD＋繁體中文	6	normal:map
+opening	作品介紹	黑暗之后	克萊恩三部曲終章	HD＋繁體中文	6	cover:title
 story-call	故事背景	戰火之後，危機未歇	長槍之役後，克萊恩仍未迎來和平。	羅拉娜召集英雄，追查凱爾高斯的災難。	8	normal:map
 story-voyage	故事背景	跨海追查黑暗勢力	隨戴諾船長跨海前往泰勒達斯。	追查失蹤者，阻止塔克西絲重返克萊恩。	8	exploration:cave
 party	遊戲特點	組建你的冒險隊伍	組建六人隊伍，搭配職業與裝備。	沿用進階龍與地下城規則，讓隊員各司其職。	8	normal:role

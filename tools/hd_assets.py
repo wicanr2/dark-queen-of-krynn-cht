@@ -36,7 +36,11 @@ def compile_image(original, generated):
         if result.getchannel('A').getextrema() != (255, 255):
             raise ValueError('不透明插畫需要完整背景，不能用透明缺口猜補背景')
     else:
-        source_box, target_box = generated.getchannel('A').getbbox(), mask.getbbox()
+        # 生成圖的幾乎透明雜點不能參與構圖邊界。下方延展只以alpha>=32
+        # 的像素為種子，這裡必須採相同門檻，否則人物先被雜點擠小，
+        # 再把遠處輪廓填成橫直色條。
+        source_box = generated.getchannel('A').point(lambda a: 255 if a >= 32 else 0).getbbox()
+        target_box = mask.getbbox()
         if source_box is None or target_box is None:
             raise ValueError('空白前景不能編譯')
         x0, y0, x1, y1 = target_box
@@ -79,6 +83,23 @@ def read_manifest(output):
             'rights': '本機原版與衍生資產，不加入Git', 'new_gameplay_replay': False, 'new_gui_sampling': False}
 
 
+def compile_sprite(original, generated):
+    """戰棋小圖不把輪廓外的顏色延展成不透明色條。缺少畫墨處保留黑色描邊。"""
+    original, generated = original.convert('RGBA'), generated.convert('RGBA')
+    size = original.width*3, original.height*3
+    mask = original.getchannel('A').resize(size, Image.Resampling.NEAREST)
+    box = generated.getchannel('A').point(lambda a: 255 if a >= 32 else 0).getbbox()
+    target = mask.getbbox()
+    if box is None or target is None:
+        raise ValueError('空白戰棋小圖')
+    result = Image.new('RGBA', size, (0, 0, 0, 255))
+    picture = generated.crop(box).resize((target[2]-target[0], target[3]-target[1]), Image.Resampling.LANCZOS)
+    # 在黑色輪廓底上合成抗鋸齒邊緣，不能把透明像素的未定義RGB填入遮罩。
+    result.alpha_composite(picture, target[:2])
+    result.putalpha(mask)
+    return result
+
+
 def save_manifest(output, data):
     temporary = output / 'hd.json.tmp'
     temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2)+'\n')
@@ -118,7 +139,7 @@ def add(root, output, key, generated, round_number, inventory=None):
     shutil.copyfile(indexed_source, output / indexed_name)
     shutil.copyfile(generated, output / raw_name)
     with Image.open(original) as source, Image.open(generated) as master:
-        target = compile_image(source, master)
+        target = (compile_sprite if key.startswith(('CBODY..', 'CPIC..')) else compile_image)(source, master)
         assert target.size == (record['width']*3, record['height']*3)
         assert target.getchannel('A').tobytes() == source.getchannel('A').resize(target.size, Image.Resampling.NEAREST).tobytes()
         target.save(output / target_name)

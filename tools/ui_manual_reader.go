@@ -70,6 +70,7 @@ func loadManualPicture(base string, item *readerIllustration) {
 		panic("說明圖稿內容框不符")
 	}
 	item.Pixels = image.NewRGBA(image.Rect(0, 0, crop.Dx(), crop.Dy()))
+	item.Path = filepath.Join(base, item.File)
 	draw.Draw(item.Pixels, item.Pixels.Bounds(), decoded, crop.Min, draw.Src)
 	for i := 3; i < len(item.Pixels.Pix); i += 4 {
 		if item.Pixels.Pix[i] != 255 {
