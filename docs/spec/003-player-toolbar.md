@@ -166,3 +166,13 @@ bash tools/player-sample.sh player-sample-demo-新的名稱 player-current demo
 - [圖文元件](../../tools/ui_journal_illustrations.go)實作地圖程序與畫布；[正常介面抽驗](../../tools/player-sample.sh)的guide／manual-map分支驗獨立視窗、全螢幕、縮放、平移、復位、回目錄及原版暫停。這是使用者指定的呈現更改，不改地圖資料與遊戲規則。
 
 Windows的地圖程序透過[系統視窗橋接](../../tools/windowbridge/restore_windows.go)尋找本次啟動者PID的遊戲視窗，再送出非同步恢復及前景請求。主視窗在查閱期間持續處理程序結束訊息，原版保持暫停；恢復第一張完整畫格後再還原原有失焦設定。平台契約沿Microsoft的[EnumWindows](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumwindows)、[ShowWindowAsync](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindowasync)與[SetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow)，不逆向DOS繪圖驅動處理桌面問題。
+
+## CONFORMED：獨立全螢幕地圖修正版驗收
+
+[Issue13](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/13)的呈現修正已接入v.1.0.1-20261029，來源2df3222329567163acdb7c66291324b12d4f796f。地圖以Go畫布直接繪製，正文保留原閱讀器；圖稿、原版規則與存檔不變。Windows的恢復請求在子程序釋放全螢幕後執行，避免主視窗再次被最小化。
+
+正常介面收據player-sample-map-release-20261029-guide與player-sample-map-unfocus-20261029-manual驗全螢幕1280×900、來源像素、縮放、平移、Home復位與返回。錄影另核實際開關manual.adventurer.page2與guide.map.flame-0，沒有把同一世界圖重複算成兩種地圖。
+
+最終封包收據在本機dist-all/v.1.0.1-20261029/smoke：linux-map以Esc、windows-map-final在Wine以原生WM_CLOSE關閉，皆返回有文字的目錄，開關期間原版步數保持，原版像素寫入與未完成交易0。Windows測試使用[原生關窗探針](../../tools/windows_native_close_windows.go)，只送系統視窗訊息，不注入遊戲狀態；不是Windows真機或Wine下Esc的驗證。macOS只驗雙架構與App結構。
+
+[地圖狀態回歸](../../tools/player_map_test.go)確認自動引用關圖後不重開，原版引用與已讀紀錄保持，碎紙12仍走原閱讀器。手札25／64的正常劇情觸發未逐一走訪，不擴張為新冒險或完整遊玩驗收。失敗的快速guide腳本與Windows恢復候選均保留於本機reported-visual-fixes，沒有列入成功收據。

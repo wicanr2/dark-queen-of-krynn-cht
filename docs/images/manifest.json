@@ -187,14 +187,14 @@
     },
     {
       "file": "manual-world-map-zh.png",
-      "source": "workplace/probe/player-sample-map-release-20261029-manual/08-map-fit.png",
-      "sha256": "9ff20d7d9bde775724748f784240d1077557e6b9e2f1a18822a99a25f0949024",
+      "source": "dist-all/v.1.0.1-20261029/smoke/windows-map-final/04-map-fullscreen.png",
+      "sha256": "6573cad251d923b3f1da8c5d80f99c7ec7921b00066b8471342f5eb26a744d44",
       "size": [
         1280,
         900
       ],
-      "bytes": 572552,
-      "scope": "正常冷啟動後開啟冒險手冊第2頁的原尺寸查閱，地形示意，非逐格通行或全程冒險驗收"
+      "bytes": 572250,
+      "scope": "修正版Windows封包在Wine中由正常介面開啟獨立全螢幕世界地圖；地形示意，不代表逐格通行或實機驗收"
     },
     {
       "file": "guide-index-zh.png",
@@ -209,7 +209,7 @@
     },
     {
       "file": "guide-map-zh.png",
-      "source": "workplace/probe/player-sample-map-release-20261029-guide/17-guide-map-fit.png",
+      "source": "workplace/probe/promo-visual-verified-normal-20261029/guide-map.ppm",
       "sha256": "782c2348a99f15472cf4da030bbe4b9a2c5062ffbd8892439097b078a0c47ae5",
       "size": [
         1280,

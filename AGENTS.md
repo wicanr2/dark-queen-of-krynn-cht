@@ -227,6 +227,7 @@
 | [player_window_bridge.go](tools/player_window_bridge.go)、[windowbridge](tools/windowbridge/restore_windows.go) | 正式玩家的跨程序視窗恢復；Windows透過系統User32恢復本次啟動者，其他平台不呼叫Win32。模組由player_music_inputs.py寫入本機modfile，在既有Docker工具鏈編譯，不改SDK與原版資料 |
 | [Windows原生關窗探針](tools/windows_native_close_windows.go) | package-smoke.sh的Windows地圖分支使用WM_CLOSE，避免以X11代理視窗的訊息當作Win32關窗；只送正常視窗訊息，不改原版狀態 |
 | [地圖狀態回歸](tools/player_map_test.go) | 納入player.sh check-ui，確認關閉自動引用地圖不重開、不改原版引用或已讀狀態；碎紙保留既有閱讀器 |
+| [獨立全螢幕地圖](docs/spec/003-player-toolbar.md#conformed獨立全螢幕地圖修正版驗收) | 手札地圖、說明世界圖與攻略另開唯讀視窗；正文保留原框。縮放、平移、返回及平台驗收界線見該節，現行交付見CONTEXT |
 | [hd_source_audit.py](tools/hd_source_audit.py) | Docker內以`--inventory`、`--theme`、`--original`及`--out`核對r3的1831筆來源、HD雜湊／遮罩及既定原生例外；來源與主題唯讀，輸出新收據。不是正常玩家路徑或全遊戲HD完成證據，未知來源明列失敗 |
 | [hd-scene-sample.sh](tools/hd-scene-sample.sh)、[hd_scene_probe.go](tools/hd_scene_probe.go) | Docker內依每個HD家族的鍵排序首／中／末與完整長邊框固定選樣，核對正式Go畫布的原版、HD、遮擋及色盤輸出。需既有合法來源產生的完整主題，命令為`bash tools/hd-scene-sample.sh scene-hd-新名稱`；屬素材布局抽驗，不是房間或結局流程證據 |
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | Go 命令畫布、交易及完整畫格提交；入口 `tools/player_render_owner.go`、`tools/player_owned_drivers.go`、`tools/render_scene_state.go`、`tools/player_scene_backend.go`。正式玩家不取原版整張 RGB；來源掛勾在規格目錄，不回寫原版。代表路徑零原版寫入與全場景覆蓋分開記錄 |
