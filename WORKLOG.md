@@ -3433,3 +3433,14 @@
 - 正式安裝保留6901個其他既有檔案的大小與時間，session未寫入；舊正式程式備份pre-final-release。清除已被取代的暫定包、暫存副本與Wine快取，實釋8.535GiB，原版來源、現行資產與存檔保持。舊inputs/profile及封包manifest另留，來源索引在CONTEXT。
 - 交付根dist-all/v.1.0.0-20261029，SHA256SUMS.json雜湊 e013bcee5d9f7d0250ecb2c5df540372c8c408eb2638204b10005422f646ec61。最後專案容器0、root-owned檔及.md目錄0。沒有新增Docker image或volume，也沒有清理其他專案。
 - Issue8及Issue9已補範圍與證據限制後關閉。gh issue close不支援comment-file，未造成遠端寫入；改用issue comment的body-file後再close。未驗真機、人耳聽感、逐房與全程通關均保留未知，不重新打開本輪。
+
+## 2026-10-29 依最新門檻追加繪圖兩輪抽驗
+
+- 使用者明確取消完整遊玩驗證，繪圖再抽樣兩輪，無問題即結案。回查復古抽樣與收尾路由，載入通則第13、19節及逆向技能的verification-and-handoff，沿既有抽驗入口。
+- 建立Issue10，執行前固定正式binary、profile、HD、音樂及26份Go來源雜湊。第一輪17家族49來源196項GPU／CPU比較加正常開場；第二輪洞穴／戰鬥快照重畫、HD及縮放。只做此兩輪，不重新審畫、重跑1652組父批或完整通關。
+
+- 第一輪通過：scene-hd-render-close-20261029-r1為17家族49來源196項GPU／CPU零差異；player-sample-render-close-20261029-r1為正式binary的正常開場、示範中斷、語言／縮放／說明與返回。實際原版像素寫入及未完成交易0。
+- 第二輪洞穴直接通過；戰鬥初次關窗落在自動換列期，reader_stable=false、footer_transition=true，renderer pending為空，實際原版像素寫入0。保留該結果，不冒稱首次即通過。只修正研究C驅動的收尾輸入，追加正常F6請求後再退出；本次F6因介面過渡被忽略，沒有強制暫停，之後結束時穩定且全部原檢查通過。取樣時機紀錄在render-round2-timing-correction.json，當次實際C來源副本留於combat-idle/scene_probe_source.c；沒有修改或重建正式遊戲、放寬檢查、第三輪抽驗或追加審畫。
+- 洞穴／戰鬥兩份原版快照均驗重畫、HD關閉／開啟與2倍／3倍。最終原版像素寫入、圖片退路、未完成繪圖及介面交易0。完整快照及其雜湊保存狀態條件，不宣稱新增亂數骰序對拍或完整遊玩驗證。
+- render_close_check.py彙整兩輪，核正式binary、profile、HD、音樂manifest及26份Go來源保持，結果SHA-256 6483aea49598010f6cd46f2e2c0b72c91ed83c108c7eee01f6e8fd391ed5f97f。繪圖依使用者門檻結案；未走訪及未知／越界回退只列證據界線，不再當本輪待辦。既有v.1.0.0-20261029封包、影片與已發布tag保持，不因補驗重發。
+- Issue10已補兩輪結果與取樣時機修正後關閉。結案文件與研究C驅動的修正提交main並推送；既有正式tag不移動。最後本專案容器0，root-owned檔及.md目錄0，輸出UID/GID1000；沒有新增映像或volume。

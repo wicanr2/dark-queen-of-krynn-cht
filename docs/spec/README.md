@@ -10,6 +10,6 @@
 | [002：手札閱讀與分頁](002-journal-reader.md) | READY，原框閱讀已定稿 | [#5](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/5) |
 | [003：中文整合入口與頂端工具列](003-player-toolbar.md) | READY；完整攻略呈現CONFORMED，18章、52張重繪圖及F7／工具列已有代表抽驗 | [#6](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/6)、[#7](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/7) |
 | [004：HD素材與獨立呈現開關](004-hd-layer.md) | CONFORMED，依使用者接受的類型抽驗收尾；HD與視窗尺寸獨立 | 1488項素材、17家族49個固定樣本，正常／注入範圍見CONTEXT |
-| [005：繪圖接管與完整畫格提交](005-render-owner.md) | 限定內層搬移、機器效果與事件預算為 READY；已接管命令及兩輪代表路徑完成，未走訪來源保留未知 | 使用者要求完全接管，沿 #7 |
+| [005：繪圖接管與完整畫格提交](005-render-owner.md) | 限定內層搬移、機器效果與事件預算為 READY；已接管命令及追加兩輪繪圖抽驗完成並結案，未走訪來源只列證據界線 | 使用者要求完全接管，沿 #7 |
 | [006：原譜高品質樂器音樂](006-hd-music.md) | CONFORMED，8段原譜與技術接入；正常開關、桌面音訊與無裝置回退已驗，聽驗待完成 | [#8](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/8) |
 | [007：全量串接、兩輪抽驗與正式交付](007-completion-delivery.md) | CONFORMED；兩輪代表抽驗、三平台六包及42秒本機推廣片完成 | 2026-10-29明確授權 |

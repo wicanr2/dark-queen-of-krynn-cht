@@ -24,5 +24,9 @@ int main(int argc,char **argv){
     hd_click(d,w);capture(d,w,argv[1],"05-hd-off");
     hd_click(d,w);capture(d,w,argv[1],"06-hd-on");
     key(d,w,XK_F2);capture(d,w,argv[1],"07-scale3");
+    /* 戰鬥關窗前增加正常F6查閱請求；由介面決定是否接受，不強制暫停。 */
+    if(!strcmp(argv[2],"combat")){
+        key(d,w,XK_F6);capture(d,w,argv[1],"08-reader-request");
+    }
     key(d,w,XK_F10);close_window(d,w);XCloseDisplay(d);return 0;
 }
