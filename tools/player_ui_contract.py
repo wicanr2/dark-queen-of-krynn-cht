@@ -30,7 +30,7 @@ if mode=='prepare':
     i = args.index('-o')
     del args[i:i+2]
     args[1:2] = ['test','-json','-count=1']
-    args += ['/tools/ui_cold_fill_test.go','/tools/player_music_assets_test.go']
+    args += ['/tools/ui_cold_fill_test.go','/tools/player_music_assets_test.go','/tools/player_map_test.go']
     script = '''#!/usr/bin/env bash
 set -euo pipefail
 Xvfb :92 -screen 0 1280x900x24 -nolisten tcp >/out/ui-xvfb.log 2>&1 &

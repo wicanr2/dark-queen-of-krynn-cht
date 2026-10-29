@@ -1665,6 +1665,10 @@ func (g *liveGame) updatePlayer() error {
 	if g.tickReaderMapWindow() {
 		return nil
 	}
+	g.openReaderMapWindow()
+	if g.mapWindow != nil {
+		return nil
+	}
 	consumed := g.tickPlayerToolbar()
 	g.playerMouse()
 	if consumed {

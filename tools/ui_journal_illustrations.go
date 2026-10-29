@@ -253,7 +253,7 @@ func readerSeparateMap(p *readerPage) bool {
 }
 
 func (g *liveGame) openReaderMapWindow() {
-	if g.player == nil || g.mapWindow != nil || g.reader == nil {
+	if g.player == nil || !g.translate || g.mapWindow != nil || g.reader == nil {
 		return
 	}
 	p := g.reader.currentPage()
@@ -284,7 +284,7 @@ func (g *liveGame) openReaderMapWindow() {
 			input.Close()
 		}
 		fmt.Fprintln(os.Stderr, "無法開啟地圖視窗：", err)
-		g.readerKey("Esc", "map-window-error", 0)
+		g.dismissReaderMap("map-window-error")
 		return
 	}
 	pending := &readerMapProcess{Command: command, Input: input, Done: make(chan error, 1), Step: g.o.Steps(), Runnable: ebiten.IsRunnableOnUnfocused()}
@@ -345,11 +345,21 @@ func (g *liveGame) tickReaderMapWindow() bool {
 		}
 		g.reader.UIEvents = append(g.reader.UIEvents, map[string]any{"step": g.o.Steps(), "action": "map-window-close"})
 		g.mapWindow = nil
-		g.readerKey("Esc", "map-window", 0)
+		g.dismissReaderMap("map-window")
 		g.reader.WaitDraw = true
 		g.mapResumeRunnable = &p.Runnable // 第一張還原畫格提交後才恢復原本的失焦設定。
 	}
 	return true
+}
+
+func (g *liveGame) dismissReaderMap(source string) {
+	if g.reader.Mode == "" {
+		// 自動手札保留原版引用與已讀狀態，只撤掉呈現頁；不送原版按鍵。
+		// Page必須撤除，否則下一次Update會重新開啟同一張地圖。
+		g.reader.Page, g.reader.Index = nil, 0
+		return
+	}
+	g.readerKey("Esc", source, 0)
 }
 
 type readerMapGame struct {
