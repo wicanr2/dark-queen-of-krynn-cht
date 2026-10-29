@@ -109,6 +109,13 @@ static Window wait_map_window(Display*d,Window main) {
     if(!w||w==main)exit(19);
     sleep(2);return w;
 }
+static void close_map_key(Display*d,Window map,Window main) {
+    XSetInputFocus(d,map,RevertToParent,CurrentTime);XSync(d,False);
+    unsigned code=XKeysymToKeycode(d,XK_Escape);
+    fake_key(code,"down");usleep(250000);fake_key(code,"up");
+    /* 故意在keyup後立即換焦點，驗證子程序失焦後仍能完成關閉。 */
+    XSetInputFocus(d,main,RevertToParent,CurrentTime);XSync(d,False);sleep(2);
+}
 int main(int argc,char **argv) {
     if(argc!=3&&argc!=4)return 2;
     if(argc==4&&strcmp(argv[3],"manual-map")&&strcmp(argv[3],"demo")&&strcmp(argv[3],"guide")&&strcmp(argv[3],"music"))return 2;
@@ -146,7 +153,7 @@ int main(int argc,char **argv) {
         key(d,mw,XK_equal);capture(d,mw,argv[1],"10-map-double");
         key(d,mw,XK_d);key(d,mw,XK_s);capture(d,mw,argv[1],"11-map-pan");
         key(d,mw,XK_Home);capture(d,mw,argv[1],"12-map-reset");
-        key(d,mw,XK_Escape);XSetInputFocus(d,w,RevertToParent,CurrentTime);XSync(d,False);sleep(2);capture(d,w,argv[1],"13-map-index");
+        close_map_key(d,mw,w);capture(d,w,argv[1],"13-map-index");
     }
     key(d,w,XK_Escape);sleep(1);capture(d,w,argv[1],"07-return");
     reader_input=0;
@@ -178,7 +185,7 @@ int main(int argc,char **argv) {
         key(d,mw,XK_equal);capture(d,mw,argv[1],"19-guide-map-double");
         key(d,mw,XK_d);key(d,mw,XK_s);capture(d,mw,argv[1],"20-guide-map-pan");
         key(d,mw,XK_Home);capture(d,mw,argv[1],"21-guide-map-reset");
-        key(d,mw,XK_Escape);XSetInputFocus(d,w,RevertToParent,CurrentTime);XSync(d,False);sleep(2);capture(d,w,argv[1],"22-guide-map-index");
+        close_map_key(d,mw,w);capture(d,w,argv[1],"22-guide-map-index");
         key(d,w,XK_Escape);capture(d,w,argv[1],"23-guide-return");
         key(d,w,XK_F7);capture(d,w,argv[1],"24-guide-reopen");
         key(d,w,XK_F7);capture(d,w,argv[1],"25-guide-toggle-return");

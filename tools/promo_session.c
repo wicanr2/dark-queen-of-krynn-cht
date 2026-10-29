@@ -51,7 +51,9 @@ int main(int argc,char**argv){
             story_hd(d,w);mark(d,w,out,"cave-hd");sleep(5);
         }
     }else if(!strcmp(mode,"combat")){
-        key(d,w,XK_q);sleep(20);key(d,w,XK_v);key(d,w,XK_Escape);sleep(3);mark(d,w,out,"battle");
+        /* 先保留隊形與怪物的可讀鏡頭，再讓原版快速戰鬥自然推進。 */
+        key(d,w,XK_v);key(d,w,XK_Escape);sleep(1);mark(d,w,out,"battle");sleep(4);
+        key(d,w,XK_q);sleep(20);mark(d,w,out,"battle-after");
     }else return 2;
     snprintf(path,sizeof(path),"%s/stop",out);
     for(int i=0;i<600&&access(path,F_OK);i++)usleep(100000);

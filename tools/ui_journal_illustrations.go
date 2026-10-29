@@ -407,6 +407,7 @@ func runReaderMapWindow() error {
 	ebiten.SetWindowSize(1280, 800)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowClosingHandled(true)
+	ebiten.SetRunnableOnUnfocused(true) // 失焦後仍須處理放開關閉鍵及父程序EOF。
 	ebiten.SetFullscreen(true)
 	return ebiten.RunGame(g)
 }

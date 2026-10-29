@@ -28,6 +28,9 @@ sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 shutil.copy2(s/"build-info.json",p/"source-build-info.json")
 metadata=dict(binary_sha256=sha(s/"dqk-player"),profile_sha256=sha(s/"inputs/player-profile.json"),hd_sha256=sha(s/"hd/hd.json"),edition=sys.argv[4],mode=sys.argv[3],capture_canvas=[1280,900],full_screen_capture=True)
 (p/"capture-inputs.json").write_text(json.dumps(metadata,indent=2)+"\n")
+(p/"capture-source").mkdir()
+for name in ["promo-capture.sh","promo_session.c","player_gui_probe.c","player_xtest_key.go"]:
+    shutil.copy2(Path("/project/tools")/name,p/"capture-source"/name)
 if sys.argv[3]!="normal":
     (p/"code").mkdir()
     for n in Path("/project/tools/player_sources.txt").read_text().splitlines():shutil.copy2(Path("/project/tools")/n,p/"code"/n)
@@ -45,8 +48,8 @@ timeout --kill-after=5s 260s docker run --rm --name "$GAME_CONTAINER" --init --n
 set -euo pipefail
 APP=/player/dqk-player
 if [[ "$1" != normal ]];then go build -modfile /out/audio-go.mod -overlay /out/build-overlay/overlay.json -o /out/scene-player /out/code/*.go;APP=/out/scene-player;fi
-cc -O2 /tools/promo_session.c -lX11 -o /out/promo-driver
-go build -o /out/xtest-key /tools/player_xtest_key.go
+cc -O2 /out/capture-source/promo_session.c -lX11 -o /out/promo-driver
+go build -o /out/xtest-key /out/capture-source/player_xtest_key.go
 Xvfb :94 -screen 0 1280x900x24 -nolisten tcp >/out/xvfb.log 2>&1 & XVFB_PID=$!
 APP_PID="";trap '\''[[ -z "$APP_PID" ]] || kill "$APP_PID" 2>/dev/null || true;kill "$XVFB_PID" 2>/dev/null || true'\'' EXIT
 for i in {1..50};do [[ -S /tmp/.X11-unix/X94 ]] && break;sleep .1;done

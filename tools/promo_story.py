@@ -48,6 +48,14 @@ def prepare(a):
     events={k:{name:float(at) for name,at in (line.split('\t') for line in (p/'events.tsv').read_text().splitlines())} for k,p in sources.items()}
     switches=read(sources['exploration']/'session/controls.json')
     assert [x['hd'] for x in switches if x['action']=='hd']==[False,True], 'HD對照需兩次實際切換成功'
+    normal=read(sources['normal']/'session/ui-diagnostics.json')
+    maps=[x for x in normal['reader_events'] if x.get('action') in ('map-window-open','map-window-close')]
+    assert [x['action'] for x in maps]==['map-window-open','map-window-close']*2, '手冊與攻略地圖均需實際開啟及關閉'
+    assert [x['source'] for x in maps if x['action']=='map-window-open']==['manual.adventurer.page2','guide.map.flame-0']
+    assert all(maps[i]['step']==maps[i+1]['step'] for i in (0,2))
+    guide=normal['guide_events'] or []
+    assert any(x['page'] and x['page']['Mode']=='guide-body' and x['book']=='chapter-17' for x in guide)
+    assert any(x['page'] and x['page']['SourceKey']=='guide.map.flame-0' for x in guide)
     text_dir=a.output/'text';text_dir.mkdir()
     metrics=[]
     def text(key,value,size,rect,where):
@@ -200,7 +208,7 @@ def render(a):
     assert all(t>=duration-1.7 for t in silences),silences
     for i,s in enumerate(plan['segments']):
         run(['ffmpeg','-nostdin','-v','error','-y','-ss',str((s['start']+s['end'])/2),'-i',str(destination),'-frames:v','1',str(a.output/f'story-contact-{i:02}.png')],a.output/f'contact-{i:02}.log')
-    manifest=dict(passed=True,version=plan['version'],edition='故事與玩法篇',video=name,sha256=sha(destination),bytes=destination.stat().st_size,seconds=duration,segments=plan['segments'],source_hashes=plan['source_hashes'],capture_inputs=plan['source_inputs'],subtitle_catalog_sha256=plan['catalog_sha256'],subtitle_srt_sha256=sha(a.output/'故事與玩法字幕.srt'),subtitle_layout_sha256=sha(a.output/'subtitle-layout.json'),story_source=plan['story_source'],music_hashes=plan['music_hashes'],music_provenance='使用者已授權的原譜RODQ1-0與RODQ3-0取樣HD版，剪輯交叉淡化，非原版晶片錄音',rights=plan['rights'],public_upload=False,visual_review_required=True,freeze_review='標題、故事地圖、隊伍目錄及閱讀停留是預期靜態；探索與戰鬥另看分幕動作',no_engine_or_package_change=True)
+    manifest=dict(passed=True,version=plan['version'],edition='故事與玩法篇',video=name,sha256=sha(destination),bytes=destination.stat().st_size,seconds=duration,segments=plan['segments'],source_hashes=plan['source_hashes'],capture_inputs=plan['source_inputs'],subtitle_catalog_sha256=plan['catalog_sha256'],subtitle_srt_sha256=sha(a.output/'故事與玩法字幕.srt'),subtitle_layout_sha256=sha(a.output/'subtitle-layout.json'),story_source=plan['story_source'],music_hashes=plan['music_hashes'],music_provenance='使用者已授權的原譜RODQ1-0與RODQ3-0取樣HD版，剪輯交叉淡化，非原版晶片錄音',rights=plan['rights'],public_upload=False,visual_review_required=True,freeze_review='封面、故事地圖、隊伍目錄及閱讀停留是預期靜態；探索與戰鬥另看分幕動作',no_engine_or_package_change=False)
     (a.output/'promo-story-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(dict(passed=True,edition=manifest['edition'],seconds=duration,sha256=manifest['sha256']),ensure_ascii=False))
 

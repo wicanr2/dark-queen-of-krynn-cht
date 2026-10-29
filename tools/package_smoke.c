@@ -15,7 +15,7 @@ int main(int argc,char**argv){
         key(d,w,XK_Right);key(d,w,XK_Down);key(d,w,XK_Return);
         Window mw=wait_map_window(d,w);capture(d,mw,argv[1],"04-map-fullscreen");
         key(d,mw,XK_equal);capture(d,mw,argv[1],"05-map-zoom");
-        key(d,mw,XK_Escape);XSetInputFocus(d,w,RevertToParent,CurrentTime);XSync(d,False);sleep(2);
+        close_map_key(d,mw,w);
         capture(d,w,argv[1],"06-map-index");
     }
     key(d,w,XK_Escape);close_window(d,w);XCloseDisplay(d);return 0;
