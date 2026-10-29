@@ -17,8 +17,9 @@ def passed(path):
 
 assert output.is_dir() and output.stat().st_uid == 1000
 if mode=='prepare':
-    line = next(line for line in (root/'tools/player.sh').read_text().splitlines() if line.startswith('go build -modfile'))
-    args = shlex.split(line)
+    sources=(root/'tools/player_sources.txt').read_text().splitlines()
+    assert len(sources)==len(set(sources)) and all(Path(n).name==n and n.endswith('.go') for n in sources)
+    args=['go','build','-modfile','/out/audio-go.mod','-overlay','/out/build-overlay/overlay.json','-o','/out/dqk-player']+['/tools/'+n for n in sources]
     overlay = json.loads((output/'build-overlay/overlay.json').read_text())
     overlay['Replace'].update({
         '/src/oracle/dqk_render_probe.go':'/tools/oracle_render_probe.go',
@@ -44,7 +45,7 @@ elif mode=='finish':
     assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic'}
     old = json.loads((parent/'camp-save-contract.json').read_text())
     for name, digest in old['sources'].items():
-        if name!='tools/early_text_live.go':
+        if name not in ('tools/early_text_live.go','tools/player_render_owner.go'):
             assert sha(root/name)==digest, name
     result = dict(old)
     result.update(sources={name:sha(root/name) for name in old['sources']},tests_sha256=sha(output/'ui-tests.json'),

@@ -38,12 +38,15 @@ type playerTextOwner struct {
 	FormatOrder   []*displayFormat
 	FoldedSources map[string]string
 	Counters      map[string]uint64
+	Unmatched     []map[string]any
+	UnmatchedSeen map[string]bool
 }
 
 func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Addr) *playerTextOwner {
 	p := &playerTextOwner{Oracle: o, Sources: map[string]string{}, Catalog: readLiveCatalog(filepath.Join(profile, "display.zh-TW.tsv"))}
 	p.Formats = map[string]*displayFormat{}
 	p.Counters = map[string]uint64{}
+	p.UnmatchedSeen = map[string]bool{}
 	formatTargets := readLiveCatalog(filepath.Join(profile, "display-format.zh-TW.tsv"))
 	for key, source := range readLiveCatalog(filepath.Join(profile, "display-format.en.tsv")) {
 		compiled, err := compileDisplayFormat(key, source, formatTargets[key])
@@ -106,6 +109,9 @@ func loadPlayerTextOwner(o *oracle.Oracle, profile string, glyphPoint oracle.Add
 		source, ok := listString(o, o.StackWord(6), o.StackWord(5))
 		if ok && source == p.FormatText {
 			source, ok = listString(o, o.StackWord(8), o.StackWord(7))
+		}
+		if ok {
+			run.Source = source
 		}
 		if ok && p.Sources[source] != "" {
 			run.Source, run.Valid = source, true
@@ -222,6 +228,18 @@ func (p *playerTextOwner) glyph() {
 
 func (p *playerTextOwner) finish(run *ownedPrint) {
 	if !run.Valid || run.Next == 0 || (run.Format == nil && run.Next != len(run.Source)) {
+		// 未取得本層所有權不等同漏譯；列表、段落及冷啟動可由其他層承接。
+		// 只保存有界來源，供抽驗核對，不改原版執行或強行套譯。
+		if source := strings.TrimSpace(run.Source); len(source) > 1 && strings.Trim(source, " 0123456789+-.,()%:") != "" {
+			key := digest([]byte(source))
+			if p.UnmatchedSeen == nil {
+				p.UnmatchedSeen = map[string]bool{}
+			}
+			if !p.UnmatchedSeen[key] && len(p.Unmatched) < 128 {
+				p.UnmatchedSeen[key] = true
+				p.Unmatched = append(p.Unmatched, map[string]any{"source": source, "sha256": key, "return": run.Return, "step": p.Oracle.Steps(), "local_layer_valid": run.Valid, "glyphs": run.Next, "classification": "unclaimed-by-complete-string-layer; check other text owners"})
+			}
+		}
 		return
 	}
 	if run.Text == "" {

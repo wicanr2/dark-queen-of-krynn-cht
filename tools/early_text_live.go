@@ -838,7 +838,12 @@ func (g *liveGame) Draw(screen *ebiten.Image) {
 		g.finished = true
 	}
 }
+
+var playerVersion = "development"
+var playerCommit = "unreleased"
+
 func main() {
+	versionOnly := flag.Bool("version", false, "顯示版本與來源提交")
 	playerPath := flag.String("player", "", "中文整合入口的資料目錄；接受一般鍵盤，不執行重播")
 	playerOriginal := flag.String("original", "/orig", "唯讀原版資料目錄")
 	playerSaves := flag.String("saves", "/session", "可寫存檔與前端偏好目錄")
@@ -871,6 +876,10 @@ func main() {
 	manualCatalog := flag.String("manual-catalog", "", "DRAFT：已校讀說明手冊 TSV")
 	manualIndex := flag.String("manual-index", "", "DRAFT：獨立手冊分冊與文章索引")
 	flag.Parse()
+	if *versionOnly {
+		fmt.Println("黑暗之后", playerVersion, playerCommit)
+		return
+	}
 	if *playerPath != "" {
 		runPlayer(*playerPath, *playerOriginal, *playerSaves)
 		return
@@ -1448,7 +1457,7 @@ func runPlayer(profile, original, saves string) {
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowSizeLimits(640, 400, -1, -1)
 	ebiten.SetWindowClosingHandled(true)
-	ebiten.SetWindowTitle("黑暗之后：繁體中文版")
+	ebiten.SetWindowTitle("黑暗之后：繁體中文版 " + playerVersion)
 	ebiten.SetTPS(60)
 	must(ebiten.RunGame(g))
 	controlLog, err := json.MarshalIndent(p.Controls, "", "  ")

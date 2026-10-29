@@ -12,3 +12,4 @@
 | [004：HD素材與獨立呈現開關](004-hd-layer.md) | CONFORMED，依使用者接受的類型抽驗收尾；HD與視窗尺寸獨立 | 1488項素材、17家族49個固定樣本，正常／注入範圍見CONTEXT |
 | [005：繪圖接管與完整畫格提交](005-render-owner.md) | 限定內層搬移、機器效果與事件預算為 READY；函式及代表介面已有收據，完整接管尚未完成 | 使用者要求完全接管，沿 #7 |
 | [006：原譜高品質樂器音樂](006-hd-music.md) | CONFORMED，8段原譜與技術接入；正常開關、桌面音訊與無裝置回退已驗，聽驗待完成 | [#8](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/8) |
+| [007：全量串接、兩輪抽驗與正式交付](007-completion-delivery.md) | READY；使用者指定兩輪後收尾，Windows／Linux／macOS及本機推廣片 | 2026-10-29明確授權 |

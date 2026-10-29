@@ -32,7 +32,7 @@
 | 音樂順序 | 使用者選定保留原譜音符、節奏與曲式，換高品質樂器音色。HD已於2026-10-29依授權抽驗收尾，接續Issue8；入口為[研究008](docs/re/008-original-music.md)與[規格006](docs/spec/006-hd-music.md)。音樂方法讀`/home/anr2/.codex/skills/compose-rpg-remake-music/SKILL.md`及知識路由的音訊入口，不新增旋律或改編曲式 |
 | 手札與說明 | 使用者已選擇內建手札與繁中說明面板，引用時顯示對應手札；原版規則與存檔判定不變 |
 | 攻略與答案 | 內建獨立、手動開啟的攻略閱讀頁；正文重新排版，攻略地圖重新繪製並作繁中標註，掃描只作校對來源，不以嵌入 PDF 或掃描頁交付；自動提示、查驗題答案及地圖疊層未定案 |
-| 封包與發行 | 平台、完整版、推廣片及公開方式尚未定案 |
+| 收尾與正式交付 | 2026-10-29使用者指定先全部串接，再抽驗兩輪，沒有問題即結束、正式打包並錄製推廣影片；平台已選Windows、Linux、macOS。入口為[規格007](docs/spec/007-completion-delivery.md)。完整素材封包及影片先留本機，不自行公開Release或上傳。 |
 
 可逆的讀取、整理、文件修正與已授權測試自主進行。需要改變目標、架構、原版忠實度、
 正式資料格式、玩家操作、授權或公開方式時，先按第 10 節共同決策。
@@ -230,6 +230,13 @@
 | [透明圖片事件續畫](docs/re/007-render-ownership.md#2026-10-28透明圖片事件續畫) | CX保留剩餘像素數，DX保留整列寬度；正式回歸1652組及森林示範已有收據。沿既有Go畫布保持圖片身分，不擴張為全場景覆蓋 |
 | `workplace/` | 唯一研究工作區，含隔離副本、解壓、掃描轉錄、快取與 HD 批次；不入 Git |
 | `dist-all/` | 唯一正式交付根，建立前讀第 4 節交付契約；本機含原版產物不入 Git |
+| [收尾交付規格007](docs/spec/007-completion-delivery.md) | 本輪全量串接、兩輪抽驗、三平台正式打包及本機推廣影片的完成門檻；不重開歷史已完成批次。 |
+| [completion_audit.py](tools/completion_audit.py)、[player_sources.txt](tools/player_sources.txt) | 正式譯文到直接、別名與完整組句的逐項串接核對；玩家建置、介面驗證及跨平台建置共用同一份Go來源清單。 |
+| [release-build.sh](tools/release-build.sh) | 固定版號與來源commit，在既有Docker映像建置Windows x86_64、Linux x86_64及macOS universal；編譯與實機驗收分列。 |
+| [release_payload.py](tools/release_payload.py) | 按交付契約建立三平台本機完整版與無原版資料引擎包，核每檔雜湊、UTF-8 ZIP、BOM、授權及資料排除。 |
+| [package-local.sh](tools/package-local.sh)、[package-smoke.sh](tools/package-smoke.sh)、[封包操作](tools/package_smoke.c)、[封包檢查](tools/package_smoke_check.py) | Docker內產生全版與引擎包，從封包目錄啟動Linux與Wine下的Windows程式，驗正常角色管理、說明與退出。 |
+| [promo-capture.sh](tools/promo-capture.sh)、[錄影操作](tools/promo_session.c)、[promo_merge.py](tools/promo_merge.py) | 隔離X11視窗的實際錄影與分幕剪輯，接已授權原譜HD音樂，保存影音技術檢查與場景注入標記；影片只留本機。 |
+| [finish-scene.sh](tools/finish-scene.sh)、[場景注入](tools/finish_scene_inject.go)、[操作](tools/finish_scene_probe.c)、[核對](tools/finish_scene_check.py) | 兩輪中的洞穴與戰鬥代表樣本；只加入研究程式，正式入口不提供注入捷徑。正常入口另用player-sample.sh。 |
 | [guide_atlas.py](tools/guide_atlas.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28完整圖集與攻略接入) | `bash tools/guide-map.sh atlas guide-新名稱 [註記JSON檔名]`依本機幾何重生圖稿，核來源與門線附著，不取掃描像素。註記限`guide-20261028/`內檔名；52圖已整理並接入正式攻略，正文及全部圖稿只留`workplace/`。這是紙本閱讀座標，紙色留白不表示可通行 |
 | [guide_pdf_sources.py](tools/guide_pdf_sources.py)、[攻略研究002](docs/re/002-walkthrough-source.md#2026-10-28海岸四圖與來源交叉核對) | `bash tools/guide-map.sh source-images guide-新名稱`只接受固定SHA的本機SSI攻略PDF，無損取出32張JPEG供校圖。影像序號不是PDF頁碼，來源圖不得作為重繪成品或直接放入閱讀器 |
 | GitHub Issues | 唯一可執行工作清單；現況必須由遠端回讀 |

@@ -11,6 +11,8 @@ FONT=/home/anr2/cht/golden_box/death_knight_of_krynn/font
 SDK="$ROOT/workplace/dosgolem"
 MODULES=/home/anr2/cht/dosgolem/workplace/gomodcache
 MUSIC_DEPS="$ROOT/workplace/probe/music-go-deps"
+VERSION="${DQK_VERSION:-development}"
+SOURCE_COMMIT="${DQK_SOURCE_COMMIT:-unreleased}"
 test -d "$ROOT/workplace/probe"
 docker image inspect "$GO" >/dev/null
 docker image inspect "$PIL" >/dev/null
@@ -57,6 +59,8 @@ find "/output/$1" -user root -o -type d -name "*.md"
   test -d "$MODULES"
   test -d "$MUSIC_DEPS"
   test -d "$ROOT/workplace/probe/gocache"
+  [[ "$VERSION" == development || "$VERSION" =~ ^v\.[0-9]+\.[0-9]+\.[0-9]+-[0-9]{8}$ ]]
+  [[ "$SOURCE_COMMIT" == unreleased || "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
   test "$(git -C "$SDK" rev-parse HEAD)" = f79eab6db8c64a524a06535e53e5d32b0bbcf7c8
   git -C "$SDK" diff --quiet HEAD -- .
   timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
@@ -70,12 +74,14 @@ find "/output/$1" -user root -o -type d -name "*.md"
   timeout --kill-after=5s 120s docker run --rm --pull never --init --network none \
     --user "$(id -u):$(id -g)" --memory 2g --cpus 2 --pids-limit 128 \
     --label project=dark-queen-of-krynn-cht -e HOME=/tmp -e GOPROXY=off -e GOMAXPROCS=2 \
-    -e GOCACHE=/gocache -e GOMODCACHE=/modules -v "$SDK:/src:ro" -v "$ROOT/tools:/tools:ro" \
+    -e GOCACHE=/gocache -e GOMODCACHE=/modules -e DQK_VERSION="$VERSION" -e DQK_SOURCE_COMMIT="$SOURCE_COMMIT" -v "$SDK:/src:ro" -v "$ROOT/tools:/tools:ro" \
     -v "$MODULES:/modules:ro" -v "$MUSIC_DEPS:/music-deps:ro" -v "$ROOT/workplace/probe/gocache:/gocache" -v "$BASE:/out" \
     -w /src --entrypoint bash "$GO" -c '
 set -euo pipefail
 test "$(stat -c %u:%g /out)" = "$(id -u):$(id -g)"
-go build -modfile /out/audio-go.mod -overlay /out/build-overlay/overlay.json -o /out/dqk-player /tools/early_text_live.go /tools/player_hd.go /tools/player_render_owner.go /tools/player_owned_drivers.go /tools/player_scene_backend.go /tools/player_picture_text.go /tools/picture_text.go /tools/render_scene_state.go /tools/player_text_owner.go /tools/player_text_format.go /tools/ui_cold_prompts.go /tools/ui_list_live.go /tools/ui_list_paragraphs.go /tools/ui_journal_reader.go /tools/ui_manual_reader.go /tools/ui_journal_illustrations.go /tools/ui_menu_source.go /tools/ui_hud_integer.go /tools/ui_inventory_ammo.go /tools/ui_hud_weapon.go /tools/ui_passage_source.go /tools/ui_passage_live.go /tools/ui_original_prefix.go /tools/music_cues.go /tools/player_music.go /tools/player_music_assets.go
+GO_SOURCES=()
+while IFS= read -r source; do GO_SOURCES+=("/tools/$source"); done < /tools/player_sources.txt
+go build -ldflags "-X main.playerVersion=$DQK_VERSION -X main.playerCommit=$DQK_SOURCE_COMMIT" -modfile /out/audio-go.mod -overlay /out/build-overlay/overlay.json -o /out/dqk-player "${GO_SOURCES[@]}"
 sha256sum /out/dqk-player >/out/binary.sha256
 find /out -user root -o -type d -name "*.md"
 '
@@ -83,6 +89,10 @@ find /out -user root -o -type d -name "*.md"
     --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
     -v "$ROOT:/project:ro" -v "$BASE:/out" --entrypoint python3 "$PIL" \
     /project/tools/player_render_check.py /project /out
+  timeout 30s docker run --rm --pull never --network none --user "$(id -u):$(id -g)" \
+    --memory 512m --cpus 1 --pids-limit 64 --label project=dark-queen-of-krynn-cht \
+    -v "$ROOT:/project:ro" -v "$BASE:/out" --entrypoint python3 "$PIL" \
+    /project/tools/completion_audit.py /project /out/inputs /out
   ;;
  check-ui)
   test -f "$BASE/audio-go.mod"

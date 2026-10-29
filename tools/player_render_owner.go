@@ -240,7 +240,10 @@ func (p *playerRenderOwner) Diagnostics() any {
 	result := map[string]any{"pending": pending, "registers": p.Oracle.Regs()}
 	if p.Text != nil {
 		result["text_commands"] = p.Text.Counters
+		result["text_unclaimed"] = p.Text.Unmatched
 	}
+	result["native_pixel_writes"] = p.Counters["native_writes"]
+	result["image_native_fallback"] = p.Counters["image_native_fallback"]
 	return result
 }
 
