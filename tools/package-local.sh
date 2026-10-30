@@ -2,6 +2,8 @@
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${1:?完整版號}";COMMIT="${2:?來源commit}";PLAYER="${3:-player-finish-20261029}"
+EXTRA=()
+case "${4:-all}" in all) ;;full-appimage) EXTRA=(--full-only --linux-appimage);;*)exit 2;;esac
 [[ "$VERSION" =~ ^v\.[0-9]+\.[0-9]+\.[0-9]+-[0-9]{8}$ && "$COMMIT" =~ ^[0-9a-f]{40}$ && "$PLAYER" =~ ^player-[a-zA-Z0-9-]+$ ]]
 test -d "$ROOT/workplace/probe/$PLAYER"
 test -d /home/anr2/cht/dosgolem/workplace/gomodcache
@@ -14,4 +16,4 @@ timeout --kill-after=5s 600s docker run --rm --network none --user "$(id -u):$(i
  -v /home/anr2/cht/dosgolem/workplace/gomodcache:/modules:ro \
  -v /home/anr2/cht/golden_box/death_knight_of_krynn/font:/font:ro --entrypoint python3 "$PIL" \
  /project/tools/release_payload.py --root /project --player "/probe/$PLAYER" --stage "/probe/package-$VERSION" --output "/delivery/$VERSION" \
- --modules /modules --deps /project/workplace/probe/music-go-deps --font /font --version "$VERSION" --commit "$COMMIT"
+ --modules /modules --deps /project/workplace/probe/music-go-deps --font /font --version "$VERSION" --commit "$COMMIT" "${EXTRA[@]}"

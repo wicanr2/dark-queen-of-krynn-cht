@@ -253,6 +253,7 @@
 | [battle_menu_inputs.py](tools/battle_menu_inputs.py)、[三種戰鬥表形](docs/spec/007-battle-menus.json) | 收尾錄影發現的精確按鈕表形，沿既有譯文與座標契約追加資料綁定，保持原版按鍵與狀態。 |
 | [release-build.sh](tools/release-build.sh) | 固定版號與來源commit，在既有Docker映像建置Windows x86_64、Linux x86_64及macOS universal；編譯與實機驗收分列。 |
 | [release_payload.py](tools/release_payload.py) | 按交付契約建立三平台本機完整版與無原版資料引擎包，核每檔雜湊、UTF-8 ZIP、BOM、授權及資料排除。 |
+| [package-full.sh](tools/package-full.sh)、[appimage_payload.py](tools/appimage_payload.py)、[第三方來源與授權](tools/appimage-licenses/files.json) | 三平台完整版重打包入口：`bash tools/package-full.sh 完整版號 來源commit 整合目錄`。Linux為含遊戲的AppImage，Windows／macOS為完整ZIP。沿固定kol工具映像與75849dc runtime，核對解壓內容與平台架構，再用package-smoke.sh的appimage及windows模式驗正常啟動。現況與權利見規格007及CONTEXT。 |
 | [package-local.sh](tools/package-local.sh)、[package-smoke.sh](tools/package-smoke.sh)、[封包操作](tools/package_smoke.c)、[封包檢查](tools/package_smoke_check.py) | Docker內產生全版與引擎包，從封包目錄啟動Linux與Wine下的Windows程式，驗正常角色管理、說明與退出。 |
 | [restore-package-stage.sh](tools/restore-package-stage.sh) | 結案清理後，只有需要重跑封包驗收時才執行`bash tools/restore-package-stage.sh 完整版號`。現行v.1.0.3缺少完整ZIP時先呼叫私人下載還原，再從dist-all核SHA重建workplace/probe/package-版本，恢復可執行權限，不覆寫既有暫存或正式包。 |
 | [promo-capture.sh](tools/promo-capture.sh)、[錄影操作](tools/promo_session.c)、[promo_merge.py](tools/promo_merge.py) | 隔離X11視窗的實際錄影與分幕剪輯，接已授權原譜HD音樂，保存影音技術檢查與場景注入標記；影片只留本機。 |

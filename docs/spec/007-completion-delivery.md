@@ -2,6 +2,19 @@
 
 狀態：CONFORMED，限本規格的代表抽驗與本機交付範圍。2026-10-29使用者明確指定先完成串接，再抽驗兩輪，沒有問題即收尾、正式打包與錄製推廣影片；平台已選Windows、Linux、macOS。不重開已接受的HD圖稿。
 
+## READY：三平台完整版與Linux AppImage重打包
+
+2026-10-30使用者要求重新打包三平台完整版，必須包含遊戲，Linux指定AppImage。
+新版本v.1.0.4-20261030，既有tag及私人Release不覆寫。
+Windows x86_64、macOS universal為完整ZIP，Linux x86_64為type-2 AppImage；三包皆含原版DQK.EXE與資料、正式95份輸入、字型、手札／說明／攻略、完整HD及8段原譜音樂，不需要另行匯入遊戲。
+正式維護資料與session保持；來源另建隔離快照，不以舊prepare的92份輸入替換正式95份。
+
+打包入口為[package-full.sh](../../tools/package-full.sh)，來源固定Go工具鏈、macOS交叉工具鏈及kol AppImage映像。
+AppImage使用已核SHA的75849dc runtime，附第三方授權與來源，存檔放在XDG使用者資料目錄；主機仍需glibc 2.36、X11、OpenGL與ALSA。
+核三包版本、來源commit、每檔SHA、原版EXE、95份輸入、Windows PE與macOS雙Mach-O架構；AppImage實際解壓後全量比對內容，另驗內建解壓執行模式正常啟動、中文介面、說明及退出。
+Windows沿Wine驗啟動，macOS未簽章、公證或真機驗收；不新增原版玩法或人耳驗收聲明，不重開已結案的全量繪圖工作。
+成品只留dist-all/v.1.0.4-20261030/full-local，附SHA256SUMS及smoke；中間快照、解壓、SquashFS、Go快取與Wine環境驗後清除。
+
 ## 串接與停止線
 
 - 正式7730筆譯文逐項核對執行入口，完整段落的片段可由已接入PassageGroups承接；不能只比TSV鍵數就判漏接。對應記錄來源雜湊及組句輸出鍵。

@@ -31,13 +31,13 @@ def readme(version,platform,full):
 平台：{platform}
 內容：{'本機完整版，含合法持有的原版及本機衍生素材，只限本機保存。' if full else '引擎包，不含原版、翻譯全文、HD、音樂或掃描。'}
 
-{'Windows雙擊「啟動.bat」；Linux執行 ./啟動.sh；macOS開啟「黑暗之后.app」。' if full else '先從您本機已準備的完整資料匯入 data/ 與 original/，再啟動。可使用 import-local.py 來源資料夾 本封包資料夾。原版ZIP本身不包含本專案的翻譯與HD，不能冒充完整中文資料。'}
+{'Windows雙擊「啟動.bat」；Linux執行完整版AppImage，或在展開的資料夾執行 ./啟動.sh；macOS開啟「黑暗之后.app」。' if full else '先從您本機已準備的完整資料匯入 data/ 與 original/，再啟動。可使用 import-local.py 來源資料夾 本封包資料夾。原版ZIP本身不包含本專案的翻譯與HD，不能冒充完整中文資料。'}
 存檔位於使用者資料目錄，更新程式不覆寫存檔。Windows使用LOCALAPPDATA，Linux使用XDG_DATA_HOME或~/.local/share，macOS使用~/Library/Application Support。
 macOS的data與original位於「黑暗之后.app/Contents/Resources/」；匯入工具的來源與目的地皆指定這一層。
 
 F2縮放；F12繁中／原版；工具列HD獨立切換；F5手札、F6說明、F7攻略、F8音樂；F10截圖、F11全螢幕。示範可按Esc中斷。
 
-Linux x86_64需要glibc 2.36以上及X11／OpenGL／ALSA桌面函式庫。Windows x86_64有Wine啟動收據，原生Windows仍需實機確認。macOS universal含x86_64及arm64，未簽章、未公證，未完成真機驗收。
+Linux x86_64需要glibc 2.36以上及X11／OpenGL／ALSA桌面函式庫。AppImage已內含遊戲與全部資料，賦予執行權限後即可啟動；系統缺少FUSE時可加 --appimage-extract-and-run 使用內建解壓執行模式。Windows x86_64有Wine啟動收據，原生Windows仍需實機確認。macOS universal含x86_64及arm64，未簽章、未公證，未完成真機驗收。
 
 完成門檻為使用者指定的兩輪代表抽驗，正常入口與場景fixture分列；不宣稱逐房走訪、全程通關或所有平台真機通過。音樂保留原版8段樂譜，改用取樣樂器，技術輸出與聽感確認分列。
 
@@ -118,6 +118,7 @@ def archive(base,path):
 def main(args):
     root,player,stage,delivery=args.root,args.player,args.stage,args.output
     assert re.fullmatch(r'v\.\d+\.\d+\.\d+-\d{8}',args.version) and re.fullmatch(r'[0-9a-f]{40}',args.commit)
+    assert not args.linux_appimage or args.full_only
     assert stage.parent.is_dir() and delivery.parent.is_dir() and not stage.exists() and not delivery.exists()
     stage.mkdir();delivery.mkdir()
     for name in ['full-local','patch','promo','smoke']:(delivery/name).mkdir()
@@ -125,7 +126,7 @@ def main(args):
     rows=[]
     for platform,binary in builds.items():
         assert binary.is_file()
-        for kind in ['full-local','patch']:
+        for kind in (['full-local'] if args.full_only else ['full-local','patch']):
             name=f'黑暗之后-{args.version}-{platform}-{kind}'
             base=stage/name;base.mkdir()
             resource=base
@@ -150,7 +151,10 @@ def main(args):
             else:(base/'README.md').write_text(text)
             manifest=dict(schema=1,version=args.version,source_commit=args.commit,platform=platform,kind=kind,binary_sha256=sha(binary),rights='local-only-original-and-derived-assets' if kind=='full-local' else 'engine-only-no-game-data',macos_hardware_verified=False,files={str(p.relative_to(base)):sha(p) for p in base.rglob('*') if p.is_file()})
             (base/'package-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
-            result=archive(base,delivery/kind/(name+'.zip'));rows.append(result);print(json.dumps(result),flush=True)
+            if platform=='linux-amd64' and kind=='full-local' and args.linux_appimage:
+                print('Linux完整資料已準備，接續建立AppImage。',flush=True)
+            else:
+                result=archive(base,delivery/kind/(name+'.zip'));rows.append(result);print(json.dumps(result),flush=True)
     result=dict(schema=1,version=args.version,source_commit=args.commit,packages=rows,public_upload=False)
     (delivery/'SHA256SUMS.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
 
@@ -159,4 +163,6 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     for name in ['root','player','stage','output','modules','deps','font']:p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--version',required=True);p.add_argument('--commit',required=True)
+    p.add_argument('--full-only',action='store_true')
+    p.add_argument('--linux-appimage',action='store_true')
     main(p.parse_args())
