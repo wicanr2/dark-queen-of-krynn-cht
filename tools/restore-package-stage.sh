@@ -7,6 +7,13 @@ VERSION="${1:?請指定完整版號}"
 test -d "$ROOT/dist-all/$VERSION"
 test -d "$ROOT/workplace/probe"
 test ! -e "$ROOT/workplace/probe/package-$VERSION"
+if test "$VERSION" = v.1.0.3-20261029; then
+ for PLATFORM in linux-amd64 windows-amd64 macos-universal; do
+  if test ! -f "$ROOT/dist-all/$VERSION/full-local/黑暗之后-$VERSION-$PLATFORM-full-local.zip"; then
+   bash "$ROOT/tools/private-release-download.sh" "$PLATFORM"
+  fi
+ done
+fi
 timeout --kill-after=5s 600s docker run --rm -i --pull never --network none \
  --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 64 \
  --label project=dark-queen-of-krynn-cht \

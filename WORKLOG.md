@@ -3553,3 +3553,17 @@ X11列舉遇到Wine瞬間消失的視窗會觸發BadWindow，屬驗證工具問�
 逐包核六個ZIP，正式binary、profile、HD、音樂與session均與錄影前相同，v.1.0.2影片仍為498b9d8b。現況與來源見CONTEXT及promo-names-20261030/delivery-checks.json；第一候選明列withdrawn，最終批次為promo-names-edit-final-20261030。只清1436個本作Go快取檔，沒有新增image或volume，原始資料及其他專案保持；所有容器均離線、有界、非root且自動刪除。
 
 錄影入口、檢查器與文件29db90b已推送main；Issue16已回讀為CLOSED。結束前核28份交付內容與SHA一致，正式binary及快取狀態保持，root-owned檔、.md目錄與本專案容器均0；影片只留本機，歷史tag未變。
+
+## 2026-10-30：清理工作區與私人素材備份，Issue17
+
+使用者要求縮減約50GB工作區，另明確授權將必要與HD素材上傳現有GitHub儲存庫。命中文件分工與dist-all路由，載入對應入口；共同決策技能核對已有明確上傳授權，保持wicanr2/dark-queen-of-krynn-cht私人。這是本次素材備份例外，不擴張為轉公開、額外掃描、研究快照、玩家存檔或影片上傳。原版規則、正式程式與遊戲功能沒有改動。
+
+cleanup-space-20261030先以340070個檔案盤點實際inode配置，基線52989681664 bytes，49.35GiB。388份已完成的歷史重播使用既有research_storage無損封存，原內容SHA核對後才移除未壓縮副本，節省2456862720 bytes；同一storage-index保留還原入口。另按SHA、權限及所有硬連結別名選出32649組歷史圖像，221158個路徑改為共享inode，預計節省18240053248 bytes。排除正式player-current、當日批次與連到保護區的inode，保留所有圖片路徑與內容，原時間記於dedup-plan。合併程序輸出完整結束行後外層240秒逾時；沒有當作失敗重做，全計畫verify獨立完成並核221158個路徑。操作日誌及原盤點無損壓縮，圖像改寫前的detach入口已加入AGENTS。
+
+GitHub直接上傳三個約1.27GB大ZIP長時間未完成，手動中止本次gh程序，未刪本機來源。改以32MiB分段後正常完成上傳；再以ZIP原始壓縮區塊共用省去跨平台重複素材。Linux完整ZIP38段，Windows及macOS差異分別4899905、8604270 bytes。差異只引用來源ZIP區塊及保存目標差異，不重壓縮；兩個平台均實際重建完整ZIP，SHA與原交付772a135d、6b7fe4d6完全相同。原六包及SHA256SUMS、tag保持，不修改既有交付位元組。
+
+私人Release v.1.0.3-20261029共45個資產、1307818490 bytes，含38段、2份差異、3個引擎包及2份清單。遠端逐項大小及SHA全數核對，實際下載第一段再核SHA；儲存庫PRIVATE、Release非draft皆已回讀。必要原版資料、繁中、字型、閱讀、8曲及完整HD與製作主圖均隨完整版備份。新private-release-download.sh只用主機gh下載，離線Docker還原到原dist-all檔名，完整SHA通過才清片段。還原工具另驗損壞片段拒絕、既有partial不覆寫、正確合併及既有ZIP核對；restore-package-stage缺少現行完整包時接同一入口。檔案清單在docs/private-release-assets.json，README已改用v.1.0.3及私人下載入口。
+
+遠端驗證後才刪三個本機完整版ZIP與本輪傳輸副本。最終按相同inode配置統計28499386368 bytes，26.54GiB，實際釋放24490295296 bytes，22.81GiB；未把本次新建又刪除的片段重複加總。清理後8041個保護檔逐檔SHA保持，包含可直接啟動的正式程式、素材、session、原始輸入、翻譯及攻略來源。影片、歷史版本與所有研究圖像路徑保留。證據為cleanup-summary、offload-cleanup-check、remote-backup-check、delta-restore-check、download-check、restore-helper-check及protected-after-check，均在cleanup-space-20261030。
+
+所有分析與清理用既有Pillow映像、UID1000的有界離線容器，未建新image／volume，保留正式啟動所需音訊映像。root-owned檔、.md目錄及本專案殘留容器0，沒有清其他專案。工具、私人清單與文件納入本輪提交；提交與推送結果以[Issue17](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/17)的收尾回讀記錄為準。

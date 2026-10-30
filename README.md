@@ -319,7 +319,19 @@ HD採固定類型抽驗收尾，繪圖依兩輪代表抽驗完成。素材布局
 ## 如何啟動
 
 開發與驗證入口使用 Linux、Docker 與可存取的 X11 桌面。建置、測試及開發中的遊戲程序均在容器中執行。
-本機正式交付位於 `dist-all/v.1.0.2-20261029/`，包含以下產物，不隨Git提供下載：
+正式版本為 `v.1.0.3-20261029`。必要資料與完整HD素材備份在
+[私人Release](https://github.com/wicanr2/dark-queen-of-krynn-cht/releases/tag/v.1.0.3-20261029)，
+僅授權成員可下載。大型Linux完整版ZIP分段保存，Windows及macOS保存相對於它的無損差異，
+三平台共用素材只存一份。原檔名、大小及各段SHA見[封包清單](docs/private-release-assets.json)。
+以主機gh登入後，在專案根目錄執行以下命令，下載並還原Linux完整版：
+
+```sh
+bash tools/private-release-download.sh linux-amd64
+```
+
+Windows改用`windows-amd64`，macOS改用`macos-universal`。
+還原程式核對分段或差異的SHA，重建原ZIP後再核對整檔SHA；成功後移除下載暫存。
+封包還原至 `dist-all/v.1.0.3-20261029/`，使用以下目錄：
 
 | 位置 | 內容 |
 |---|---|

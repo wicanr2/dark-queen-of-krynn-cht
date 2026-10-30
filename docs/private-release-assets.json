@@ -1,0 +1,232 @@
+{
+  "schema": 1,
+  "version": "v.1.0.3-20261029",
+  "private_only": true,
+  "split_bytes": 33554432,
+  "archives": [
+    {
+      "path": "dist-all/v.1.0.3-20261029/full-local/黑暗之后-v.1.0.3-20261029-linux-amd64-full-local.zip",
+      "bytes": 1274225961,
+      "sha256": "8a9a09ed1b9a25bec4c8376786b5f96b92191a72f9d84434ecbb393363bed3bb",
+      "parts": [
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part001",
+          "bytes": 33554432,
+          "sha256": "b8d37d7f14a6f79c97eb6094b0ba747ef6dc87267e7a43e0977c1431b450940d"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part002",
+          "bytes": 33554432,
+          "sha256": "1fcef5337c2ac1a2acbb4091ea1e9b3305b78b97bda6feb1bcef791bbebb6851"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part003",
+          "bytes": 33554432,
+          "sha256": "7e8f090e8f42494328601b3034d9ecfd308c86e4456a7e4f21583bf428f16c75"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part004",
+          "bytes": 33554432,
+          "sha256": "40716b459da38fb2f3bb116ae1ce5f49f06987b1cff64e560e9d3010b6705a41"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part005",
+          "bytes": 33554432,
+          "sha256": "f370b54ed3b46b41e947a814019eac27f7da37324aa88d3cdfdd0a9ee5ea7119"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part006",
+          "bytes": 33554432,
+          "sha256": "5594094e93d7d860f6dd561f62c015a24f03105eb1beecfca37eb388e4f30b97"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part007",
+          "bytes": 33554432,
+          "sha256": "9f00969600391e280fd2b241823a4f38798fcca6ea4fce208313670f1f3e837a"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part008",
+          "bytes": 33554432,
+          "sha256": "01512d4f91b58d5e3af16087f21c028f1d15dc46b1c1fa06d5c7cbf5f3b08fa2"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part009",
+          "bytes": 33554432,
+          "sha256": "9cc8d344123154b4e30450351917c921e1fa543fdaa4a6086d3d79139d5697da"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part010",
+          "bytes": 33554432,
+          "sha256": "abb596fe7cc40ec7da84b75ced6f59887338db61546bd69740ce046da45aeb53"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part011",
+          "bytes": 33554432,
+          "sha256": "3e297e3cbc3630579df5dd33517fa75c97de9028258b240469a06be51503457d"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part012",
+          "bytes": 33554432,
+          "sha256": "3dd61405b7e5b029d35cc1f224553eec92139d4a28178f71ddaed84bfb1314c4"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part013",
+          "bytes": 33554432,
+          "sha256": "16de4c930e5d4a7a87f1adfbd538819c3d9cded66e40b9bf79322c45c9cbe77f"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part014",
+          "bytes": 33554432,
+          "sha256": "3bd4f6b709d61531c9c4d994509a906caec27ce0631bc3633db97650dad83507"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part015",
+          "bytes": 33554432,
+          "sha256": "0ee3868064ce2b53ac0e8e8f651c17b498120465f75239d2a8f6acc595d150c2"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part016",
+          "bytes": 33554432,
+          "sha256": "4f38f7a132d67f58c7ab01abee79055f5ce6507147ba5c63ef880390eac2784e"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part017",
+          "bytes": 33554432,
+          "sha256": "afc8b21fbf0d4325459d791df0701ae5fea21cc4fd2e616ab2bef117948ad849"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part018",
+          "bytes": 33554432,
+          "sha256": "47d4d7b2752dc4a2fe0711166276c469443607f68d4c1bf873c4c9ddb4f076e9"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part019",
+          "bytes": 33554432,
+          "sha256": "74a9f1eddeb67d51970dff82ce8c453d7606e21879d4b7addb2858cb64f0a452"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part020",
+          "bytes": 33554432,
+          "sha256": "b3f8a0649065a95bd80ca6c5dfa648c3335aeadc47ef2960f082711aa82088d4"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part021",
+          "bytes": 33554432,
+          "sha256": "d004e235bc0385a4a29e8bfc38632d18cedebd8894127e00b707f5e7a7a39620"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part022",
+          "bytes": 33554432,
+          "sha256": "8d68cfaceb79d52a0a7e968302eb213ed260e8140f86436c46e5316d8b37a8d2"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part023",
+          "bytes": 33554432,
+          "sha256": "49f4e4268c9995bba9c94e987863403be6874b43b485d8e3266f6cca9408a26b"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part024",
+          "bytes": 33554432,
+          "sha256": "afbaa5db739c9d791b3aceeed522f8797760d6081e435c4fcd8c14587e8ee030"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part025",
+          "bytes": 33554432,
+          "sha256": "55f31a73fd75e459d49781b1af0a1c0dd1eb6100439359f95e82ef34dc536113"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part026",
+          "bytes": 33554432,
+          "sha256": "2902a5f8464029b2c28d58aa240ad2750ee5b2c711a20f09eeb6ab20f11e867d"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part027",
+          "bytes": 33554432,
+          "sha256": "d6b6ad3c654ee35b6e4f817a8d3ff7eb1fd3d62236b28d3758ab77df331eb80f"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part028",
+          "bytes": 33554432,
+          "sha256": "b64b198d0fa4beb9ab82a6387f56af5a0859a853c3a952ec2ebba940a18749c9"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part029",
+          "bytes": 33554432,
+          "sha256": "eec28df95368d35c72029f96ac4f6118087496c650a5fb0f59262b0aa17f04a9"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part030",
+          "bytes": 33554432,
+          "sha256": "50ba312607ce467335f66acc0ff90cb2bb580569bc3e5da7236cca9fab034c54"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part031",
+          "bytes": 33554432,
+          "sha256": "9824ccbee1ba1df72a13c8f14a3444d27ebf86adc3b08b506236e019f1750c3f"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part032",
+          "bytes": 33554432,
+          "sha256": "7b35bc54a8549c8607735116bf9d3b108c525b331a97287f93c6daab3ef2d4f6"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part033",
+          "bytes": 33554432,
+          "sha256": "7cca299b3936124d1ab500e3d53f77ef3c0574b5408cd47d50b5ed7d341b88f2"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part034",
+          "bytes": 33554432,
+          "sha256": "63b9d119298c74fda808ebd3796351ea9b107c20692f61c828bc5178a4651ae0"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part035",
+          "bytes": 33554432,
+          "sha256": "b40dcaa749ad09689ee90e9cfc304b0b3d09514f4de95ffa05a1a6eea487c499"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part036",
+          "bytes": 33554432,
+          "sha256": "044b69c02803dc45ac07eafc92f931fbc522771c8b7685f57bb8563b1192aa00"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part037",
+          "bytes": 33554432,
+          "sha256": "96be6898c46e31e0885328db915f4a262f47f5b4d2bb74a162a723851aa051be"
+        },
+        {
+          "name": "dqk-v.1.0.3-20261029-linux-amd64-full-local.zip.part038",
+          "bytes": 32711977,
+          "sha256": "19f2884fa0674748fb3d568eb5715a7a6311e17d4f4a51cab95891cd7290ab72"
+        }
+      ]
+    },
+    {
+      "path": "dist-all/v.1.0.3-20261029/full-local/黑暗之后-v.1.0.3-20261029-windows-amd64-full-local.zip",
+      "bytes": 1270496344,
+      "sha256": "772a135d5ee4fd8d9342407b82e0b1a8af49babf4bb4f80f20a0ba78657a4eed",
+      "base_archive": "dist-all/v.1.0.3-20261029/full-local/黑暗之后-v.1.0.3-20261029-linux-amd64-full-local.zip",
+      "delta": {
+        "name": "dqk-v.1.0.3-20261029-windows-amd64-full-local.zip.delta.json.gz",
+        "bytes": 4899905,
+        "sha256": "3ee4bfbec2fbb704beffdcf6b7764a5aacfbd3da6277642acb96c557b4677bc1"
+      }
+    },
+    {
+      "path": "dist-all/v.1.0.3-20261029/full-local/黑暗之后-v.1.0.3-20261029-macos-universal-full-local.zip",
+      "bytes": 1274723941,
+      "sha256": "6b7fe4d6296e086091fc21e59913f3d30e2b9ba8b4e97a1dce85d5a708488722",
+      "base_archive": "dist-all/v.1.0.3-20261029/full-local/黑暗之后-v.1.0.3-20261029-linux-amd64-full-local.zip",
+      "delta": {
+        "name": "dqk-v.1.0.3-20261029-macos-universal-full-local.zip.delta.json.gz",
+        "bytes": 8604270,
+        "sha256": "f986d4ca03e229db0dae34e61ce594f326184f8c628c5064c46502746587e42c"
+      }
+    }
+  ],
+  "repository": "wicanr2/dark-queen-of-krynn-cht",
+  "release_id": 428572982,
+  "release_url": "https://github.com/wicanr2/dark-queen-of-krynn-cht/releases/tag/v.1.0.3-20261029",
+  "scope": "使用者2026-10-30授權：必要與HD素材備份至現有私人儲存庫，不代表公開散布權",
+  "format": "Linux原ZIP分段，加Windows與macOS原始ZIP壓縮區塊差異；不重壓縮，還原SHA須與原封包完全一致"
+}

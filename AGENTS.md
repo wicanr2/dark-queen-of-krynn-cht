@@ -83,6 +83,13 @@
   保存於`docs/images/`並提交私人儲存庫。來源及雜湊見[展示圖清單](docs/images/manifest.json)。
   此範圍只涵蓋首頁展示，不擴張為上傳原版遊戲檔、完整素材包或轉公開。
 - 譯文與衍生素材逐批記錄來源及權利分類。未確認可提交的批次留在 `workplace/`。
+- 2026-10-30使用者明確授權「必要素材與HD素材都上github repo」。本次例外限既有私人庫
+  `wicanr2/dark-queen-of-krynn-cht` 的Release：備份已驗證的v.1.0.3完整版及引擎包，
+  包含必要原版資料、繁中、字型、閱讀、音樂、完整HD與製作主圖。Linux ZIP分段保存，
+  Windows／macOS保存原始ZIP壓縮區塊的無損差異，不重壓縮，不加入一般Git物件；
+  [封包清單](docs/private-release-assets.json)記錄原封包、分段與差異的SHA。
+  還原入口為`bash tools/private-release-download.sh linux-amd64`，平台另可選
+  `windows-amd64`、`macos-universal`。不擴張為轉公開、公開散布或上傳額外掃描、研究快照與玩家存檔。
 - 需要原版的測試缺檔時明確略過，不用自製替代資料冒充原版驗證。
 - 前作、dosgolem 與 `~/.claude/` 都是唯讀參考，不修改、不搬移、不清理其中的資料。
 
@@ -215,6 +222,7 @@
 | `text/`、`font/` | 經權利檢查的 TSV、術語、字型來源與重建規則；自有說明面板文案入口為 [manual-ui.zh-TW.tsv](text/manual-ui.zh-TW.tsv)，圖片內嵌文字由 [image-text.en.tsv](text/image-text.en.tsv) 與 [image-text.zh-TW.tsv](text/image-text.zh-TW.tsv) 成對保存。書籍正文仍留本機 |
 | [party-names.en.tsv](text/party-names.en.tsv)、[party-names.zh-TW.tsv](text/party-names.zh-TW.tsv) | 六名已知隊員的完整姓名及稱號；由 `player_inputs.py display` 接入完整顯示來源。已知姓名忽略英文字母大小寫，其他自訂姓名保留；不改角色資料或存檔。 |
 | `tools/` | 可重現的 Docker、盤點、驗證與打包入口 |
+| [私人封包清單](docs/private-release-assets.json)、[下載還原](tools/private-release-download.sh)、[還原核對](tools/private_release_assets.py) | 私人Release的Linux完整ZIP分段、Windows／macOS無損差異、大小與SHA；主機gh下載，離線Docker核對與還原到dist-all原檔名，不覆寫既有不同內容。 |
 | [music-hd.sh](tools/music-hd.sh)、[xmi_score.py](tools/xmi_score.py)、[製作器](tools/music_score_render.py)、[核對器](tools/music_score_check.py)、[音樂研究008](docs/re/008-original-music.md) | Docker內擷取XMI、原譜取樣合成及音符／控制事件核對；`prepare`、`render`、`check`、`probe`與`install`用法見研究008。8曲的原版、JSON、MIDI、WAV與Ogg只留本機。 |
 | [music_cues.go](tools/music_cues.go)、[原版探針](tools/music_cue_probe.go)、[player_music.go](tools/player_music.go)、[解碼與資料核對](tools/player_music_assets.go)、[音樂測試](tools/player_music_assets_test.go) | 原版遠呼叫的只讀開始／停止／音量觀察；音樂獨立於圖像HD、語言與縮放，正式TSV工具列及F8控制；證據與聽驗限制見規格006。 |
 | [player_music_inputs.py](tools/player_music_inputs.py)、`workplace/probe/music-go-deps/` | 固定oggvorbis v1.0.5及vorbis v1.0.2；`music-hd.sh deps`首次建立，建置前核zip與每個解壓成員。只產生本作modfile，不修改SDK或共用模組快取。 |
@@ -246,7 +254,7 @@
 | [release-build.sh](tools/release-build.sh) | 固定版號與來源commit，在既有Docker映像建置Windows x86_64、Linux x86_64及macOS universal；編譯與實機驗收分列。 |
 | [release_payload.py](tools/release_payload.py) | 按交付契約建立三平台本機完整版與無原版資料引擎包，核每檔雜湊、UTF-8 ZIP、BOM、授權及資料排除。 |
 | [package-local.sh](tools/package-local.sh)、[package-smoke.sh](tools/package-smoke.sh)、[封包操作](tools/package_smoke.c)、[封包檢查](tools/package_smoke_check.py) | Docker內產生全版與引擎包，從封包目錄啟動Linux與Wine下的Windows程式，驗正常角色管理、說明與退出。 |
-| [restore-package-stage.sh](tools/restore-package-stage.sh) | 結案清理後，只有需要重跑封包驗收時才執行`bash tools/restore-package-stage.sh 完整版號`。從dist-all的ZIP核SHA後重建workplace/probe/package-版本，恢復可執行權限，不覆寫既有暫存或正式包。 |
+| [restore-package-stage.sh](tools/restore-package-stage.sh) | 結案清理後，只有需要重跑封包驗收時才執行`bash tools/restore-package-stage.sh 完整版號`。現行v.1.0.3缺少完整ZIP時先呼叫私人下載還原，再從dist-all核SHA重建workplace/probe/package-版本，恢復可執行權限，不覆寫既有暫存或正式包。 |
 | [promo-capture.sh](tools/promo-capture.sh)、[錄影操作](tools/promo_session.c)、[promo_merge.py](tools/promo_merge.py) | 隔離X11視窗的實際錄影與分幕剪輯，接已授權原譜HD音樂，保存影音技術檢查與場景注入標記；影片只留本機。 |
 | [推廣片字幕](text/promo-story.zh-TW.tsv)、[promo_story.py](tools/promo_story.py) | 故事與玩法篇的自有繁中文案、12幕分鏡與影音合成；依README及手冊摘要撰寫，使用正式程式新錄影，來源與權利分列。`prepare`核來源與姓名重畫，`render`合成及檢測，`motion`只取視訊畫格驗差異。後者在既有`wasteland-media:bookworm-modern-r1`容器執行`python3 /tools/promo_story.py motion --output /out`，`/tools`掛本專案tools唯讀、`/out`掛待驗影片目錄；不以AAC封包數當畫格數。規格見007。 |
 | [finish-scene.sh](tools/finish-scene.sh)、[場景注入](tools/finish_scene_inject.go)、[操作](tools/finish_scene_probe.c)、[核對](tools/finish_scene_check.py) | 兩輪中的洞穴與戰鬥代表樣本；只加入研究程式，正式入口不提供注入捷徑。正常入口另用player-sample.sh。 |
@@ -267,6 +275,7 @@
 |---|---|
 | [research-storage.sh](tools/research-storage.sh) | 離線 Docker 的 `list`、`verify`、`restore`、`pack` 與本專案 `cache` 入口 |
 | [research_storage.py](tools/research_storage.py) | 串流壓縮、原始內容校驗、按邏輯路徑還原；不改遊戲或正式資料格式 |
+| [history_dedup.py](tools/history_dedup.py) | 相同內容的歷史PNG／PPM／索引圖以硬連結共用儲存，保留每個路徑；排除player-current、目前20261030批次與連到保護區的檔案。由research-storage.sh的dedup-plan、dedup-apply、dedup-verify、dedup-detach進入。 |
 | `workplace/probe/storage-index.json` | 唯一封存索引，保存原邏輯路徑、原始／壓縮雜湊、大小、權限及還原狀態 |
 
 研究文件與舊程式中的原路徑保留為邏輯引用。取用缺少的歷史紀錄前，先執行：
@@ -281,6 +290,22 @@ bash tools/research-storage.sh restore workplace/probe/研究目錄/重播目錄
 `verify` 只證明封存的原始位元組完整，不等於重新執行 GUI 或遊戲驗收。
 `pack` 依 [research_storage.py](tools/research_storage.py) 的 `KEEP` 名單保護目前批次及圖文來源，
 僅選其他目錄至少 16 MiB 的 `receipt.json`；`cache` 只清本專案 `workplace/probe/gocache` 內容，保留目錄。
+
+2026-10-30空間清理另逐檔選取已完成歷史的1MiB以上重播，仍使用同一封存索引與原內容SHA核對。
+歷史圖像合併的操作紀錄在`workplace/probe/cleanup-space-20261030/dedup-plan.json.gz`，
+這是圖像硬連結與原始時間的紀錄，不取代重播封存索引。核對命令為：
+
+```sh
+bash tools/research-storage.sh dedup-verify /project/workplace/probe/cleanup-space-20261030/dedup-plan.json.gz
+```
+
+合併的歷史圖像視為唯讀；修改其中一份前，先拆成獨立副本，避免修改傳到其他歷史路徑：
+
+```sh
+bash tools/research-storage.sh dedup-detach /project/workplace/probe/cleanup-space-20261030/dedup-plan.json.gz workplace/probe/歷史批次/圖像.png
+```
+
+拆分會核對內容並恢復該路徑原權限與時間。正式素材與存檔不在合併範圍。
 
 ## 10. 共同決策與停止線
 
