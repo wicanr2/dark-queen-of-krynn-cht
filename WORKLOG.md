@@ -3551,3 +3551,5 @@ X11列舉遇到Wine瞬間消失的視窗會觸發BadWindow，屬驗證工具問�
 最終12幕86秒、70文字安全框與兩輪目視通過，封面、故事、職業隊伍、探索、戰鬥、F7法術提示、HD對照及全螢幕地圖保持。H.264／AAC、1080p／30fps、48kHz立體聲，無黑幀、長靜音及削波，峰值-7.5dB；原譜取樣配樂保持，不新增人工聽感或通關聲明。最終SHA-256 0b6af1eb400a0f49705c632a1f99f69b044a08ba8bd4ff1c36f7367d7ec5d498，交付至v.1.0.3-20261029原空白promo目錄，含28份影片及證據檔與獨立SHA清單。
 
 逐包核六個ZIP，正式binary、profile、HD、音樂與session均與錄影前相同，v.1.0.2影片仍為498b9d8b。現況與來源見CONTEXT及promo-names-20261030/delivery-checks.json；第一候選明列withdrawn，最終批次為promo-names-edit-final-20261030。只清1436個本作Go快取檔，沒有新增image或volume，原始資料及其他專案保持；所有容器均離線、有界、非root且自動刪除。
+
+錄影入口、檢查器與文件29db90b已推送main；Issue16已回讀為CLOSED。結束前核28份交付內容與SHA一致，正式binary及快取狀態保持，root-owned檔、.md目錄與本專案容器均0；影片只留本機，歷史tag未變。
