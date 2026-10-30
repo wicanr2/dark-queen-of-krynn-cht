@@ -2,9 +2,9 @@
 
 狀態：CONFORMED，限本規格的代表抽驗與本機交付範圍。2026-10-29使用者明確指定先完成串接，再抽驗兩輪，沒有問題即收尾、正式打包與錄製推廣影片；平台已選Windows、Linux、macOS。不重開已接受的HD圖稿。
 
-## READY：三平台完整版與Linux AppImage重打包
+## CONFORMED：三平台完整版與Linux AppImage重打包
 
-2026-10-30使用者要求重新打包三平台完整版，必須包含遊戲，Linux指定AppImage。
+2026-10-30使用者要求重新打包三平台完整版，必須包含遊戲，Linux指定AppImage，追蹤[Issue19](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/19)。
 新版本v.1.0.4-20261030，既有tag及私人Release不覆寫。
 Windows x86_64、macOS universal為完整ZIP，Linux x86_64為type-2 AppImage；三包皆含原版DQK.EXE與資料、正式95份輸入、字型、手札／說明／攻略、完整HD及8段原譜音樂，不需要另行匯入遊戲。
 正式維護資料與session保持；來源另建隔離快照，不以舊prepare的92份輸入替換正式95份。
@@ -14,6 +14,11 @@ AppImage使用已核SHA的75849dc runtime，附第三方授權與來源，存檔
 核三包版本、來源commit、每檔SHA、原版EXE、95份輸入、Windows PE與macOS雙Mach-O架構；AppImage實際解壓後全量比對內容，另驗內建解壓執行模式正常啟動、中文介面、說明及退出。
 Windows沿Wine驗啟動，macOS未簽章、公證或真機驗收；不新增原版玩法或人耳驗收聲明，不重開已結案的全量繪圖工作。
 成品只留dist-all/v.1.0.4-20261030/full-local，附SHA256SUMS及smoke；中間快照、解壓、SquashFS、Go快取與Wine環境驗後清除。
+
+來源a608b0be05861b4afe88cf99e0e4dfd22fc5865a。三包逐檔內容、95份正式輸入與原版EXE核對完成，AppImage實際解壓7271個檔案與AppDir完全相同，Windows PE及macOS兩個Mach-O架構正確。
+AppImage以內建解壓執行模式走正常角色管理、說明及全螢幕世界圖，縮放、Esc返回、子程序讀圖與原版步數暫停通過；沒有狀態注入。
+Windows執行檔與封包「啟動.bat」皆在Wine走正常角色管理、說明及關窗，確認LOCALAPPDATA路徑；首次批次驗證的Wine巢狀引號失敗保留，改以ASCII驗證批次傳遞Unicode環境變數後通過，沒有改動出貨批次或遊戲。
+此為封包驗收，未新增完整遊玩或平台真機聲明；實際FUSE掛載、Windows原生及macOS真機未驗。收據入口為該版本smoke/full-package-checks.json、appimage/checks.json、windows-launcher-fixed/checks.json及delivery-checks.json。
 
 ## 串接與停止線
 

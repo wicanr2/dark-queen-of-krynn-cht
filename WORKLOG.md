@@ -3581,3 +3581,19 @@ GitHub直接上傳三個約1.27GB大ZIP長時間未完成，手動中止本次gh
 清理後8041個受保護檔案SHA保持，包含正式程式與全部player-current素材、session、原始輸入、譯文及攻略來源。第二批編譯副本刪除另排除所有保護前綴。按相同inode配置方式統計，本輪28499759104降至4100874240 bytes，26.54GiB降至3.82GiB，再釋放24398884864 bytes，22.72GiB；一般檔案剩42203個。正式影片與私人45個Release資產保持。未新增image／volume，建置快取隨容器刪除，擁有權異常與本專案殘留容器0，其他專案不動。
 
 精簡政策、後續bug建置入口與限制已回填AGENTS、CONTEXT及README。計畫與證據在cleanup-lean-20261030的retired-packages、prune-plan、compiled-inputs-plan、protected-check、rebuild-check.sha256、prepare-check及cleanup-summary。工具與文件納入本輪main提交；提交與推送結果以[Issue18](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/18)收尾回讀為準。
+
+## 2026-10-30：三平台完整版與Linux AppImage，Issue19
+
+使用者要求重新打包三平台完整版，必須包含遊戲，Linux採AppImage。命中跨平台打包、版號及交付目錄路由，讀取固定版號、dist-all、逆向重製技能與verification-and-handoff；驗證批次入口時另載入Wine正常玩家路徑方法，沿本專案Docker-only規則。新版本v.1.0.4-20261030，既有tag及私人Release保持，不另上傳新遊戲包。新增package-full與appimage_payload，沿既有Windows／macOS封裝，Linux改為type-2 AppImage。
+
+來源固定a608b0be05861b4afe88cf99e0e4dfd22fc5865a，從player-current的正式95份輸入、完整HD、音樂及圖片中文另建player-release-20261030快照，不使用舊prepare的92份資料。三平台建置使用既有Go1.24.13及macOS SDK15.5映像；Linux SHA 40523190d98a84f3b394a534ab8810d19cbbd949e5c17da28dcabc23ea6c7910，Windows 3dc4021a2a98f082f114a2c02e3b951520246dbe2a4a56a819c2d1ba05238c54，macOS universal 1aba07fd630f883bed37b907796000dd4d540901a5ea63a4238618176dbc6074。主譯7730筆、0缺漏及profile82e7b43a核對通過；本機維護程式與正式資產、session保持。
+
+AppImage沿既有kol-package固定映像0b933af1238ab5839ad7a64b6ae05f069f57cb85da5917dfbe59730f6d7ba53f，使用/opt/runtime-x86_64的75849dc runtime，SHA 1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf，944632 bytes。映像內另一份不同SHA的runtime未使用。第三方來源及授權從既有受控快照逐項核SHA後保存tools/appimage-licenses，來源壓縮檔隨包內附。mksquashfs4.5.1採zstd、1MiB區塊、256MiB工作記憶體、兩程序及固定時間；先以含中文／空白檔名的最小AppImage驗執行，再製作正式AppImage。沒有新增Docker映像。
+
+三包均含原版DQK.EXE及資料、95份正式輸入、字型、手札／說明／攻略、完整HD與8段音樂，不另匯入遊戲。Windows及macOS ZIP逐檔雜湊、UTF-8與Windows說明BOM通過。macOS含Intel與Apple Silicon兩片Mach-O，App版本與啟動器核對；Linux實際解壓7271個AppDir檔案，逐檔與封裝前完全相同。另比較隔離快照與維護版本四個資產目錄：inputs96檔、hd7070檔、music10檔、picture-text5檔，全部內容相同。
+
+實際AppImage以內建解壓執行模式啟動，正常角色管理、說明、全螢幕世界圖縮放、Esc返回及子程序讀圖通過，原版步數暫停，原版像素寫入、圖片退路及未完成交易0。Windows先驗PE正常啟動，再驗出貨啟動.bat及LOCALAPPDATA。首次Wine cmd巢狀引號被轉成字面跳脫，沒有啟動遊戲，失敗log保留；改用ASCII驗證批次、以Unicode環境變數傳遞出貨路徑後，windows-launcher-fixed正常通過。這是驗證命令修正，出貨批次與三個封包位元組未改。AppImage角色頁、世界圖及Windows批次角色頁已目視，沒有重開HD審畫或完整遊玩。
+
+正式交付dist-all/v.1.0.4-20261030/full-local：Windows ZIP1270496462 bytes、SHA3ee08f136ec06e665ba6f7d8854851aa557958829940f165914f6fae91559005；Linux AppImage1109621240 bytes、SHA2610aea635c40faf8c778276c7d829173df8d72ddd1964bfa56f50f8a8fe4999；macOS ZIP1274724058 bytes、SHA9a6646f2d58b09d8b9a85faa5bd90190e256f1a3b47c775b0ffcb7355233ab32。SHA256SUMS為149cdce9d9f5dba698ba42fa3575c69b102f8d0131dac1225dfb20714ab8c4f9；smoke/delivery-checks為4d8ee09e0971a75724f9990d314a6c7876596ca9a9877eafe3ee60fcf3d5fc5c。各包獨立包含遊戲，沒有用分段或差異包代替本次完整版。
+
+完整內容與GUI核對通過後，清隔離快照7196檔、封包／AppDir／解壓／SquashFS暫存29053檔、失敗Wine環境844檔及Go快取453.7MiB；通過Wine環境及測試工具亦清除。保留三個必要成品、精簡smoke、原始維護來源及既有影片。舊私人備份仍只還原v.1.0.3；新版還原器認得AppImage清單，重跑GUI時直接執行成品。實際FUSE掛載、Windows原生、macOS真機及人工聽感未驗，不宣稱交叉編譯等於真機。來源、建置log及清理結果在release-appimage-20261030，現況見CONTEXT。新工具來源a608b0b先固定；後續啟動驗證入口及文件隨本輪main提交，推送與新tag結果以[Issue19](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/19)收尾回讀為準。使用者新增文字與交換檔未動。

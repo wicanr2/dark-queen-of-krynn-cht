@@ -5,7 +5,9 @@ from pathlib import Path
 import sys
 from PIL import Image, ImageChops
 out, mode = Path(sys.argv[1]),sys.argv[2]
-session=out/('userdata/DarkQueenOfKrynn' if mode=='linux' else 'session')
+launcher=mode=='windows-launcher'
+if launcher:mode='windows'
+session=out/('userdata/DarkQueenOfKrynn' if mode=='linux' or launcher else 'session')
 for p in out.glob('*.ppm'):Image.open(p).save(p.with_suffix('.png'))
 assert all((out/(n+'.png')).is_file() for n in ['01-title','02-role','03-manual'])
 assert ImageChops.difference(Image.open(out/'02-role.png'),Image.open(out/'03-manual.png')).getbbox()
@@ -15,6 +17,7 @@ assert d['reader_stable'] and not d['renderer']['pending'] and not any(d['list_p
 assert all(c.get(n,0)==0 for n in ['native_writes','unexpected_owned_native_writes','image_native_fallback'])
 assert 'panic:' not in (out/'player.log').read_text(errors='replace')
 result=dict(passed=True,platform=mode,execution='Linux native in container' if mode=='linux' else 'Windows executable under Wine; not Windows hardware',state_injection=False,scope=['packaged executable','cold title','normal role management','manual','clean close','zero original pixel writes'],counts=c,screenshots={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in out.glob('*.png')})
+if launcher:result['scope']+=['shipped 啟動.bat entry','LOCALAPPDATA save directory']
 if (out/'04-map-fullscreen.png').exists():
     assert Image.open(out/'04-map-fullscreen.png').size==(1280,900)
     for name in ['04-map-fullscreen.png','05-map-zoom.png']:

@@ -318,36 +318,39 @@ HD採固定類型抽驗收尾，繪圖依兩輪代表抽驗完成。素材布局
 
 ## 如何啟動
 
-開發與驗證入口使用 Linux、Docker 與可存取的 X11 桌面。建置、測試及開發中的遊戲程序均在容器中執行。
-正式版本為 `v.1.0.3-20261029`。必要資料與完整HD素材備份在
-[私人Release](https://github.com/wicanr2/dark-queen-of-krynn-cht/releases/tag/v.1.0.3-20261029)，
-僅授權成員可下載。大型Linux完整版ZIP分段保存，Windows及macOS保存相對於它的無損差異，
-三平台共用素材只存一份。原檔名、大小及各段SHA見[封包清單](docs/private-release-assets.json)。
-以主機gh登入後，在專案根目錄執行以下命令，下載並還原Linux完整版：
+現行完整版為 `v.1.0.4-20261030`，保存在本機 `dist-all/v.1.0.4-20261030/full-local/`。
+三包均內含原版遊戲、繁中與字型、手札／說明／攻略、完整HD及音樂，啟動前不用另外匯入遊戲。
+
+| 平台 | 完整版與啟動方式 |
+|---|---|
+| Windows x86_64 | 完整ZIP，解壓後雙擊「啟動.bat」 |
+| Linux x86_64 | 完整AppImage，賦予執行權限後直接執行 |
+| macOS Intel／Apple Silicon | universal完整ZIP，解壓後開啟「黑暗之后.app」 |
+
+Linux可在成品目錄執行：
 
 ```sh
-bash tools/private-release-download.sh linux-amd64
+chmod +x 黑暗之后-v.1.0.4-20261030-linux-amd64-full-local.AppImage
+./黑暗之后-v.1.0.4-20261030-linux-amd64-full-local.AppImage
 ```
 
-Windows改用`windows-amd64`，macOS改用`macos-universal`。
-還原程式核對分段或差異的SHA，重建原ZIP後再核對整檔SHA；成功後移除下載暫存。
-封包還原至 `dist-all/v.1.0.3-20261029/`，使用以下目錄：
+系統缺少FUSE時，在第二行末尾加上`--appimage-extract-and-run`。
+Linux仍需glibc 2.36以上、X11、OpenGL及ALSA桌面函式庫。存檔放在使用者資料目錄，
+Windows採LOCALAPPDATA，Linux採XDG_DATA_HOME或`~/.local/share`，macOS採`~/Library/Application Support`。
+同版`SHA256SUMS.json`保存三包雜湊，`smoke/`保存內容與啟動驗收。
+86秒故事與玩法推廣影片保持在`dist-all/v.1.0.3-20261029/promo/`。
 
-| 位置 | 內容 |
-|---|---|
-| `full-local/` | Windows x86_64、Linux x86_64、macOS universal 三個完整版ZIP，含本機原版與衍生素材 |
-| `patch/` | 同三平台的引擎包及本機資料匯入工具，不含遊戲資料、翻譯全文、HD與音樂 |
-| `promo/` | 86秒故事與玩法篇：以遊戲封面開場，介紹故事、組隊、探索、戰術戰鬥及中文／HD功能；附字幕、分幕來源與影音檢查 |
-| `smoke/`、`SHA256SUMS.json` | 封包啟動、獨立全螢幕地圖與返回檢查、交付雜湊清單；既有兩輪繪圖證據見CONTEXT |
-
-完整版解壓後，Windows使用「啟動.bat」、Linux使用「啟動.sh」、macOS開啟「黑暗之后.app」。
-存檔放在各平台的使用者資料目錄，位置見包內說明。引擎包只接受本機已準備的完整資料；
-原版ZIP本身不包含本專案譯文與HD，不能直接當作完整中文資料匯入。
-
-Linux已有容器內的原生啟動驗收，Windows已有Wine啟動驗收，仍未等同Windows實機。
+AppImage已驗內建解壓執行模式、正常角色管理、說明、全螢幕地圖縮放與返回；FUSE掛載未驗。
+Windows已驗Wine下的「啟動.bat」與使用者資料目錄，仍未等同Windows實機。
 macOS包含Intel與Apple Silicon兩種架構，尚未簽章、公證或真機驗收。
 交付範圍見[收尾規格](docs/spec/007-completion-delivery.md)。
 
+必要素材另有[v.1.0.3私人備份](https://github.com/wicanr2/dark-queen-of-krynn-cht/releases/tag/v.1.0.3-20261029)，
+原封包及分段／差異的SHA見[備份清單](docs/private-release-assets.json)。有權限的成員可用
+`bash tools/private-release-download.sh linux-amd64`還原舊版Linux ZIP，Windows改用`windows-amd64`，
+macOS改用`macos-universal`。備份還原目錄為`dist-all/v.1.0.3-20261029/`。
+
+開發與驗證入口使用Linux、Docker與可存取的X11桌面；建置、測試及開發中的遊戲程序均在容器中執行。
 若本機合法原版、既有資料批與已建置的整合程式齊備，在專案根目錄執行：
 
 ```sh

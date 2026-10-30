@@ -38,6 +38,10 @@ for row in manifest['packages']:
     archive=delivery/row['kind']/row['file']
     with archive.open('rb') as f:
         assert hashlib.file_digest(f,'sha256').hexdigest()==row['sha256'],archive
+    if row.get('format')=='AppImage-type2':
+        assert row['platform']=='linux-amd64' and archive.suffix=='.AppImage'
+        print('verified AppImage; package-smoke的appimage模式直接執行成品，不建立原生Linux ZIP暫存。',flush=True)
+        continue
     with zipfile.ZipFile(archive) as z:
         for info in z.infolist():
             p=PurePosixPath(info.filename)

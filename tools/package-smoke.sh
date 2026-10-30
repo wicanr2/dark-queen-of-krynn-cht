@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${1:?完整版號}";MODE="${2:?linux或windows}"
+if [[ "$MODE" = linux && -f "$ROOT/dist-all/$VERSION/full-local/黑暗之后-$VERSION-linux-amd64-full-local.AppImage" ]];then MODE=appimage;fi
 BATCH="${3:-$MODE}"
 [[ "$BATCH" =~ ^[a-zA-Z0-9-]+$ ]]
 [[ "$VERSION" =~ ^v\.[0-9]+\.[0-9]+\.[0-9]+-[0-9]{8}$ ]]
@@ -27,6 +28,7 @@ timeout --kill-after=5s 150s docker run --rm --init --network none --user "$(id 
  -e HOME=/tmp -e LIBGL_ALWAYS_SOFTWARE=1 -e GOMAXPROCS=2 -e DQK_TRACE_PLAYER_UI=1 -e WINEPREFIX=/out/wine -e WINEDEBUG=-all -e WINEARCH=win64 -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 \
  -e DQK_VERIFY_MAP_WINDOW="${DQK_VERIFY_MAP_WINDOW:-0}" \
  -e DQK_MAP_CLOSE_WM="${DQK_MAP_CLOSE_WM:-0}" \
+ -e DQK_VERIFY_WINDOWS_LAUNCHER="${DQK_VERIFY_WINDOWS_LAUNCHER:-0}" \
  -v "$STAGE:/packages:ro" -v "$ROOT/dist-all/$VERSION/full-local:/artifacts:ro" -v "$OUT:/out" --entrypoint bash "$IMAGE" -c '
 set -euo pipefail
 Xvfb :95 -screen 0 1280x900x24 -nolisten tcp >/out/xvfb.log 2>&1 & XVFB_PID=$!
@@ -45,14 +47,22 @@ else
   wineserver -w
   PACKAGES=(/packages/*windows-amd64-full-local)
   PACKAGE="${PACKAGES[0]}"
-  wine "$PACKAGE/DarkQueen.exe" -player "Z:$PACKAGE/data/inputs" -original "Z:$PACKAGE/original" -saves Z:/out/session >/out/player.log 2>&1 & APP_PID=$!
+  if [[ "$DQK_VERIFY_WINDOWS_LAUNCHER" = 1 ]];then
+    WIN_LAUNCHER=$(winepath -w "$PACKAGE/啟動.bat")
+    printf '\''@echo off\r\nset "LOCALAPPDATA=Z:\\out\\userdata"\r\ncall "%%DQK_LAUNCHER%%"\r\n'\'' >/out/launch-check.cmd
+    DQK_LAUNCHER="$WIN_LAUNCHER" wine cmd /d /c Z:\\out\\launch-check.cmd >/out/player.log 2>&1 & APP_PID=$!
+  else
+    wine "$PACKAGE/DarkQueen.exe" -player "Z:$PACKAGE/data/inputs" -original "Z:$PACKAGE/original" -saves Z:/out/session >/out/player.log 2>&1 & APP_PID=$!
+  fi
 fi
 /out/smoke-driver /out >/out/driver.log 2>&1
 wait "$APP_PID";APP_PID=""
 find /out -user root -o -type d -name "*.md"
 ' -- "$MODE"
+CHECK_MODE="${MODE/appimage/linux}"
+if [[ "$MODE" = windows && "${DQK_VERIFY_WINDOWS_LAUNCHER:-0}" = 1 ]];then CHECK_MODE=windows-launcher;fi
 timeout 30s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 512m --cpus 1 --pids-limit 64 \
- -v "$ROOT/tools:/tools:ro" -v "$OUT:/out" --entrypoint python3 sc-cht-hdtools:pillow11.3.0-r2 /tools/package_smoke_check.py /out "${MODE/appimage/linux}"
+ -v "$ROOT/tools:/tools:ro" -v "$OUT:/out" --entrypoint python3 sc-cht-hdtools:pillow11.3.0-r2 /tools/package_smoke_check.py /out "$CHECK_MODE"
 timeout 30s docker run --rm --network none --user "$(id -u):$(id -g)" --memory 256m --cpus 1 --pids-limit 32 \
  -v "$OUT:/out" --entrypoint python3 sc-cht-hdtools:pillow11.3.0-r2 -c '
 from pathlib import Path
