@@ -1,18 +1,20 @@
 # 目前真相
 
-更新：2026-10-29。規則見[AGENTS.md](AGENTS.md)，歷程見[WORKLOG.md](WORKLOG.md)。下表是唯一目前狀態；歷史批次的數字與缺項不重新開啟工作。
+更新：2026-10-30。規則見[AGENTS.md](AGENTS.md)，歷程見[WORKLOG.md](WORKLOG.md)。下表是唯一目前狀態；歷史批次的數字與缺項不重新開啟工作。
 
 | 項目 | 現況與證據 |
 |---|---|
-| 目前工作 | Issue15完成截圖六名隊員的完整繁中姓名及稱號，補大小寫、搬頁與游標遮擋綁定。三平台本機修正版v.1.0.3-20261029；原HD、音樂、舊版本與tag保持。 |
-| 工作順序 | 本輪只修已知姓名的呈現與相關交付；7730筆原譯表、1488項HD、閱讀、音樂及原版規則保持，未重開完整遊玩或全量審畫。 |
+| 目前工作 | Issue16完成中文姓名修正版推廣影片，沿v.1.0.3正式程式重錄；12幕86秒、封面與故事玩法設計保持，兩輪目視及影音檢查通過。遊戲封包及歷史影片保持。 |
+| 工作順序 | 本輪僅更新影片、錄影與合成入口及文件；正式程式、95份輸入、1488項HD、閱讀、音樂與存檔保持，未重開完整遊玩、全量繪圖或審畫。 |
 | 繪圖結案驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/render-two-rounds-checks.json` SHA-256 `6483aea49598010f6cd46f2e2c0b72c91ed83c108c7eee01f6e8fd391ed5f97f`。第一輪17家族49固定來源、196項GPU／CPU比較零差異，另驗正式程式正常開場。第二輪洞穴及戰鬥快照重畫、HD關閉／開啟、2倍／3倍通過；實際原版像素寫入、圖片退路與未完成交易0。預先登記、第一輪、第二輪取樣時機修正及彙整器皆在同批，正式程式、93份輸入與素材保持。 |
 | 兩輪完成驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/two-round-checks.json` SHA-256 `a381d5b2f191d6f2aede57d48f9e1365f05d8d193144d0ac578e1a4008a849dd`。final-r1驗正常示範中斷、角色管理、語言、縮放及說明；final-r2驗音樂、工具列與桌面服務。探索／戰鬥沿相同Go來源快照收據，資料差額及針對修正另驗；正常入口與注入分開。實際原版像素寫入、圖片退路及未完成交易均0。 |
 | 正式交付 | `dist-all/v.1.0.3-20261029/`含Windows x86_64、Linux x86_64、macOS universal的完整版與引擎包，共六個ZIP。SHA256SUMS.json SHA-256 `a10b6162481f278a7f2421bd3b73f92f6cec98fa74bf7aba0635e8669dd19a44`。完整版只留本機，無公開Release。 |
 | 交付再次核對 | v.1.0.3的smoke/delivery-checks.json SHA-256 `af0ab3b5ba18a0b1b8f14b4216f47297a9f705a57744ac40e9f0f2b936c780bd`。六包內容、UTF-8、雜湊、平台架構、版本及來源3edbb0d9a24ac434ed751cfa7513f15950920303已核；另驗Linux與Wine下Windows正常啟動。 |
 | 封包啟動 | v.1.0.3的smoke/linux-names及windows-names驗封包冷啟動、角色管理、說明及乾淨退出，無狀態注入；原版像素寫入與待辦0。地圖開關沿v.1.0.2既有驗收，未重跑。Windows／macOS真機未驗；macOS僅雙切片、App結構及封包內容，未簽章或公證。 |
-| 推廣影片 | 沿v.1.0.2既有影片，本次姓名修正未重錄。 `dist-all/v.1.0.2-20261029/promo/黑暗之后-HD繁中推廣影片-故事與玩法篇.mp4`，86秒12幕、6種版面，1080p／30fps、H.264／AAC、48kHz立體聲。SHA-256 `498b9d8ba4d8d37f565e7720b7163a739bf1aa88a93345212693cb701f1812f9`。封面開場、故事、玩法、HD並列及全螢幕地圖沿用；整備段改實際F7法術提示頁。70文字安全框、逐幕目視及影音檢查通過；錄影及交付Go來源同為25c89ab，正常／快照分列，未宣稱新通關。 |
-| 收尾清理 | party-names-20261029/cleanup-check.json SHA-256 `fb021349911e1c29f34b7503e135ee0b7d819bf3f2a73efc5e3e27a5174edb4a`。六份解壓暫存逐檔對應manifest後刪除，Go快取清空；正式封包、原始來源、素材、存檔及歷史證據保持，未清其他專案資源。 |
+| 推廣影片 | `dist-all/v.1.0.3-20261029/promo/黑暗之后-HD繁中推廣影片-故事與玩法篇.mp4`，86秒12幕、六種版面，1080p／30fps、H.264／AAC及48kHz立體聲。SHA-256 `0b6af1eb400a0f49705c632a1f99f69b044a08ba8bd4ff1c36f7367d7ec5d498`。保留封面、故事、玩法、HD並列及兩種全螢幕地圖；六名隊員實際重畫為中文，戰鬥第二輪為戰場畫面，70個字幕安全框通過。新版及舊版僅留本機。 |
+| 影片來源與驗收 | 引擎來源3edbb0d9a24ac434ed751cfa7513f15950920303，正式binary f958c05b。來源為promo-names-normal-20261030、promo-names-exploration-20261030及promo-names-combat-final-20261030；正常及快照分列，後兩者28份Go來源核對。最終剪輯promo-names-edit-final-20261030，首版人物頁戰鬥分鏡已撤回保留。story-visual-review與story-motion-checks通過；後者只取視訊，各十幀有差異，不當作玩法對拍。無黑幀／長靜音，峰值-7.5dB，未新增人工聽感聲明。 |
+| 影片交付核對 | promo-names-20261030/delivery-checks.json SHA-256 `2b47d1d5882cea1b3c333e847271459a69616bc0afff490c14cb124a5b8168a7`；交付promo-SHA256SUMS.json SHA-256 `2e936b6e162cbff04cb6f0fe00ad597b1020d0faf9bf51ad759bf0c2ec64a0e5`。核28份影片及證據檔，六個ZIP逐包SHA、正式程式／profile／HD／音樂／session及舊v.1.0.2影片保持。SHA256SUMS.json仍為原六包清單，不覆寫。 |
+| 收尾清理 | promo-names-20261030/cleanup-check.json僅清本次1436個可重建Go快取檔，保留原始錄影、未採用首版、字幕、正式影片與歷史證據。沒有新image或volume；不清其他專案資源。 |
 | 正式程式 | `workplace/probe/player-current/dqk-player` SHA-256 `f958c05b96dec4d19c207a7cfa517daa7db3a9741e4b4938b1252b05fe61e96c`，來源3edbb0d9a24ac434ed751cfa7513f15950920303，版號v.1.0.3-20261029。profile95份、SHA-256 `82e7b43a51f61910868299cebe8b22485fc64f38e1d9097a3983de18b47d6e35`。新增六名只改顯示來源、譯文、來源紀錄及profile四檔，字模逐位元組保持。 |
 | 高清文字證據 | battle-text-hidpi-20261029/font-checks.json核2896／33個字模及七個輪廓樣本，並非放大小字。compare-final/checks.json三個固定步數的原版／接管索引、色盤與暫存器相同；finish-scene-sharp-final-20261029-r1的防護間隙576像素回到原版底色。正常錄影promo-sharp-normal-20261029-r2已實際使用48／60字模並驗兩種地圖開關；圖稿內文字及未重新輸出的快照像素分列限制。 |
 | 音樂與證據 | `music-hd-20261029/evidence.json` SHA-256 `51266f251fb161f756c6cb743b9e04af2d518a4e65fc8f6c11244371709737d1`。8段Ogg、48kHz立體聲，保留三秒釋音；音樂manifest `0ec4b019fad2766cfa9a9ee1fed16deb4d1c3fdfc6115a78c7b30985ca7a1acb`。原版正常標題／展示命令、原版函式注入全8段、音量0／90／100及越界拒絕分開記錄。播放器已接原版只讀開始／停止／音量，音樂與HD／縮放／語言獨立；詳見研究008及規格006。 |
@@ -34,7 +36,7 @@
 | 正常示範與中斷 | `player-sample-cold-return-20261028-r2/checks.json` SHA-256 `494552b1fbb1c8f0aac31f67e6ccaf2ecf1cf11cf175207f854cdd618299503c`。5e63e50f已含交易去重及填色修正，D進森林、Esc返回、P角色管理、語言／縮放／F6／截圖／關窗通過，五張基準差異0、未完成交易0。其後僅補查驗交接及診斷，以新冒險收據驗證，不重跑示範父批。 |
 | 正常冒險與存讀 | `player-sample-exploration-20261029-r1/`由正常A隊伍走到帕蘭薩斯、旅店及營地，寫C槽並正常退出。9df4cac9的`player-sample-exploration-20261029-r4/checks.json` SHA-256 `9e1f2ca9d87a45f1695ced329acc00d3050ea4408c4349be606ebb4388890007`由冷啟動讀回同一C槽，再存D槽、返回營地、進王宮與自動手札54。2倍視窗HD關閉／開啟、隊伍區保持、槽位及右邊框保持、手札無紅色姓名遮擋與返回恢復通過。繪圖／UI待辦0、已接管命令原版寫入0、圖片身分退路0；未注入場景或代答。原r7的入城與地名勘誤沿規格005保留，不重跑父批。未新增自由移動或戰鬥。 |
 | 場景類型抽驗 | v.1.0.0歷史基線，修正版未重跑本父批。[規格004](docs/spec/004-hd-layer.md#conformed使用者授權的場景類型抽驗)保存使用者接受門檻。`scene-hd-20261029-final/checks.json` SHA-256 `0a2eae7e4a6f9595327b72136792b162350f88b55b9d05f4845ceb2c6caf4290`為17家族、49樣本、196項Go畫布／GPU與CPU參考比較。`scene-sample-20261029/checks.json` SHA-256 `f7775aee0f0478a73ed959f26d4b6ba7e9e2025dfd3928de793077c6a5d672ab`為兩組原版快照注入：洞穴移動／轉向、營地返回、區域圖、2倍／3倍及戰鬥續行、武器／生命力欄、HD切換。待辦與已接管命令原版寫入皆0。研究入口、來源副本、檢查器與完整證據在該批次，正式程式沒有注入捷徑。 |
-| README | 故事、機制及原版／HD圖庫保持，角色、閱讀與地圖展示圖更新為高清文字，新增1920×1200戰鬥畫布。29張選定展示圖可在GitHub直接閱讀；來源、尺寸及SHA在docs/images/manifest.json。快照與正常畫面分列，完整素材、影片與書籍全文不入Git。 |
+| README | 故事、機制及原版／HD圖庫保持，角色、閱讀與地圖展示圖更新為高清文字，新增1920×1200戰鬥畫布。30張選定展示圖可在GitHub直接閱讀；來源、尺寸及SHA在docs/images/manifest.json。快照與正常畫面分列，完整素材、影片與書籍全文不入Git。 |
 | 尚未證實與可選項 | 完整遊玩驗證不列本輪條件，繪圖經最後兩輪抽驗結案。未知輸出、未走訪場景、正常結局與跨作匯入不宣稱已證實，亦不因這些範圍重開本輪。Windows原生與macOS真機、人工聽感仍未驗；額外美化不列阻塞，未公開Release或上傳影片。 |
 | 工具鏈 | SDK隔離來源`f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`唯讀，Go1.24.13及Pillow r2保持。取樣沿既有wasteland-media映像與FluidSynth 2.3.1、FluidR3_GM 3.1。桌面執行映像`dqk-player-audio:1.24-r1` ID `70a02710cbba9dee61c8f56893fee51ea9ea55db7ef9fd79678dac602da589f9`，只補ALSA至PulseAudio橋接；Go建置仍用原8ed6bdee映像。新解碼依賴保存在本作music-go-deps，SDK及共用快取唯讀，原EXE保持。 |
 | 儲存與Docker | 使用者授權僅清本專案。先前81份歷史重播已無損封存，實釋8.430GiB，清理證據`cleanup-20261028-result.json` SHA-256 `76b1858e765f1bb115accb5e8059214ea956426588fc06025b173769783a96db`。目前批次、原始資料、HD與存檔保留；不全域清其他專案。每批使用非root、離線、有界且自動刪除容器。 |

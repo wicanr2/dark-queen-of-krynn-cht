@@ -34,6 +34,7 @@ def prepare(a):
     sources={k:getattr(a,k) for k in ['normal','exploration','combat']}
     inputs={k:read(p/'capture-inputs.json') for k,p in sources.items()}
     for k,metadata in inputs.items():
+        metadata['capture_sources_sha256']={p.name:sha(p) for p in sorted((sources[k]/'capture-source').iterdir()) if p.is_file()}
         if metadata.get('full_screen_capture'):
             geometry=read(sources[k]/'window-rect.json')
             x,y,w,h=geometry['rect']
@@ -57,6 +58,18 @@ def prepare(a):
     events={k:{name:float(at) for name,at in (line.split('\t') for line in (p/'events.tsv').read_text().splitlines())} for k,p in sources.items()}
     switches=read(sources['exploration']/'session/controls.json')
     assert [x['hd'] for x in switches if x['action']=='hd']==[False,True], 'HD對照需兩次實際切換成功'
+    name_commands=[]
+    if accepted.get('name_acceptance_sha256'):
+        def names(locale):
+            return {r['key']:r['text'] for r in csv.DictReader(
+                (a.root/'text'/('party-names.'+locale+'.tsv')).open(),delimiter='\t',quoting=csv.QUOTE_NONE)}
+        en,zh=names('en'),names('zh-TW')
+        assert en.keys()==zh.keys() and len(en)==6
+        visible=read(sources['exploration']/'session/ui-diagnostics.json')['renderer']['text_words']
+        for key,source in en.items():
+            matches=[w for w in visible if w['source'].casefold()==source.casefold() and w['text']==zh[key]]
+            assert matches, '探索錄影沒有重新繪製完整姓名：'+key
+            name_commands.append(matches[0])
     normal=read(sources['normal']/'session/ui-diagnostics.json')
     maps=[x for x in normal['reader_events'] if x.get('action') in ('map-window-open','map-window-close')]
     assert [x['action'] for x in maps]==['map-window-open','map-window-close']*2, '手冊與攻略地圖均需實際開啟及關閉'
@@ -132,7 +145,7 @@ def prepare(a):
     music=formal/'music'
     hashes={str(p/'raw.mp4'):sha(p/'raw.mp4') for p in sources.values()}
     hashes.update({s['source']:s['source_sha256'] for s in segments if s['source_id'].startswith('cover:')})
-    plan=dict(schema=1,version=a.version,seconds=cursor,font='/font/'+a.font.name,segments=segments,source_inputs=inputs,source_hashes=hashes,music=[str(music/'RODQ1-0.ogg'),str(music/'RODQ3-0.ogg')],music_hashes={n:sha(music/n) for n in ['RODQ1-0.ogg','RODQ3-0.ogg']},render_acceptance_sha256=sha(acceptance),catalog_sha256=sha(catalog),story_source=dict(path='README.md',sha256=sha(a.root/'README.md'),sections=['故事背景','遊戲機制','中文介面與工具列','遊戲內地圖與攻略重繪']),rights='local-only-original-and-derived-assets',public_upload=False)
+    plan=dict(schema=1,version=a.version,seconds=cursor,font='/font/'+a.font.name,segments=segments,source_inputs=inputs,source_hashes=hashes,name_source_commands=name_commands,music=[str(music/'RODQ1-0.ogg'),str(music/'RODQ3-0.ogg')],music_hashes={n:sha(music/n) for n in ['RODQ1-0.ogg','RODQ3-0.ogg']},render_acceptance_sha256=sha(acceptance),catalog_sha256=sha(catalog),story_source=dict(path='README.md',sha256=sha(a.root/'README.md'),sections=['故事背景','遊戲機制','中文介面與工具列','遊戲內地圖與攻略重繪']),rights='local-only-original-and-derived-assets',public_upload=False)
     (a.output/'story-plan.json').write_text(json.dumps(plan,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(dict(prepared=True,segments=len(segments),seconds=cursor,text_fields=len(metrics)),ensure_ascii=False))
 
@@ -220,14 +233,33 @@ def render(a):
     assert all(t>=duration-1.7 for t in silences),silences
     for i,s in enumerate(plan['segments']):
         run(['ffmpeg','-nostdin','-v','error','-y','-ss',str((s['start']+s['end'])/2),'-i',str(destination),'-frames:v','1',str(a.output/f'story-contact-{i:02}.png')],a.output/f'contact-{i:02}.log')
-    manifest=dict(passed=True,version=plan['version'],edition='故事與玩法篇',video=name,sha256=sha(destination),bytes=destination.stat().st_size,seconds=duration,segments=plan['segments'],source_hashes=plan['source_hashes'],capture_inputs=plan['source_inputs'],subtitle_catalog_sha256=plan['catalog_sha256'],subtitle_srt_sha256=sha(a.output/'故事與玩法字幕.srt'),subtitle_layout_sha256=sha(a.output/'subtitle-layout.json'),story_source=plan['story_source'],music_hashes=plan['music_hashes'],music_provenance='使用者已授權的原譜RODQ1-0與RODQ3-0取樣HD版，剪輯交叉淡化，非原版晶片錄音',rights=plan['rights'],public_upload=False,visual_review_required=True,freeze_review='封面、故事地圖、隊伍目錄及閱讀停留是預期靜態；探索與戰鬥另看分幕動作',no_engine_or_package_change=False)
+    manifest=dict(passed=True,version=plan['version'],edition='故事與玩法篇',video=name,sha256=sha(destination),bytes=destination.stat().st_size,seconds=duration,segments=plan['segments'],source_hashes=plan['source_hashes'],capture_inputs=plan['source_inputs'],name_source_commands=plan.get('name_source_commands',[]),subtitle_catalog_sha256=plan['catalog_sha256'],subtitle_srt_sha256=sha(a.output/'故事與玩法字幕.srt'),subtitle_layout_sha256=sha(a.output/'subtitle-layout.json'),story_source=plan['story_source'],music_hashes=plan['music_hashes'],music_provenance='使用者已授權的原譜RODQ1-0與RODQ3-0取樣HD版，剪輯交叉淡化，非原版晶片錄音',rights=plan['rights'],public_upload=False,visual_review_required=True,freeze_review='封面、故事地圖、隊伍目錄及閱讀停留是預期靜態；探索與戰鬥另看分幕動作',no_engine_or_package_change=False)
     (a.output/'promo-story-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(dict(passed=True,edition=manifest['edition'],seconds=duration,sha256=manifest['sha256']),ensure_ascii=False))
 
 
+def motion(a):
+    """只比視訊畫格，避免把AAC封包誤算成畫格；動作內容另由逐幕目視確認。"""
+    plan=read(a.output/'story-plan.json')
+    video=a.output/'黑暗之后-HD繁中推廣影片-故事與玩法篇.mp4'
+    result={}
+    for key,crop in [('exploration','crop=1280:800:320:104'),('combat','crop=860:812:64:104')]:
+        segment=next(s for s in plan['segments'] if s['key']==key)
+        data=subprocess.check_output(['ffmpeg','-nostdin','-v','error','-threads','2','-filter_threads','1',
+            '-ss',str(segment['start']),'-i',str(video),'-t',str(segment['duration']),
+            '-map','0:v:0','-an','-vf',crop+',fps=1','-f','framemd5','-'],text=True)
+        (a.output/(key+'-motion.framemd5')).write_text(data)
+        frames=[row.rsplit(',',1)[1].strip() for row in data.splitlines() if row and not row.startswith('#')]
+        assert len(frames)==segment['duration'] and len(set(frames))>=2, (key,len(frames),len(set(frames)))
+        result[key]=dict(video_only=True,frames=len(frames),unique=len(set(frames)),crop=crop)
+    (a.output/'story-motion-checks.json').write_text(json.dumps(dict(passed=True,video_sha256=sha(video),
+        samples=result,scope='解碼畫格差異；實際場景與動作另由目視驗收'),ensure_ascii=False,indent=2)+'\n')
+    print(json.dumps(result))
+
+
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('mode',choices=['prepare','render']);p.add_argument('--output',type=Path,required=True)
+    p.add_argument('mode',choices=['prepare','render','motion']);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--root',type=Path);p.add_argument('--normal',type=Path);p.add_argument('--exploration',type=Path);p.add_argument('--combat',type=Path)
     p.add_argument('--font',type=Path);p.add_argument('--version');p.add_argument('--player',type=Path);p.add_argument('--acceptance',type=Path)
     a=p.parse_args();globals()[a.mode](a)

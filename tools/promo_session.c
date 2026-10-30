@@ -47,17 +47,19 @@ int main(int argc,char**argv){
             key(d,w,XK_Right);key(d,w,XK_Right);key(d,w,XK_Return);mark(d,w,out,"spell-notes");sleep(8);
         }
     }else if(!strcmp(mode,"exploration")){
-        key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);
-        key(d,w,XK_e);key(d,w,XK_Escape);sleep(3);mark(d,w,out,"cave");
+        /* 快照只含既有像素；先沿正常操作重畫人物與隊伍姓名，再設剪輯點。 */
+        XWarpPointer(d,None,w,0,0,0,0,950,590);XSync(d,False);
+        key(d,w,XK_v);key(d,w,XK_Escape);key(d,w,XK_Down);
+        sleep(2);mark(d,w,out,"cave");
         if(story){
             sleep(8);mark(d,w,out,"cave-motion");
             key(d,w,XK_Right);key(d,w,XK_Up);key(d,w,XK_Left);sleep(2);
-            story_hd(d,w);mark(d,w,out,"cave-native");sleep(4);
-            story_hd(d,w);mark(d,w,out,"cave-hd");sleep(5);
+            story_hd(d,w);mark(d,w,out,"cave-native");sleep(6);
+            story_hd(d,w);mark(d,w,out,"cave-hd");sleep(6);
         }
     }else if(!strcmp(mode,"combat")){
         /* 先保留隊形與怪物的可讀鏡頭，再讓原版快速戰鬥自然推進。 */
-        key(d,w,XK_v);key(d,w,XK_Escape);sleep(1);mark(d,w,out,"battle");sleep(4);
+        sleep(1);mark(d,w,out,"battle");sleep(4);
         key(d,w,XK_q);sleep(20);mark(d,w,out,"battle-after");
     }else return 2;
     snprintf(path,sizeof(path),"%s/stop",out);

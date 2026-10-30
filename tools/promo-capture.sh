@@ -60,10 +60,10 @@ echo "pcm.!default { type null }" >/tmp/asound-null.conf;export ALSA_CONFIG_PATH
 wait "$APP_PID";APP_PID=""
 ' -- "$MODE" &
 GAME_JOB=$!
-timeout --kill-after=5s 245s docker run --rm --name "$VIDEO_CONTAINER" --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 96 --label project=dark-queen-of-krynn-cht \
+timeout --kill-after=5s 400s docker run --rm --name "$VIDEO_CONTAINER" --init --network none --user "$(id -u):$(id -g)" --memory 1g --cpus 2 --pids-limit 96 --label project=dark-queen-of-krynn-cht \
  -e HOME=/tmp -v "$BASE:/out" -v "$BASE/x11:/tmp/.X11-unix:ro" --entrypoint bash "$MEDIA" -c '
 set -euo pipefail
-for i in {1..600};do [[ -s /out/window-id ]] && break;sleep .1;done
+for i in {1..1800};do [[ -s /out/window-id ]] && break;sleep .1;done
 read -r WINDOW_ID </out/window-id;[[ "$WINDOW_ID" =~ ^[0-9]+$ ]]
 ffmpeg -nostdin -v warning -y -f x11grab -draw_mouse 0 -framerate 30 -video_size 1280x900 -i :94 -t "$1" -an -c:v libx264 -preset veryfast -crf 17 -pix_fmt yuv420p /out/raw.mp4 >/out/encoder.log 2>&1 & ENCODER=$!
 touch /out/recording
