@@ -379,6 +379,11 @@ bash tools/player.sh run
 入口與資料依賴見 [player.sh](tools/player.sh)及[整合規格](docs/spec/003-player-toolbar.md)。
 全螢幕及各平台實機支援仍須各自驗證。
 
+本機僅保留現行遊戲、存檔與維護所需來源。修復程式時沿用`player-current`的正式輸入，
+以`bash tools/player.sh build`重建；必要素材亦可從私人Release還原。
+可重建的舊封包、執行檔及詳細測試輸出已清除，歷史驗收保留摘要，重查時重新產生。
+來源保護與重建界線見[精簡工作區](AGENTS.md#精簡工作區)。
+
 ### 重建本機圖文版
 
 合法原版及本機研究素材齊備時，執行：

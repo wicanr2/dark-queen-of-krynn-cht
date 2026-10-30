@@ -4,7 +4,7 @@
 
 | 項目 | 現況與證據 |
 |---|---|
-| 目前工作 | Issue17完成工作區清理與私人素材備份；實際配置空間49.35GiB降至26.54GiB，釋放22.81GiB。證據在cleanup-space-20261030/cleanup-summary.json。原始資料、正式素材與存檔保持，未清其他專案。 |
+| 目前工作 | Issue18依使用者要求只留必要資料；本輪26.54GiB降至3.82GiB，再釋放22.72GiB。證據在cleanup-lean-20261030/cleanup-summary.json。正式遊戲與存檔保留，可重建歷史產物已刪；不清其他專案。 |
 | 工作順序 | 本輪只整理儲存、私人備份、還原工具與文件；正式程式、95份輸入、1488項HD、閱讀、音樂與存檔保持，未重開完整遊玩、全量繪圖或審畫。 |
 | 繪圖結案驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/render-two-rounds-checks.json` SHA-256 `6483aea49598010f6cd46f2e2c0b72c91ed83c108c7eee01f6e8fd391ed5f97f`。第一輪17家族49固定來源、196項GPU／CPU比較零差異，另驗正式程式正常開場。第二輪洞穴及戰鬥快照重畫、HD關閉／開啟、2倍／3倍通過；實際原版像素寫入、圖片退路與未完成交易0。預先登記、第一輪、第二輪取樣時機修正及彙整器皆在同批，正式程式、93份輸入與素材保持。 |
 | 兩輪完成驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/two-round-checks.json` SHA-256 `a381d5b2f191d6f2aede57d48f9e1365f05d8d193144d0ac578e1a4008a849dd`。final-r1驗正常示範中斷、角色管理、語言、縮放及說明；final-r2驗音樂、工具列與桌面服務。探索／戰鬥沿相同Go來源快照收據，資料差額及針對修正另驗；正常入口與注入分開。實際原版像素寫入、圖片退路及未完成交易均0。 |
@@ -15,7 +15,8 @@
 | 推廣影片 | `dist-all/v.1.0.3-20261029/promo/黑暗之后-HD繁中推廣影片-故事與玩法篇.mp4`，86秒12幕、六種版面，1080p／30fps、H.264／AAC及48kHz立體聲。SHA-256 `0b6af1eb400a0f49705c632a1f99f69b044a08ba8bd4ff1c36f7367d7ec5d498`。保留封面、故事、玩法、HD並列及兩種全螢幕地圖；六名隊員實際重畫為中文，戰鬥第二輪為戰場畫面，70個字幕安全框通過。新版及舊版僅留本機。 |
 | 影片來源與驗收 | 引擎來源3edbb0d9a24ac434ed751cfa7513f15950920303，正式binary f958c05b。來源為promo-names-normal-20261030、promo-names-exploration-20261030及promo-names-combat-final-20261030；正常及快照分列，後兩者28份Go來源核對。最終剪輯promo-names-edit-final-20261030，首版人物頁戰鬥分鏡已撤回保留。story-visual-review與story-motion-checks通過；後者只取視訊，各十幀有差異，不當作玩法對拍。無黑幀／長靜音，峰值-7.5dB，未新增人工聽感聲明。 |
 | 影片交付核對 | promo-names-20261030/delivery-checks.json SHA-256 `2b47d1d5882cea1b3c333e847271459a69616bc0afff490c14cb124a5b8168a7`；交付promo-SHA256SUMS.json SHA-256 `2e936b6e162cbff04cb6f0fe00ad597b1020d0faf9bf51ad759bf0c2ec64a0e5`。核28份影片及證據檔，六個ZIP逐包SHA、正式程式／profile／HD／音樂／session及舊v.1.0.2影片保持。SHA256SUMS.json仍為原六包清單，不覆寫。 |
-| 收尾清理 | cleanup-space-20261030：388份歷史重播無損封存，32649組重複圖像合併221158個歷史路徑；內容與路徑均保持，原時間存在dedup-plan.json.gz。核對dedup-check及8041個保護檔；圖像改寫前先依AGENTS拆分。遠端備份核SHA後才清三個本機完整版ZIP與傳輸暫存。原始錄影、影片及其他歷史版保留；沒有新image或volume，本專案容器及擁有權異常0。 |
+| 收尾清理 | cleanup-lean-20261030：刪18個過期封包、296841個歷史圖像／程式／詳細重播／RAM傾印／模型及1061個舊編譯輸入與字模，保留來源與資料準備的直接依賴。700筆重播封存索引改pruned-rebuildable，不能再還原；舊完整去重計畫不作目前檢查。8041個保護檔保持，正式影片及診斷快照保留。原始驗收摘要仍記錄當時結果，詳細輸出多已刪。 |
+| 修復重建 | 乾淨Go容器從保留來源與現行資料重新編譯，無既有Go快取，binary SHA完全相同f958c05b96dec4d19c207a7cfa517daa7db3a9741e4b4938b1252b05fe61e96c。資料prepare試跑亦通過，生成暫存已刪，不取代正式95檔輸入。入口bash tools/player.sh build；只重建當次bug所需內容，完整素材由私人Release還原。證據rebuild-check.sha256及prepare-check.json。 |
 | 正式程式 | `workplace/probe/player-current/dqk-player` SHA-256 `f958c05b96dec4d19c207a7cfa517daa7db3a9741e4b4938b1252b05fe61e96c`，來源3edbb0d9a24ac434ed751cfa7513f15950920303，版號v.1.0.3-20261029。profile95份、SHA-256 `82e7b43a51f61910868299cebe8b22485fc64f38e1d9097a3983de18b47d6e35`。新增六名只改顯示來源、譯文、來源紀錄及profile四檔，字模逐位元組保持。 |
 | 高清文字證據 | battle-text-hidpi-20261029/font-checks.json核2896／33個字模及七個輪廓樣本，並非放大小字。compare-final/checks.json三個固定步數的原版／接管索引、色盤與暫存器相同；finish-scene-sharp-final-20261029-r1的防護間隙576像素回到原版底色。正常錄影promo-sharp-normal-20261029-r2已實際使用48／60字模並驗兩種地圖開關；圖稿內文字及未重新輸出的快照像素分列限制。 |
 | 音樂與證據 | `music-hd-20261029/evidence.json` SHA-256 `51266f251fb161f756c6cb743b9e04af2d518a4e65fc8f6c11244371709737d1`。8段Ogg、48kHz立體聲，保留三秒釋音；音樂manifest `0ec4b019fad2766cfa9a9ee1fed16deb4d1c3fdfc6115a78c7b30985ca7a1acb`。原版正常標題／展示命令、原版函式注入全8段、音量0／90／100及越界拒絕分開記錄。播放器已接原版只讀開始／停止／音量，音樂與HD／縮放／語言獨立；詳見研究008及規格006。 |
@@ -40,7 +41,7 @@
 | README | 故事、機制及原版／HD圖庫保持，30張選定展示圖可在GitHub直接閱讀，來源與SHA在docs/images/manifest.json。交付入口已改為v.1.0.3私人Release與分段／差異還原工具；大型素材不放一般Git物件，完整素材備份限本私人Release。影片與額外書籍來源仍只留本機。 |
 | 尚未證實與可選項 | 完整遊玩驗證不列本輪條件，繪圖經最後兩輪抽驗結案。未知輸出、未走訪場景、正常結局與跨作匯入不宣稱已證實，亦不因這些範圍重開本輪。Windows原生與macOS真機、人工聽感仍未驗；額外美化不列阻塞，未公開Release或上傳影片。 |
 | 工具鏈 | SDK隔離來源`f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`唯讀，Go1.24.13及Pillow r2保持。取樣沿既有wasteland-media映像與FluidSynth 2.3.1、FluidR3_GM 3.1。桌面執行映像`dqk-player-audio:1.24-r1` ID `70a02710cbba9dee61c8f56893fee51ea9ea55db7ef9fd79678dac602da589f9`，只補ALSA至PulseAudio橋接；Go建置仍用原8ed6bdee映像。新解碼依賴保存在本作music-go-deps，SDK及共用快取唯讀，原EXE保持。 |
-| 儲存與Docker | 使用者授權僅清本專案。先前81份歷史重播已無損封存，實釋8.430GiB，清理證據`cleanup-20261028-result.json` SHA-256 `76b1858e765f1bb115accb5e8059214ea956426588fc06025b173769783a96db`。目前批次、原始資料、HD與存檔保留；不全域清其他專案。每批使用非root、離線、有界且自動刪除容器。 |
+| 儲存與Docker | 目前實際配置4100874240 bytes，檔案42203個。必要原始輸入、正式HD／主圖、譯文、手工資料、工具鏈及精簡報告保留。可重建舊產物已依最新授權刪除，不再保留大型歷史重播。建置只用容器暫存快取，未建新image／volume，沒有清其他專案；擁有權異常及殘留專案容器0。 |
 
 ## 較早資料批的證據入口
 

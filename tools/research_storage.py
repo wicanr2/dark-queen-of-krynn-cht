@@ -103,8 +103,10 @@ def pack(index,selection=None):
 
 
 def verify(index):
-    total=0
+    total=0;pruned=0
     for relative,row in index['entries'].items():
+        if row['state']=='pruned-rebuildable':
+            pruned+=1;continue
         p=member(relative);packed=p.with_suffix('.json.gz')
         assert str(packed.relative_to(ROOT))==row['gzip_path']
         if row['state']=='archived':
@@ -113,11 +115,14 @@ def verify(index):
         else:assert digest(p)==(row['original_sha256'],row['original_bytes']),p
         total+=1
     print('verified',total,'original byte streams',flush=True)
+    if pruned:print('pruned rebuildable streams',pruned,'not verified; retained metadata only',flush=True)
 
 
 def restore(index,selection):
     matches=[(rel,row) for rel,row in index['entries'].items() if rel==selection or rel.startswith(selection.rstrip('/')+'/')]
     assert matches,'索引沒有此路徑；請使用 list 列出邏輯路徑'
+    if any(row['state']=='pruned-rebuildable' for _,row in matches):
+        raise SystemExit('此選取含依使用者授權刪除的可重建歷史重播；保留的索引不是備份。請依AGENTS的精簡工作區入口，用保存的來源、快照與重播設定重新產生。')
     for rel,row in matches:
         p=member(rel)
         packed=p.with_suffix('.json.gz');assert str(packed.relative_to(ROOT))==row['gzip_path']

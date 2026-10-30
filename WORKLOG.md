@@ -3567,3 +3567,17 @@ GitHub直接上傳三個約1.27GB大ZIP長時間未完成，手動中止本次gh
 遠端驗證後才刪三個本機完整版ZIP與本輪傳輸副本。最終按相同inode配置統計28499386368 bytes，26.54GiB，實際釋放24490295296 bytes，22.81GiB；未把本次新建又刪除的片段重複加總。清理後8041個保護檔逐檔SHA保持，包含可直接啟動的正式程式、素材、session、原始輸入、翻譯及攻略來源。影片、歷史版本與所有研究圖像路徑保留。證據為cleanup-summary、offload-cleanup-check、remote-backup-check、delta-restore-check、download-check、restore-helper-check及protected-after-check，均在cleanup-space-20261030。
 
 所有分析與清理用既有Pillow映像、UID1000的有界離線容器，未建新image／volume，保留正式啟動所需音訊映像。root-owned檔、.md目錄及本專案殘留容器0，沒有清其他專案。工具、私人清單與文件納入本輪提交；提交與推送結果以[Issue17](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/17)的收尾回讀記錄為準。
+
+## 2026-10-30：只保留必要資料，Issue18
+
+使用者明確表示26.5GB仍太大，要求留下必要資料，將可重建部分全部刪除，日後有bug再重建。此授權取代上一輪保留全部歷史畫格與詳細重播的做法。命中文件分工路由並載入project-document-responsibilities；只清本專案，不改私人Release及tag。新批次cleanup-lean-20261030保存保護名單、計畫、結果及重建驗證。
+
+先移除v.1.0.0、v.1.0.1、v.1.0.2的18個過期完整與引擎ZIP，按原manifest核對路徑、版本及大小後刪除，保留舊清單與報告。第二批刪296841個可重建歷史程式、畫格、渲染媒體、詳細重播、RAM傾印及可重新下載的OCR模型；依實際inode估算11624464384 bytes。正式player-current、音樂依賴及原始資料排除，52張正式攻略圖與SVG、說明世界圖、圖片中文製作來源另列保護。歷史.state診斷快照、私人工具、校讀、翻譯、地圖幾何及精簡證據保留。初版盤點誤讀舊X11 socket，後續套用因沒有計畫拒絕，未刪研究檔；改為僅選一般檔案後完成計畫及套用，屬清理腳本問題。
+
+另刪1061份舊編譯輸入與字模JSON，共1369292800 bytes，保留目前正式95檔、shared-feedback的資料來源及startup-captions的開頭來源。原storage-index的700份歷史重播改為pruned-rebuildable，保存原SHA與刪除計畫，明確不再表示有備份。research_storage的restore會拒絕這類選取，verify另列略過數；已實測拒絕，不以索引存在冒稱內容仍可還原。舊圖像去重計畫保留作歷史操作紀錄，整份verify不再適用；AGENTS已更新入口與精簡後限制。
+
+以既有固定Go映像、SDK、模組與正式95份資料，從空容器Go快取重新編譯28份來源，輸出只留容器/tmp，結束自動刪除。binary SHA為f958c05b96dec4d19c207a7cfa517daa7db3a9741e4b4938b1252b05fe61e96c，與正式程式完全相同。另試跑player.sh prepare至獨立player-rebuild-cleanup-20261030，52張地圖、字模、片段、圖片中文及profile準備均成功；此舊prepare入口產生92份profile輸入，不宣稱與正式95檔相同，不安裝、不取代正式維護基線。試跑輸出已刪，保留prepare-check與log。沒有重跑完整遊玩、HD審畫或聲稱新玩法驗收。
+
+清理後8041個受保護檔案SHA保持，包含正式程式與全部player-current素材、session、原始輸入、譯文及攻略來源。第二批編譯副本刪除另排除所有保護前綴。按相同inode配置方式統計，本輪28499759104降至4100874240 bytes，26.54GiB降至3.82GiB，再釋放24398884864 bytes，22.72GiB；一般檔案剩42203個。正式影片與私人45個Release資產保持。未新增image／volume，建置快取隨容器刪除，擁有權異常與本專案殘留容器0，其他專案不動。
+
+精簡政策、後續bug建置入口與限制已回填AGENTS、CONTEXT及README。計畫與證據在cleanup-lean-20261030的retired-packages、prune-plan、compiled-inputs-plan、protected-check、rebuild-check.sha256、prepare-check及cleanup-summary。工具與文件納入本輪main提交；提交與推送結果以[Issue18](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/18)收尾回讀為準。

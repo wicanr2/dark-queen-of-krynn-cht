@@ -270,6 +270,8 @@
 磁碟清理時可將大型歷史 `receipt.json` 無損封存為同目錄 `receipt.json.gz`。
 原始資料、譯文、程式、字模、圖片、存檔、證據索引及目前工作批次保留。
 封存前後逐檔核對原始內容 SHA-256，不改寫舊 evidence manifest 的歷史雜湊。
+使用者2026-10-30另明確要求「留下必要的就好，可以重建的部份都刪除」。
+依下方「精簡工作區」例外，已刪的歷史原始輸出不再視為封存備份。
 
 | 入口 | 職責 |
 |---|---|
@@ -292,12 +294,9 @@ bash tools/research-storage.sh restore workplace/probe/研究目錄/重播目錄
 僅選其他目錄至少 16 MiB 的 `receipt.json`；`cache` 只清本專案 `workplace/probe/gocache` 內容，保留目錄。
 
 2026-10-30空間清理另逐檔選取已完成歷史的1MiB以上重播，仍使用同一封存索引與原內容SHA核對。
-歷史圖像合併的操作紀錄在`workplace/probe/cleanup-space-20261030/dedup-plan.json.gz`，
-這是圖像硬連結與原始時間的紀錄，不取代重播封存索引。核對命令為：
-
-```sh
-bash tools/research-storage.sh dedup-verify /project/workplace/probe/cleanup-space-20261030/dedup-plan.json.gz
-```
+歷史圖像合併的操作紀錄在`workplace/probe/cleanup-space-20261030/dedup-plan.json.gz`。
+這是圖像硬連結與原始時間的歷史紀錄，不取代重播封存索引。精簡後多數歷史圖像已刪除，
+不能再以整份舊計畫執行dedup-verify作目前完整性檢查。
 
 合併的歷史圖像視為唯讀；修改其中一份前，先拆成獨立副本，避免修改傳到其他歷史路徑：
 
@@ -306,6 +305,30 @@ bash tools/research-storage.sh dedup-detach /project/workplace/probe/cleanup-spa
 ```
 
 拆分會核對內容並恢復該路徑原權限與時間。正式素材與存檔不在合併範圍。
+
+### 精簡工作區
+
+後續回報bug時，以`workplace/probe/player-current/`的正式95份輸入、HD、音樂、
+圖片中文及session為維護基線，不從歷史批次重建整個工作區。程式建置入口為
+`bash tools/player.sh build`；來源為`tools/player_sources.txt`的28份Go檔、
+`workplace/dosgolem`固定SDK及`music-go-deps`，建置命令與唯讀依賴見[player.sh](tools/player.sh)。
+缺少完整素材時，先依第3節的私人Release下載還原，不以舊研究截圖代替正式資產。
+
+- 保留原始輸入、正式可玩版本、存檔、譯文與綁定資料、HD主圖、手工地圖幾何、校讀資料、
+  私人工具、診斷快照、逆向資料庫、必要SDK與依賴，以及精簡驗收報告。
+- 被取代的本機ZIP、歷史執行檔、測試畫格、詳細重播、記憶體傾印、舊編譯字模與輸入副本、
+  可下載模型及本輪建置暫存已刪。未來只重建正在修復的項目，結束後清除可重建輸出。
+- 資料準備入口`bash tools/player.sh prepare player-新的名稱`仍保留直接來源；本輪試跑通過，
+  但不取代正式95份輸入，也不新增原版玩法驗收聲明。
+- `storage-index.json`中700筆`pruned-rebuildable`只保留歷史雜湊與刪除紀錄。
+  `restore`會明確拒絕，`verify`另列略過數，不宣稱原始位元組仍可還原。
+  有需要時依保留的來源、快照與重播設定重新執行，不能從索引重生原始輸出。
+
+本輪保護清單、刪除計畫與結果入口為`workplace/probe/cleanup-lean-20261030/`的
+`prune-plan.json.gz`、`compiled-inputs-plan.json.gz`、`retired-packages.json`、
+`protected-check.json`、`prepare-check.json`、`rebuild-check.sha256`及`cleanup-summary.json`。
+歷史文件中的畫格與詳細重播路徑可能已精簡；原驗收摘要描述當時結果，不表示原始輸出仍存在。
+私人Release及既有tag保持。
 
 ## 10. 共同決策與停止線
 
