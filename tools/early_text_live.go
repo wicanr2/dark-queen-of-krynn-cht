@@ -1339,7 +1339,11 @@ type playerSession struct {
 	SharpText         playerSharpText
 	Renderer          playerFrameRenderer
 	Controls          []map[string]any
+	Quiz              func(*liveGame)
 }
+
+// 防拷查驗自動填入；歷史研究清單可不連入，維持原有輸入。
+var playerQuizLoader func([]byte) func(*liveGame)
 
 type playerFrameRenderer interface {
 	Source(*liveGame) (int, int, []byte)
@@ -1459,6 +1463,9 @@ func runPlayer(profile, original, saves string) {
 	o.SetCmdLine("SB220 SI7 RB330")
 	o.SetScratch(filepath.Join(saves, "saves"))
 	p := &playerSession{Directory: saves, Scale: 2, Mouse: [2]int{-1, -1}, HDEnabled: true, MusicEnabled: true}
+	if playerQuizLoader != nil {
+		p.Quiz = playerQuizLoader(raw)
+	}
 	if playerSharpTextLoader != nil {
 		p.SharpText = playerSharpTextLoader(profile)
 	}
@@ -1782,6 +1789,9 @@ func (g *liveGame) updatePlayer() error {
 	g.syncMovementCaption()
 	g.syncSpellCaption()
 	g.syncBattleNotice()
+	if g.player.Quiz != nil {
+		g.player.Quiz(g)
+	}
 	g.o.TrimPresentationHistory()
 	// 研究的事件索引只在尚待首字形時使用。一般遊玩保留小段診斷，不累積每幀 PNG。
 	if len(g.list.awaitGlyphs) == 0 && len(g.list.events) > 2048 {

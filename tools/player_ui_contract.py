@@ -30,7 +30,7 @@ if mode=='prepare':
     i = args.index('-o')
     del args[i:i+2]
     args[1:2] = ['test','-json','-count=1']
-    args += ['/tools/ui_cold_fill_test.go','/tools/player_music_assets_test.go','/tools/player_map_test.go','/tools/player_text_hd_test.go']
+    args += ['/tools/ui_cold_fill_test.go','/tools/player_music_assets_test.go','/tools/player_map_test.go','/tools/player_text_hd_test.go','/tools/player_quiz_test.go']
     script = '''#!/usr/bin/env bash
 set -euo pipefail
 Xvfb :92 -screen 0 1280x900x24 -nolisten tcp >/out/ui-xvfb.log 2>&1 &
@@ -42,7 +42,7 @@ export DISPLAY=:92
 '''+shlex.join(args)+' >/out/ui-tests.json\n'
     (output/'ui-tests.sh').write_text(script)
 elif mode=='finish':
-    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace','TestKnownPartyNamesStayInDisplayLayer','TestCopiedDisplayWordsRequireCompleteSource','TestTemporaryCursorKeepsKnownText','TestMouseUsesOriginalDriverUnits','TestCursorRunsOnlyTemporaryPixelsInText'}
+    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace','TestKnownPartyNamesStayInDisplayLayer','TestCopiedDisplayWordsRequireCompleteSource','TestTemporaryCursorKeepsKnownText','TestMouseUsesOriginalDriverUnits','TestCursorRunsOnlyTemporaryPixelsInText','TestQuizPoolDecodeRule','TestQuizPoolMatchesOriginalAnswers'}
     old = json.loads((parent/'camp-save-contract.json').read_text())
     for name, digest in old['sources'].items():
         if name=='tools/ui_list_live.go':
