@@ -1808,6 +1808,25 @@ func (g *liveGame) updatePlayer() error {
 	return nil
 }
 
+// DQK開機以INT 33h AX=7／AX=8把範圍設為0..2559×0..1599，再把AX=3讀回的CX、DX各除以8
+// 當成320×200像素；無頭量測六點皆為游標＝讀值÷8，盾形游標畫在游標左上5像素。
+// dosgolem驅動的X以「回報值÷2」保存（320寬模式的預設倍率），Y保存原值，
+// 所以視窗的遊戲像素要先換成遊戲的驅動單位。直接送像素時盾牌只走到1/4與1/8。
+const (
+	dqkMouseUnit         = 8
+	dqkMouseDriverXScale = 2
+)
+
+// dqkMouseDriverPosition 把320×200遊戲像素換成dosgolem驅動保存的座標。
+func dqkMouseDriverPosition(x, y int) (int, int) {
+	return x * dqkMouseUnit / dqkMouseDriverXScale, y * dqkMouseUnit
+}
+
+// dqkMouseGamePixel 是遊戲由驅動座標讀回的游標像素，供呈現層找游標位置。
+func dqkMouseGamePixel(x, y int) (int, int) {
+	return x * dqkMouseDriverXScale / dqkMouseUnit, y / dqkMouseUnit
+}
+
 func (g *liveGame) playerMouse() {
 	p := g.player
 	x, y := g.playerCursor()
@@ -1815,7 +1834,7 @@ func (g *liveGame) playerMouse() {
 		!(g.translate && g.reader != nil && g.reader.Mode != "")
 	if accept && p.Mouse != ([2]int{x / 2, y / 2}) {
 		p.Mouse = [2]int{x / 2, y / 2}
-		must(g.o.MoveMouse(p.Mouse[0], p.Mouse[1]))
+		must(g.o.MoveMouse(dqkMouseDriverPosition(p.Mouse[0], p.Mouse[1])))
 	}
 	for i, button := range []ebiten.MouseButton{ebiten.MouseButtonLeft, ebiten.MouseButtonRight} {
 		if p.MouseButtons[i] && (!ebiten.IsMouseButtonPressed(button) || !accept) {

@@ -42,7 +42,7 @@ export DISPLAY=:92
 '''+shlex.join(args)+' >/out/ui-tests.json\n'
     (output/'ui-tests.sh').write_text(script)
 elif mode=='finish':
-    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace','TestKnownPartyNamesStayInDisplayLayer','TestCopiedDisplayWordsRequireCompleteSource','TestTemporaryCursorKeepsKnownText'}
+    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace','TestKnownPartyNamesStayInDisplayLayer','TestCopiedDisplayWordsRequireCompleteSource','TestTemporaryCursorKeepsKnownText','TestMouseUsesOriginalDriverUnits','TestCursorRunsOnlyTemporaryPixelsInText'}
     old = json.loads((parent/'camp-save-contract.json').read_text())
     for name, digest in old['sources'].items():
         if name=='tools/ui_list_live.go':

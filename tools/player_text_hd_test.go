@@ -89,6 +89,39 @@ func TestCopiedDisplayWordsRequireCompleteSource(t *testing.T) {
 	}
 }
 
+func TestMouseUsesOriginalDriverUnits(t *testing.T) {
+	// DQK把範圍設為0..2559×0..1599並把AX=3讀值除以8；驅動回報CX＝X×2、DX＝Y。
+	for _, p := range [][2]int{{0, 0}, {40, 40}, {160, 100}, {300, 190}, {319, 199}} {
+		x, y := dqkMouseDriverPosition(p[0], p[1])
+		if cx, dy := x*2, y; cx/8 != p[0] || dy/8 != p[1] || cx > 2559 || dy > 1599 {
+			t.Fatalf("遊戲讀回%d,%d，應為%v", cx/8, dy/8, p)
+		}
+		if gx, gy := dqkMouseGamePixel(x, y); gx != p[0] || gy != p[1] {
+			t.Fatalf("呈現層游標位置%d,%d，應為%v", gx, gy, p)
+		}
+	}
+}
+
+func TestCursorRunsOnlyTemporaryPixelsInText(t *testing.T) {
+	// 只補回游標附近、中文框內、底層素材仍在但暫時不可見的像素。
+	asset := &sceneAsset{W: 1, H: 1, Index: []byte{7}}
+	model := new(scenePage)
+	hidden := sceneCell{Asset: asset, Visible: false}
+	model.Cells[100*320+100] = hidden                                 // 框內游標像素
+	model.Cells[100*320+101] = hidden                                 // 同列相鄰
+	model.Cells[100*320+102] = sceneCell{Asset: asset, Visible: true} // 可見素材
+	model.Cells[100*320+103] = sceneCell{}                            // 非自有像素
+	model.Cells[95*320+100] = hidden                                  // 框外
+	model.Cells[100*320+120] = hidden                                 // 離游標太遠
+	runs := temporaryCursorRuns(model, 104, 102, [][4]int{{96, 98, 140, 106}})
+	if len(runs) != 1 || runs[0] != [3]int{100, 100, 102} {
+		t.Fatalf("游標補回範圍錯誤：%v", runs)
+	}
+	if len(temporaryCursorRuns(model, 0, 0, [][4]int{{96, 98, 140, 106}})) != 0 {
+		t.Fatal("游標不在附近時不應補回")
+	}
+}
+
 func TestTemporaryCursorKeepsKnownText(t *testing.T) {
 	// 游標改變當下色號，底下仍保留原字形；普通清除及新字形則會撤除它。
 	asset := &sceneAsset{W: 1, H: 1, Index: []byte{7}}

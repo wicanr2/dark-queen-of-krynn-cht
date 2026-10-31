@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image"
 	"os"
 	"path/filepath"
 
@@ -327,7 +328,75 @@ func (p *playerRenderOwner) Source(g *liveGame) (int, int, []byte) {
 func (p *playerRenderOwner) ComposeText(px []byte, g *liveGame, rgb []byte) {
 	if g.translate && !p.Busy() {
 		p.Text.Compose(px, g, rgb)
+		p.restoreCursor(px, g)
 	}
+}
+
+// 盾形／劍形游標由原版讀回範圍暫存繪製；落在中文框內的像素會被中文底色與字墨蓋住。
+// 暫存寫入保留底層素材而只把Visible設為false，永久寫入會清除Asset，
+// 所以Asset仍在且不可見的像素就是暫存寫入的結果（同retainedTextPixel的判準）。
+// 所有中文合成之後，把目前游標附近這類像素的原版色號放回最上層，並清除該處高清字墨。
+// 底層不是自有素材的像素維持現狀。圖片文字另有同紋理游標合成，閱讀器開啟時原版游標
+// 不在操作中，兩者都不處理。
+func (p *playerRenderOwner) restoreCursor(px []byte, g *liveGame) {
+	if g.reader != nil && g.reader.Mode != "" {
+		return
+	}
+	page, ok := nativeVisiblePage(p.Oracle)
+	if !ok {
+		return
+	}
+	cx, cy := dqkMouseGamePixel(p.Oracle.Mouse())
+	protected := append(g.playerProtectedRectangles(), p.Text.Rectangles(g.playerProtectedRectangles())...)
+	protected = append(protected, g.playerTextInkRectangles()...)
+	model := p.Scene.page(page, p.Oracle.PresentationPlane)
+	pal := p.Oracle.Palette()
+	for _, run := range temporaryCursorRuns(model, cx, cy, protected) {
+		y := run[0]
+		for x := run[1]; x < run[2]; x++ {
+			col := pal[model.Index[y*320+x]]
+			for yy := 0; yy < 2; yy++ {
+				for xx := 0; xx < 2; xx++ {
+					at := ((y*2+yy)*640 + x*2 + xx) * 4
+					copy(px[at:at+3], col[:])
+				}
+			}
+		}
+		g.sharpClear(image.Rect(run[1]*2, y*2, run[2]*2, (y+1)*2))
+		p.Counters["cursor_restored_pixels"] += uint64(run[2] - run[1])
+	}
+}
+
+// temporaryCursorRuns 回游標（cx,cy）±8像素內、位於中文框且屬暫存寫入的連續像素 {y, x0, x1}。
+func temporaryCursorRuns(model *scenePage, cx, cy int, protected [][4]int) [][3]int {
+	x0, y0, x1, y1 := max(0, cx-8), max(0, cy-8), min(320, cx+8), min(200, cy+8)
+	cursor := func(x, y int) bool {
+		c := model.Cells[y*320+x]
+		if c.Asset == nil || c.Visible {
+			return false
+		}
+		for _, r := range protected {
+			if x >= r[0] && x < r[2] && y >= r[1] && y < r[3] {
+				return true
+			}
+		}
+		return false
+	}
+	var runs [][3]int
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; {
+			if !cursor(x, y) {
+				x++
+				continue
+			}
+			start := x
+			for x < x1 && cursor(x, y) {
+				x++
+			}
+			runs = append(runs, [3]int{y, start, x})
+		}
+	}
+	return runs
 }
 
 func (p *playerRenderOwner) Present(screen *ebiten.Image, g *liveGame, rgb []byte, held bool) {
