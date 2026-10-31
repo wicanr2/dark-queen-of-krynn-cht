@@ -2,6 +2,13 @@
 
 狀態：CONFORMED，限本規格的代表抽驗與本機交付範圍。2026-10-29使用者明確指定先完成串接，再抽驗兩輪，沒有問題即收尾、正式打包與錄製推廣影片；平台已選Windows、Linux、macOS。不重開已接受的HD圖稿。
 
+## CONFORMED：v.1.0.6防拷查驗自動填入重打包
+
+2026-10-31使用者要求防拷密碼直接填入，選定自動填入、自己按Enter，並重包三平台；不上傳、不push。功能見[規格003](003-player-toolbar.md#conformed防拷查驗自動填入)。
+使用者刪除workplace/probe後，player-current由v.1.0.5 Windows完整包還原，四個資產目錄樹雜湊與v.1.0.5交付核對相同；打包所需FluidR3授權亦由該包取回。來源da22b37262a91eb78b060f499fe34007edc0e2ae。
+本機成品在dist-all/v.1.0.6-20261031/full-local。appimage、windows-r2、windows-launcher-r2沿既有正常入口驗收，Windows首輪因主機負載逾時後重跑通過；smoke/quiz驗Wine下Windows與正式Linux的自動填入與進城。
+build-info為DRAFT，因ABI與介面合約收據已刪；繪圖驅動與場景模型來源自6276837未變。實際FUSE掛載、Windows原生與macOS真機仍未驗。
+
 ## CONFORMED：v.1.0.5滑鼠修正重打包
 
 2026-10-31使用者回報Windows版主選單無法用滑鼠點選，選擇一併修正游標遮擋並重包三平台，不上傳、不push。修正內容見[規格003](003-player-toolbar.md#conformed遊戲區滑鼠座標)與[規格005](005-render-owner.md#conformed原版游標位於中文框上)。

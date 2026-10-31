@@ -318,8 +318,8 @@ HD採固定類型抽驗收尾，繪圖依兩輪代表抽驗完成。素材布局
 
 ## 如何啟動
 
-現行完整版為 `v.1.0.5-20261031`，保存在本機 `dist-all/v.1.0.5-20261031/full-local/`。
-v.1.0.4的遊戲區滑鼠點選無反應，v.1.0.5已修正，舊版請改用新版。
+現行完整版為 `v.1.0.6-20261031`，保存在本機 `dist-all/v.1.0.6-20261031/full-local/`。
+v.1.0.4的遊戲區滑鼠點選無反應，v.1.0.5起已修正。v.1.0.6在開始冒險的防拷查驗自動填入正確答案，按 Enter 確認即可。
 三包均內含原版遊戲、繁中與字型、手札／說明／攻略、完整HD及音樂，啟動前不用另外匯入遊戲。
 
 | 平台 | 完整版與啟動方式 |
@@ -331,8 +331,8 @@ v.1.0.4的遊戲區滑鼠點選無反應，v.1.0.5已修正，舊版請改用新
 Linux可在成品目錄執行：
 
 ```sh
-chmod +x 黑暗之后-v.1.0.5-20261031-linux-amd64-full-local.AppImage
-./黑暗之后-v.1.0.5-20261031-linux-amd64-full-local.AppImage
+chmod +x 黑暗之后-v.1.0.6-20261031-linux-amd64-full-local.AppImage
+./黑暗之后-v.1.0.6-20261031-linux-amd64-full-local.AppImage
 ```
 
 系統缺少FUSE時，在第二行末尾加上`--appimage-extract-and-run`。
@@ -342,7 +342,7 @@ Windows採LOCALAPPDATA，Linux採XDG_DATA_HOME或`~/.local/share`，macOS採`~/L
 86秒故事與玩法推廣影片保持在`dist-all/v.1.0.3-20261029/promo/`。
 
 AppImage已驗內建解壓執行模式、正常角色管理、說明、全螢幕地圖縮放與返回；FUSE掛載未驗。
-Windows已驗Wine下的「啟動.bat」、使用者資料目錄與滑鼠點選，仍未等同Windows實機。
+Windows已驗Wine下的「啟動.bat」、使用者資料目錄、滑鼠點選與查驗自動填入，仍未等同Windows實機。
 macOS包含Intel與Apple Silicon兩種架構，尚未簽章、公證或真機驗收。
 交付範圍見[收尾規格](docs/spec/007-completion-delivery.md)。
 

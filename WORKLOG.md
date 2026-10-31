@@ -3613,3 +3613,19 @@ AppImage沿既有kol-package固定映像0b933af1238ab5839ad7a64b6ae05f069f57cb85
 appimage、windows、windows-launcher三組package-smoke通過。Wine下Windows封包的滑鼠抽驗除開場外與正式Linux逐像素相同，點「開始遊戲」進角色管理；從v.1.0.4 ZIP取出的出貨執行檔3dc4021a在同腳本中盾牌最遠到(159,55)、點選無反應，與使用者回報一致。收據在v.1.0.5的smoke/mouse/mouse-checks.json及delivery-checks.json，精簡證據與重現腳本在release-mousefix-20261031。
 
 收尾刪除隔離快照、封包暫存（約6GiB）、兩份測試建置與19個滑鼠抽驗目錄的指令，被工具安全檢查擋下而沒有執行；Go快取同批未清，留待使用者處理。player-current維護程式仍為f958c05b。沒有push、建立Issue、tag或Release，使用者筆記與交換檔未動。
+
+## 2026-10-31：防拷查驗自動填入與v.1.0.6重包
+
+使用者要求把防拷密碼直接填在答案後面，或bypass防拷。開工時發現workplace/probe在18:29整個清空，含player-current、music-go-deps、ABI與介面合約父批、研究快照及上一輪證據；本session的刪除指令先前被擋下，未執行。經詢問，使用者確認是自行刪除，選擇由v.1.0.5還原、自動填入且自己按Enter、重包v.1.0.6。
+
+player-current四個資產目錄由v.1.0.5 Windows完整ZIP還原，7181檔樹雜湊與v.1.0.5 delivery-checks相同；music-go-deps以music-hd.sh deps重下，核對兩個固定模組的go.sum。
+
+查驗研究：DQK.EXE檔案偏移0x6A996起80個編碼字串，每byte減字串長度後反轉即明文，四個一組為標題與三答案，共60題；中文手冊附表只有30題，遊戲拼法DIETIES與手冊不同。無頭oracle以Return、P、L、T、A、B進入查驗，題目為THE MOONS OF KRYNN第3字；字串複製0x132D4把答案CREATION寫入DS:C6F9。研究注入改成ABOUT後輸入ABOUT可通過，答錯換題時緩衝變MAY，小寫與提前送入也通過。頁碼與字序沒有以連續陣列出現在EXE，未追出題索引，接入改讀答案緩衝。
+
+新增player_quiz.go，以冷啟動提示層四個查驗文字都在畫面上為條件，緩衝屬於題庫答案時送一般鍵盤輸入，同題只填一次。首輪GUI抽驗因驅動按住B三秒造成Xvfb連發，輸入框混入B而答錯換題，第二題仍正確填入；改為短按後通過。自動填入與無填入對照版手動輸入同一答案的查驗與進城畫格逐像素相同；原文模式亦填入。進城後底列殘留「輸入」字框，手動作答相同，屬既有問題，本輪未修。
+
+單元測試首版把THAC0誤列為答案，實為標題，修正後介面測試17項通過，IRQ邊界測試因研究快照已刪而略過；check-ui合約步驟因父批收據不存在而無法完成。提交da22b37。build-info為DRAFT，原因是ABI 1652組收據、介面合約父批及battle-continuation快照已刪；render-abi.sh需該快照，未重建。繪圖驅動與場景模型來源自6276837未變。
+
+首次package-full因缺workplace/probe/music-hd-20261029/soundfont-license.txt失敗，該檔由v.1.0.5封包的LICENSE-FluidR3-samples.txt取回（2132 bytes、SHA f2f5e6358fc7c1fe62aafc6c8229c4c5898e5afb0d4ce1322b15362a8cbd600e），刪除本輪半成品後重跑成功。v.1.0.6三包：Windows ZIP 1270503541 bytes、SHA a564ecbfae1cd86d30c71324303cdfa949bde2f2b5bdeefb89289cbe8a63d965；Linux AppImage 1109637624 bytes、SHA 5970869ffe2aac07820ef0216264e76027f91c33e2c6197ac28cba6e9065062b；macOS ZIP 1274735821 bytes、SHA e6df032d4fd33eecc735ae3d90b4b3e7e87f958ec98489003ad673cdef5cf04a。
+
+appimage驗收通過。windows與windows-launcher首輪在主機負載約24時超過150秒外層時限，未產生log；佔用者為其他專案容器與編譯。重跑windows-r2、windows-launcher-r2通過，失敗輪只含建置工具的目錄已刪。Wine下Windows自動填入與正式Linux畫格相同。收據smoke/quiz/quiz-checks.json與delivery-checks.json；精簡證據在release-quiz-20261031，快照、封包暫存、對照建置與抽驗目錄已刪。沒有push、Issue、tag或Release，使用者筆記與交換檔未動。
