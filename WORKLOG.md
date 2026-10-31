@@ -3629,3 +3629,19 @@ player-current四個資產目錄由v.1.0.5 Windows完整ZIP還原，7181檔樹�
 首次package-full因缺workplace/probe/music-hd-20261029/soundfont-license.txt失敗，該檔由v.1.0.5封包的LICENSE-FluidR3-samples.txt取回（2132 bytes、SHA f2f5e6358fc7c1fe62aafc6c8229c4c5898e5afb0d4ce1322b15362a8cbd600e），刪除本輪半成品後重跑成功。v.1.0.6三包：Windows ZIP 1270503541 bytes、SHA a564ecbfae1cd86d30c71324303cdfa949bde2f2b5bdeefb89289cbe8a63d965；Linux AppImage 1109637624 bytes、SHA 5970869ffe2aac07820ef0216264e76027f91c33e2c6197ac28cba6e9065062b；macOS ZIP 1274735821 bytes、SHA e6df032d4fd33eecc735ae3d90b4b3e7e87f958ec98489003ad673cdef5cf04a。
 
 appimage驗收通過。windows與windows-launcher首輪在主機負載約24時超過150秒外層時限，未產生log；佔用者為其他專案容器與編譯。重跑windows-r2、windows-launcher-r2通過，失敗輪只含建置工具的目錄已刪。Wine下Windows自動填入與正式Linux畫格相同。收據smoke/quiz/quiz-checks.json與delivery-checks.json；精簡證據在release-quiz-20261031，快照、封包暫存、對照建置與抽驗目錄已刪。沒有push、Issue、tag或Release，使用者筆記與交換檔未動。
+
+## 2026-10-31：重建驗證基準、撤除查驗「輸入」與v.1.0.7重包
+
+使用者要求重建驗證並繼續處理進城後的「輸入」殘留，需要的資源從v.1.0.5還原。v.1.0.5三包與私人Release只含遊戲、譯文、HD與音樂，沒有戰鬥快照、1652組父批或介面父批；經詢問，使用者選定以新的冷啟動快照為基準，並重包v.1.0.7三平台，不上傳、不push。
+
+新增verify-base.sh與verify_base_probe.go。首輪r1只送Return、P、L、T、A，停在角色管理，400M步內沒有查驗，輸出已刪；補B（Begin Adventuring）後r2在350M步出題，410M步存quiz.state，輸入答案並Return後1,030M步存palanthas.state，SHA de9778cd9dabae9b43299beb11afbdd6b460c22307b8197f997496bbedc0e97d。r3重跑的快照、截圖與動作逐位元組相同。
+
+render-abi.sh、render_abi_probe.go與ui_cold_fill_test.go改用新快照。首次ABI執行因缺hd-assets-20261026-r1/inventory.json中止，以hd_inventory.py從原版TLB重生，SHA e47bfaf2與HD清單記錄的值相同。render-abi-rebuild-20261031-r1共1652組通過，非拒絕案例原版直接寫入0，evidence SHA 88791eda。
+
+介面契約改為第2版：五個測試檔的每個Test函式都須通過、不得略過，記錄全部編入來源SHA；建置檢查改讀新ABI證據與同目錄ui-contract.json，並核快照與基準收據。build、check-ui（45項，IRQ對照16組實際執行）、再build後build-info為READY，player.sh run的閘門通過。
+
+「輸入」殘留：Xvfb冷啟動作答進城的ui-diagnostics在v.1.0.6程式留有startup.quiz-enter。無頭追蹤顯示原版先填色清正文，再在0x4000頁畫石框底圖、翻頁，之後以鎖存器複製重寫0頁底列；新提示在x=63起，不與「Enter」相交，所以既有填色與底列替換都接不到。答錯時原版會填色清底列後重印，既有規則已處理。ui_cold_prompts.go改為記下字形所在頁，查驗正文消失後翻頁離開或同頁整框重寫才撤除；每次顯存寫入先以底列y=189過濾。新增單元測試2組。修正後同流程只剩隊伍標題詞框，進城畫格與修正前只差原生(8,189)至(47,196)的1280像素。
+
+提交938025b。release-build後Linux binary 4e2265be、Windows e7025d88、macOS universal acbfbb5a，build-info READY。package-full產出v.1.0.7三包：Windows ZIP 1270506776 bytes、SHA 315384996559c085176a0e9fabe467566ff35d360a50988f9e5b198b4adf5013；macOS ZIP 1274742330 bytes、SHA 4f75de11bd9c921288d7133e0b9105c11fd9cc27d8f849e9f98d12f8a9d01563；Linux AppImage 1109641720 bytes、SHA b74fd2e3c1a9693e9571cd8042cdfb090767de68b0fc4337c88d11452d276c8d。appimage驗收通過。
+
+windows與windows-launcher首輪通過。Wine下Windows封包與正式Linux執行查驗流程，冷啟動詞框都不再留startup.quiz-enter，進城畫格相同；查驗畫格只差輸入游標閃爍的(104,189)附近。smoke/footer/footer-checks.json SHA 8d670c9f，smoke/delivery-checks.json SHA dd51656c，四個資產目錄與v.1.0.5相同。收尾刪除封包暫存（約6GiB）與研究畫格原檔；verify-base、render-abi-rebuild與重生的hd-assets是建置檢查輸入，保留。沒有push、建立Issue、tag或Release；容器皆--rm，無root-owned檔或殘留本作容器。

@@ -600,3 +600,39 @@ Issue：[15](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/15)。
 - 場景模型對暫存寫入保留底層素材並把Visible設為false，永久寫入清除Asset，判準同retainedTextPixel。所有中文合成之後，[呈現層](../../tools/player_render_owner.go)在目前游標±8像素內，把位於中文框、素材仍在且不可見的像素放回原版色號，並清除該處高清字墨。
 - 圖片文字沿既有同紋理游標合成，閱讀器開啟時不處理；底層不是自有素材的像素維持現狀。繪圖驅動、場景模型與1652組函式父批來源逐位元組保持，原生效果驗證仍成立。
 - 標題版本列、底部按鈕與角色管理兩欄上的游標完整顯示；游標移開後，按鈕區與先前畫格逐像素相同。[單元測試](../../tools/player_text_hd_test.go)固定補回範圍，介面回歸40項通過。
+
+## CONFORMED：冷啟動驗證基準重建
+
+2026-10-31使用者刪除整個workplace/probe，1652組函式父批`render-abi-resume-20261028-r1`、介面父批`player-hd-finish-20261029`、IRQ根收據`player-coverage-20261028/cold-fill-irq-root-r2.json`與戰鬥快照`battle-continuation-20261025/control-r1/final.state`都不存在，build-info只能為DRAFT。v.1.0.5完整包與私人Release只含遊戲資料，沒有快照或收據。使用者選定改以新的冷啟動快照為基準。
+
+- [verify-base.sh](../../tools/verify-base.sh)以[verify_base_probe.go](../../tools/verify_base_probe.go)無頭執行原版，命令列`SB220 SI7 RB330`。一般按鍵依序為Return跳過示範、P、L、T、A讀原附A隊、B開始冒險；答案沿[規格003](003-player-toolbar.md#conformed防拷查驗自動填入)讀`DS:C6F9`後輸入，再按Return進帕蘭薩斯。不寫入原版記憶體。
+- `verify-base-20261031-r2/base/palanthas.state`在1,030M步，SHA-256 `de9778cd9dabae9b43299beb11afbdd6b460c22307b8197f997496bbedc0e97d`，畫面為入城敘事與「PRESS RETURN TO CONTINUE」。同目錄另存410M步查驗頁`quiz.state`，SHA-256 `837408330fae16d3a4239b8d54cc1246398b6112c96ffe961721bfe18f876273`。r3重跑的快照、截圖與動作逐位元組相同。快照內的檔案代碼指向`/orig`，使用者須以同一路徑唯讀掛原版。
+- [render-abi.sh](../../tools/render-abi.sh)的1652組函式對照與[ui_cold_fill_test.go](../../tools/ui_cold_fill_test.go)的IRQ對照都改用palanthas.state。對照所需的HD來源盤點`hd-assets-20261026-r1`由[hd_inventory.py](../../tools/hd_inventory.py)從原版TLB重生，inventory.json SHA-256 `e47bfaf243226c8834383e421c6fe287a42b5a3788adb698213f05037c4bd6c6`與HD清單記錄的值相同。
+- `render-abi-rebuild-20261031-r1/evidence.json`為1652組全數通過，非拒絕案例的原版直接寫入0，路由邊界6項，SHA-256 `88791edab4d62ea1b27008cb5251b449dd7f68e8a8812db01b6d2e37df854364`。繪圖驅動與場景模型來源自6276837未變。
+- 介面契約改為第2版：[player_ui_contract.py](../../tools/player_ui_contract.py)要求五個測試檔內的每個Test函式通過、不得略過；IRQ對照16組、查驗交接3組、營地提示2組、底列替換3組與查驗「Enter」退場2組。契約記錄全部編入Go來源的SHA，[建置檢查](../../tools/player_render_check.py)要求來源未再變動，並核對快照與基準收據。已刪父批只保留文件中的歷史雜湊。
+- 建置順序為`bash tools/player.sh build`、`bash tools/player.sh check-ui`，再`build`一次；第二次才讀到新契約。
+
+新基準是帕蘭薩斯入城，與舊戰鬥快照不同。1652組對照以合成參數呼叫常駐繪圖函式，快照提供已載入的機器環境；戰鬥場景本身的記憶體內容不在本基準內。promo-capture.sh與finish-scene.sh的戰鬥模式仍指向已刪快照，需要時另建戰鬥快照。正常玩家抽驗`player-sample`未重跑，build-info的normal_player_sample_verified為false，不影響READY判定。
+
+## CONFORMED：查驗「Enter」在原版換頁後退場
+
+使用者回報進城後底列左側殘留「輸入」字框。以`quiz.state`無頭追蹤原版對(8,189)至(56,197)的寫入：
+
+| 步數 | 原版動作 | 顯示頁 |
+|---|---|---|
+| 430,018,873 | 填色清(8,8,304,176)，查驗正文消失，底列未清 | 0 |
+| 430,051,424 | 01E7:0266在0x4000頁底列畫石框底圖 | 0 |
+| 約430,260,792 | 翻頁顯示0x4000 | 0x4000 |
+| 430,918,151 | 01E7:0941以鎖存器複製重寫0頁底列 | 0x4000 |
+| 457,059,652 | 「Press Return to continue.」畫在x=63至265 | 0x4000 |
+
+原版沒有用填色或文字蓋過「Enter」，新提示也不與它相交，所以既有的填色清除與底列替換都接不到。答錯時原版先填色清(8,189,304,8)再重印「Enter」，既有填色規則已處理。
+
+[ui_cold_prompts.go](../../tools/ui_cold_prompts.go)對正式17筆綁定的`startup.quiz-enter`：
+
+- 字形繪製中的實際顯存寫入決定它所在的頁。
+- 查驗頁號、題號與標題三個詞框仍在時不動作，游標與回顯寫入不影響。
+- 正文清除後，顯示頁離開它所在的頁，或同頁整個字框都被重寫，才撤除；另一頁的寫入或局部寫入不算。每次寫入先以底列y=189過濾。
+- 不改原版答案判定、查驗文字、亂數或存檔。
+
+GUI冷啟動作答進城的`ui-diagnostics.json`，修正前冷啟動詞框留有`startup.quiz-enter`，修正後只剩隊伍標題。修正前後同時點的進城畫格只差在640×400的(16,378)至(95,393)，即原生(8,189)至(47,196)的1280像素，其餘相同；查驗畫面仍顯示「輸入」與自動填入的答案。證據在`footer-research-20261031/`的red-r1、green-r1與green-r2。

@@ -227,7 +227,7 @@
 | [music_cues.go](tools/music_cues.go)、[原版探針](tools/music_cue_probe.go)、[player_music.go](tools/player_music.go)、[解碼與資料核對](tools/player_music_assets.go)、[音樂測試](tools/player_music_assets_test.go) | 原版遠呼叫的只讀開始／停止／音量觀察；音樂獨立於圖像HD、語言與縮放，正式TSV工具列及F8控制；證據與聽驗限制見規格006。 |
 | [player_music_inputs.py](tools/player_music_inputs.py)、`workplace/probe/music-go-deps/` | 固定oggvorbis v1.0.5及vorbis v1.0.2；`music-hd.sh deps`首次建立，建置前核zip與每個解壓成員。只產生本作modfile，不修改SDK或共用模組快取。 |
 | [player-audio-image.sh](tools/player-audio-image.sh)、[Dockerfile.player-audio](tools/Dockerfile.player-audio)、[asound-pulse.conf](tools/asound-pulse.conf) | 固定Go映像的桌面音訊延伸，只補ALSA至PulseAudio橋接；使用`bash tools/player-audio-image.sh`，既存映像先驗。啟動只連目前UID的socket；無裝置保留遊戲。 |
-| [player_ui_contract.py](tools/player_ui_contract.py)、[高清文字守衛](tools/player_text_hd_test.go) | `bash tools/player.sh check-ui player-整合目錄`重跑既有介面、音樂、地圖及高清文字／遮罩守衛；沿用原版IRQ根收據，輸出本機ui-contract.json，不重新執行全量繪圖父批。 |
+| [player_ui_contract.py](tools/player_ui_contract.py)、[高清文字守衛](tools/player_text_hd_test.go) | `bash tools/player.sh check-ui player-整合目錄`重跑全部介面、音樂、地圖、查驗及高清文字／遮罩測試，16組原版IRQ對照以verify-base快照執行，不得略過；輸出本機ui-contract.json，不重新執行全量繪圖父批。 |
 | [圖片文字規格](docs/spec/005-render-owner.md#ready圖片文字的語言獨立替換)、[picture_text.go](tools/picture_text.go)、[picture_text_inputs.py](tools/picture_text_inputs.py) | 圖片文字的來源核對、繪製前底圖保存、Go文字安全框及獨立於HD的繁中替換；接入在[player_picture_text.go](tools/player_picture_text.go)，本機資料為正式入口的picture-text目錄 |
 | [player.sh](tools/player.sh)、[規格 003](docs/spec/003-player-toolbar.md) | 中文整合與頂端工具列入口；`prepare`／`build`／`run`，來源只讀，字級、原框閱讀及工具列已定稿，HD與說明世界地圖已接入；目前數量與限制見CONTEXT |
 | [guide_inputs.py](tools/guide_inputs.py)、[guide-ui.zh-TW.tsv](text/guide-ui.zh-TW.tsv) | 編譯本機18章攻略與52張重繪閱讀圖，核對來源及增補字模；沿規格003的F7、工具列與原框查閱，全文及完整圖集不入Git |
@@ -243,6 +243,7 @@
 | [規格 005](docs/spec/005-render-owner.md)、[研究 007](docs/re/007-render-ownership.md) | Go 命令畫布、交易及完整畫格提交；入口 `tools/player_render_owner.go`、`tools/player_owned_drivers.go`、`tools/render_scene_state.go`、`tools/player_scene_backend.go`。正式玩家不取原版整張 RGB；來源掛勾在規格目錄，不回寫原版。代表路徑零原版寫入與全場景覆蓋分開記錄 |
 | [player_text_format.go](tools/player_text_format.go)、[規格005](docs/spec/005-render-owner.md#ready帶變數的完整顯示來源) | 正式TSV格式與原版實際輸出配對；保留數值、加值、未知姓名及檔名，不讀寫原版varargs或語意資料 |
 | [player_quiz.go](tools/player_quiz.go)、[查驗測試](tools/player_quiz_test.go) | 防拷查驗自動填入：解DQK.EXE題庫，查驗文字都在畫面上時讀原版答案緩衝並送一般鍵盤輸入，玩家自行按Enter；不改原版比較 |
+| [verify-base.sh](tools/verify-base.sh)、[verify_base_probe.go](tools/verify_base_probe.go) | 無頭dosgolem從冷啟動以一般按鍵讀原附A隊、作答並進帕蘭薩斯，存查驗與入城兩份快照及收據；`bash tools/verify-base.sh verify-base-新名稱`。函式對照與介面IRQ對照的基準，快照只留本機 |
 | [player-sample.sh](tools/player-sample.sh)、[視窗驅動](tools/player_gui_probe.c)、[XTEST按鍵](tools/player_xtest_key.go)、[檢查器](tools/player_sample_check.py) | Docker內的正常介面代表抽驗；使用既有XGB／XTEST產生伺服器鍵盤事件，第二參數可選本機對照程式，來源與影像參考唯讀；結束後核畫格、控制與未完成交易，產生checks.json |
 | [render-abi.sh](tools/render-abi.sh)、[player-sample.sh](tools/player-sample.sh) | 限定繪圖函式與正常玩家介面抽驗；前者可加 `gpu` 對照真實素材的 GPU／CPU 輸出，後者只送正常 X11 輸入。新目錄與收據皆留 `workplace/probe/`，範圍見規格 005 |
 | [透明圖片事件續畫](docs/re/007-render-ownership.md#2026-10-28透明圖片事件續畫) | CX保留剩餘像素數，DX保留整列寬度；正式回歸1652組及森林示範已有收據。沿既有Go畫布保持圖片身分，不擴張為全場景覆蓋 |
@@ -312,7 +313,7 @@ bash tools/research-storage.sh dedup-detach /project/workplace/probe/cleanup-spa
 
 後續回報bug時，以`workplace/probe/player-current/`的正式95份輸入、HD、音樂、
 圖片中文及session為維護基線，不從歷史批次重建整個工作區。程式建置入口為
-`bash tools/player.sh build`；來源為`tools/player_sources.txt`的28份Go檔、
+`bash tools/player.sh build`；來源為`tools/player_sources.txt`的29份Go檔、
 `workplace/dosgolem`固定SDK及`music-go-deps`，建置命令與唯讀依賴見[player.sh](tools/player.sh)。
 缺少完整素材時，先依第3節的私人Release下載還原，不以舊研究截圖代替正式資產。
 
@@ -332,12 +333,15 @@ bash tools/research-storage.sh dedup-detach /project/workplace/probe/cleanup-spa
 歷史文件中的畫格與詳細重播路徑可能已精簡；原驗收摘要描述當時結果，不表示原始輸出仍存在。
 私人Release及既有tag保持。
 
-本機現行完整版v.1.0.6-20261031包含遊戲，三個成品留在dist-all同版本full-local。
-2026-10-31使用者刪除整個workplace/probe；player-current由v.1.0.5完整包還原，ABI、介面合約父批與研究快照已不存在，
-build-info只能為DRAFT，`player.sh run`會拒絕，本機遊玩改用dist-all完整版。重建READY需先重新取得這些快照與收據。
-若需重跑封包驗收，先執行`bash tools/restore-package-stage.sh v.1.0.6-20261031`，
-再以新批次名執行`bash tools/package-smoke.sh v.1.0.6-20261031 appimage appimage-bug-01`。
-Windows批次入口使用`DQK_VERIFY_WINDOWS_LAUNCHER=1 bash tools/package-smoke.sh v.1.0.6-20261031 windows windows-bug-01`。
+本機現行完整版v.1.0.7-20261031包含遊戲，三個成品留在dist-all同版本full-local。
+2026-10-31使用者刪除整個workplace/probe；player-current由v.1.0.5完整包還原。驗證基準改由
+`bash tools/verify-base.sh verify-base-新名稱`從冷啟動重生快照，1652組函式對照與介面契約依
+[規格005](docs/spec/005-render-owner.md#conformed冷啟動驗證基準重建)重跑。READY需依序`player.sh build`、
+`check-ui`、再`build`；`verify-base-20261031-r2`、`render-abi-rebuild-20261031-r1`及重生的
+`hd-assets-20261026-r1`是建置檢查的必要輸入，不可清除。
+若需重跑封包驗收，先執行`bash tools/restore-package-stage.sh v.1.0.7-20261031`，
+再以新批次名執行`bash tools/package-smoke.sh v.1.0.7-20261031 appimage appimage-bug-01`。
+Windows批次入口使用`DQK_VERIFY_WINDOWS_LAUNCHER=1 bash tools/package-smoke.sh v.1.0.7-20261031 windows windows-bug-01`。
 AppImage模式直接執行完整成品，還原器只驗其SHA，不另重建原生Linux ZIP；Windows／macOS仍從ZIP還原。
 實際FUSE掛載、Windows原生及macOS真機驗收尚未完成，不以容器或交叉編譯取代。
 

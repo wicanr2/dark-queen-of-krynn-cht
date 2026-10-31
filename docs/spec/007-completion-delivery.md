@@ -2,12 +2,19 @@
 
 狀態：CONFORMED，限本規格的代表抽驗與本機交付範圍。2026-10-29使用者明確指定先完成串接，再抽驗兩輪，沒有問題即收尾、正式打包與錄製推廣影片；平台已選Windows、Linux、macOS。不重開已接受的HD圖稿。
 
+## CONFORMED：v.1.0.7驗證基準重建與查驗底列修正重打包
+
+2026-10-31使用者要求重建驗證並處理進城後殘留的「輸入」，資源從v.1.0.5還原；v.1.0.5與私人Release沒有研究快照，使用者選定以新冷啟動快照為基準，並重包三平台，不上傳、不push。驗證基準與修正見[規格005](005-render-owner.md#conformed冷啟動驗證基準重建)及[查驗「Enter」退場](005-render-owner.md#conformed查驗enter在原版換頁後退場)。
+來源938025b2daaf46c06f05fd911e6944c83eeddad5，release-build後build-info為READY。本機成品在dist-all/v.1.0.7-20261031/full-local，四個資產目錄樹雜湊與v.1.0.5相同。
+appimage、windows與windows-launcher沿既有正常入口驗收；smoke/footer以Wine下的Windows執行檔與正式Linux執行檔驗查驗自動填入與進城底列，並保留v.1.0.6程式的殘留對照。
+實際FUSE掛載、Windows原生與macOS真機仍未驗；正常玩家抽驗player-sample未重跑。
+
 ## CONFORMED：v.1.0.6防拷查驗自動填入重打包
 
 2026-10-31使用者要求防拷密碼直接填入，選定自動填入、自己按Enter，並重包三平台；不上傳、不push。功能見[規格003](003-player-toolbar.md#conformed防拷查驗自動填入)。
 使用者刪除workplace/probe後，player-current由v.1.0.5 Windows完整包還原，四個資產目錄樹雜湊與v.1.0.5交付核對相同；打包所需FluidR3授權亦由該包取回。來源da22b37262a91eb78b060f499fe34007edc0e2ae。
 本機成品在dist-all/v.1.0.6-20261031/full-local。appimage、windows-r2、windows-launcher-r2沿既有正常入口驗收，Windows首輪因主機負載逾時後重跑通過；smoke/quiz驗Wine下Windows與正式Linux的自動填入與進城。
-build-info為DRAFT，因ABI與介面合約收據已刪；繪圖驅動與場景模型來源自6276837未變。實際FUSE掛載、Windows原生與macOS真機仍未驗。
+當時build-info為DRAFT，v.1.0.7重建驗證基準後恢復READY。實際FUSE掛載、Windows原生與macOS真機仍未驗。
 
 ## CONFORMED：v.1.0.5滑鼠修正重打包
 
