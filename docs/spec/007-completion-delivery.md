@@ -2,6 +2,13 @@
 
 狀態：CONFORMED，限本規格的代表抽驗與本機交付範圍。2026-10-29使用者明確指定先完成串接，再抽驗兩輪，沒有問題即收尾、正式打包與錄製推廣影片；平台已選Windows、Linux、macOS。不重開已接受的HD圖稿。
 
+## CONFORMED：v.1.0.5滑鼠修正重打包
+
+2026-10-31使用者回報Windows版主選單無法用滑鼠點選，選擇一併修正游標遮擋並重包三平台，不上傳、不push。修正內容見[規格003](003-player-toolbar.md#conformed遊戲區滑鼠座標)與[規格005](005-render-owner.md#conformed原版游標位於中文框上)。
+來源0411c3b77f9d4a5e44d37c09a7baa7349e06e6b0，沿v.1.0.4的[package-full.sh](../../tools/package-full.sh)、映像與三包形式；從player-current另建隔離快照，四個資產目錄與維護版相同。快照先過check-ui 40項，build-info為READY。
+本機成品在dist-all/v.1.0.5-20261031/full-local。appimage、windows與windows-launcher沿既有正常入口驗收；smoke/mouse另以Wine下的Windows執行檔與正式Linux執行檔驗滑鼠移動、點選與中文框上的游標，出貨v.1.0.4 Windows執行檔在同腳本重現使用者症狀。
+實際FUSE掛載、Windows原生與macOS真機仍未驗。v.1.0.4成品保留為舊版。
+
 ## CONFORMED：三平台完整版與Linux AppImage重打包
 
 2026-10-30使用者要求重新打包三平台完整版，必須包含遊戲，Linux指定AppImage，追蹤[Issue19](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/19)。

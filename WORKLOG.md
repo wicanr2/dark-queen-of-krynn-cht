@@ -3597,3 +3597,19 @@ AppImage沿既有kol-package固定映像0b933af1238ab5839ad7a64b6ae05f069f57cb85
 正式交付dist-all/v.1.0.4-20261030/full-local：Windows ZIP1270496462 bytes、SHA3ee08f136ec06e665ba6f7d8854851aa557958829940f165914f6fae91559005；Linux AppImage1109621240 bytes、SHA2610aea635c40faf8c778276c7d829173df8d72ddd1964bfa56f50f8a8fe4999；macOS ZIP1274724058 bytes、SHA9a6646f2d58b09d8b9a85faa5bd90190e256f1a3b47c775b0ffcb7355233ab32。SHA256SUMS為149cdce9d9f5dba698ba42fa3575c69b102f8d0131dac1225dfb20714ab8c4f9；smoke/delivery-checks為4d8ee09e0971a75724f9990d314a6c7876596ca9a9877eafe3ee60fcf3d5fc5c。各包獨立包含遊戲，沒有用分段或差異包代替本次完整版。
 
 完整內容與GUI核對通過後，清隔離快照7196檔、封包／AppDir／解壓／SquashFS暫存29053檔、失敗Wine環境844檔及Go快取453.7MiB；通過Wine環境及測試工具亦清除。保留三個必要成品、精簡smoke、原始維護來源及既有影片。舊私人備份仍只還原v.1.0.3；新版還原器認得AppImage清單，重跑GUI時直接執行成品。實際FUSE掛載、Windows原生、macOS真機及人工聽感未驗，不宣稱交叉編譯等於真機。來源、建置log及清理結果在release-appimage-20261030，現況見CONTEXT。新工具來源a608b0b先固定；後續啟動驗證入口及文件隨本輪main提交，推送與新tag結果以[Issue19](https://github.com/wicanr2/dark-queen-of-krynn-cht/issues/19)收尾回讀為準。使用者新增文字與交換檔未動。
+
+## 2026-10-31：遊戲區滑鼠座標、游標遮擋與v.1.0.5重包
+
+使用者回報Windows版跳過示範後，左上角盾形游標只能小範圍移動，所有選項點選無反應。命中除錯、逆向與跨平台打包路由，先建可重跑的Xvfb滑鼠抽驗：冷啟動、Return跳過開場、XWarpPointer移到九個位置後擷圖量盾牌外框。Linux維護版f958c05b同樣重現，指標在(620,380)時盾牌停在(144,36)；水平約1/4、垂直約1/8。
+
+無頭oracle統計INT 33h呼叫：開機AX=0、4、7、8、0Ch、0Fh各少量，之後AX=3輪詢約38000次，範圍為x 0..2559、y 0..1599。dosgolem回報CX＝保存X×2、DX＝保存Y，盾牌位置符合讀值÷8再減5。改送遊戲單位後七個位置的盾牌都在目標左上5像素。DQK.EXE內只有通用INT 33h包裝，靜態沒有逐一追呼叫端常數，證據等級列強推論。
+
+修正playerMouse後，游標可到達中文字，盾形與劍形游標在中文框內被中文底色與高清字墨蓋住。移動滑鼠時原版各呼叫一次sub_2485C、sub_24C92、sub_24CC4，靜止時0次，屬既有readback-scope暫存寫入。第一版在場景模型新增暫存標記，畫面通過，但player_render_check要求player_owned_drivers.go與render_scene_state.go等於1652組ABI收據，改動會讓建置降為DRAFT。撤回該版，改用既有判準「Asset仍在且Visible為false」在player_render_owner.go補回游標附近像素；畫格與第一版逐像素相同，兩個受守衛檔案未改。
+
+點選抽驗共做修正版9次、只修座標的對照版3次。修正版7次進角色管理；1次Return未跳過開場；1次按鈕高亮後停住，當輪以強制結束收尾而沒有診斷，其後6次同條件含標題停留25秒都沒重現。對照版也有1次開場未跳過，3次中2次成功，正常關窗的各輪renderer、list與cold皆無待辦。未解釋的那1次保留為證據界線。
+
+提交0411c3b含換算、游標補回、兩項單元測試及介面合約測試集合。從player-current另建player-release-20261031，7181檔逐檔相同；check-ui 40項通過，release-build後build-info為READY。package-full產出v.1.0.5-20261031三包：Windows ZIP 1270499013 bytes、SHA 89980a115262ad405b00c87161959f0a282f9b2946694d08e83847f9b3bd7de3；Linux AppImage 1109625336 bytes、SHA 5b70908dc2d469541b1c831607e97945734062415aba6a1992d40058ea133258；macOS ZIP 1274728333 bytes、SHA c48ba0d3554d2125dc6754292ae2983de1ac082f0324219cb24a9aa4b702a06c。
+
+appimage、windows、windows-launcher三組package-smoke通過。Wine下Windows封包的滑鼠抽驗除開場外與正式Linux逐像素相同，點「開始遊戲」進角色管理；從v.1.0.4 ZIP取出的出貨執行檔3dc4021a在同腳本中盾牌最遠到(159,55)、點選無反應，與使用者回報一致。收據在v.1.0.5的smoke/mouse/mouse-checks.json及delivery-checks.json，精簡證據與重現腳本在release-mousefix-20261031。
+
+收尾刪除隔離快照、封包暫存（約6GiB）、兩份測試建置與19個滑鼠抽驗目錄的指令，被工具安全檢查擋下而沒有執行；Go快取同批未清，留待使用者處理。player-current維護程式仍為f958c05b。沒有push、建立Issue、tag或Release，使用者筆記與交換檔未動。

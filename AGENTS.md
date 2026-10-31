@@ -331,10 +331,10 @@ bash tools/research-storage.sh dedup-detach /project/workplace/probe/cleanup-spa
 歷史文件中的畫格與詳細重播路徑可能已精簡；原驗收摘要描述當時結果，不表示原始輸出仍存在。
 私人Release及既有tag保持。
 
-本機現行完整版v.1.0.4-20261030包含遊戲，三個成品留在dist-all同版本full-local。
-若需重跑封包驗收，先執行`bash tools/restore-package-stage.sh v.1.0.4-20261030`，
-再以新批次名執行`bash tools/package-smoke.sh v.1.0.4-20261030 appimage appimage-bug-01`。
-Windows批次入口使用`DQK_VERIFY_WINDOWS_LAUNCHER=1 bash tools/package-smoke.sh v.1.0.4-20261030 windows windows-bug-01`。
+本機現行完整版v.1.0.5-20261031包含遊戲，三個成品留在dist-all同版本full-local。
+若需重跑封包驗收，先執行`bash tools/restore-package-stage.sh v.1.0.5-20261031`，
+再以新批次名執行`bash tools/package-smoke.sh v.1.0.5-20261031 appimage appimage-bug-01`。
+Windows批次入口使用`DQK_VERIFY_WINDOWS_LAUNCHER=1 bash tools/package-smoke.sh v.1.0.5-20261031 windows windows-bug-01`。
 AppImage模式直接執行完整成品，還原器只驗其SHA，不另重建原生Linux ZIP；Windows／macOS仍從ZIP還原。
 實際FUSE掛載、Windows原生及macOS真機驗收尚未完成，不以容器或交叉編譯取代。
 
