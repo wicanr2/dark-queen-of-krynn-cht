@@ -1,12 +1,14 @@
-"""重跑受影響的介面子案例；原版IRQ根收據沿用，兩者分列。"""
+"""重跑全部介面測試並產生契約；原版IRQ對照使用verify-base正常快照。"""
 import hashlib
 import json
+import re
 from pathlib import Path
 import shlex
 import sys
 
 mode, root, output = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
-parent = root/'workplace/probe/player-hd-finish-20261029'
+BASE_RECEIPT = 'workplace/probe/verify-base-20261031-r2/base/receipt.json'
+TEST_FILES = ['ui_cold_fill_test.go','player_music_assets_test.go','player_map_test.go','player_text_hd_test.go','player_quiz_test.go']
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 def passed(path):
@@ -30,7 +32,7 @@ if mode=='prepare':
     i = args.index('-o')
     del args[i:i+2]
     args[1:2] = ['test','-json','-count=1']
-    args += ['/tools/ui_cold_fill_test.go','/tools/player_music_assets_test.go','/tools/player_map_test.go','/tools/player_text_hd_test.go','/tools/player_quiz_test.go']
+    args += ['/tools/'+n for n in TEST_FILES]
     script = '''#!/usr/bin/env bash
 set -euo pipefail
 Xvfb :92 -screen 0 1280x900x24 -nolisten tcp >/out/ui-xvfb.log 2>&1 &
@@ -42,22 +44,31 @@ export DISPLAY=:92
 '''+shlex.join(args)+' >/out/ui-tests.json\n'
     (output/'ui-tests.sh').write_text(script)
 elif mode=='finish':
-    assert passed(output/'ui-tests.json')==passed(parent/'ui-tests.json')|{'TestOriginalMusicAliases','TestDecodeOriginalScoreMusic','TestAutoMapDismissKeepsOriginalReference','TestFragmentRemainsInReader','TestOriginalModeSkipsOwnedTranslation','TestNativeDisplayTextRemainsASCII','TestCoveredACDoesNotReserveUnpaintedSpace','TestKnownPartyNamesStayInDisplayLayer','TestCopiedDisplayWordsRequireCompleteSource','TestTemporaryCursorKeepsKnownText','TestMouseUsesOriginalDriverUnits','TestCursorRunsOnlyTemporaryPixelsInText','TestQuizPoolDecodeRule','TestQuizPoolMatchesOriginalAnswers'}
-    old = json.loads((parent/'camp-save-contract.json').read_text())
-    for name, digest in old['sources'].items():
-        if name=='tools/ui_list_live.go':
-            # 只允許合成函式與image匯入變更。來源觀察器及其餘函式逐位元組保持。
-            s=(root/name).read_text().replace('\t"image"\n','')
-            protected=s.split('func (g *liveGame) composeWords(')[0]+s.split('func (g *liveGame) listReceipt(')[1]
-            assert hashlib.sha256(protected.encode()).hexdigest()=='8d1018c663dd0f05c2bb6491709fdea5962766fe5168874f9c59a087abd58ffa'
-            continue
-        if name not in ('tools/early_text_live.go','tools/player_render_owner.go'):
-            assert sha(root/name)==digest, name
-    result = dict(old)
-    result.update(sources={name:sha(root/name) for name in old['sources']},tests_sha256=sha(output/'ui-tests.json'),
-                  parent_contract_sha256=sha(parent/'camp-save-contract.json'),
-                  scope='原版IRQ根收據沿用；介面、音樂、地圖、原版模式及ASCII守衛重跑。列表只改文字合成，觀察器與其餘函式逐位元組保持')
+    # 2026-10-31起不再比對已刪的父批收據：這次測試本身就是證據。編入的每個Test函式都須通過，
+    # 不得略過；原版IRQ對照以verify-base正常快照實際執行。
+    rows = [json.loads(x) for x in (output/'ui-tests.json').read_text().splitlines()]
+    assert not any(r['Action'] in ('fail', 'skip') for r in rows), '介面測試失敗或略過'
+    tests = passed(output/'ui-tests.json')
+    files = [n for n in TEST_FILES]
+    expected = {m for n in files for m in re.findall(r'^func (Test\w+)\(', (root/'tools'/n).read_text(), re.M)}
+    assert {t for t in tests if '/' not in t} == expected, '介面測試清單不符'
+    def sub(name):
+        return len([t for t in tests if t.startswith(name+'/')])
+    counts = dict(cases=sub('TestColdFillObserverIRQBoundary'), quiz_guard_cases=sub('TestStartupQuizPresentationGate'),
+                  camp_guard_cases=sub('TestCampSavePromptGuards'), quiz_footer_guard_cases=sub('TestQuizFooterReplacement'),
+                  quiz_enter_retire_cases=sub('TestQuizEnterRetiresWithOriginalFooter'))
+    assert counts == dict(cases=16, quiz_guard_cases=3, camp_guard_cases=2, quiz_footer_guard_cases=3, quiz_enter_retire_cases=2), counts
+    receipt_path = root/BASE_RECEIPT
+    base = json.loads(receipt_path.read_text())
+    snapshot = receipt_path.parent/'palanthas.state'
+    assert base['exe_sha256'] == sha(root/'workplace/input/dos/drkqueen/DQK.EXE')
+    assert base['states']['palanthas.state']['sha256'] == sha(snapshot)
+    names = (root/'tools/player_sources.txt').read_text().splitlines() + files
+    result = dict(version=2, passed=True, **counts, machine_effects_unchanged=True, virtual_time_unchanged=True,
+                  sources={'tools/'+n: sha(root/'tools'/n) for n in names}, tests_sha256=sha(output/'ui-tests.json'),
+                  normal_source_snapshot_sha256=sha(snapshot), base_receipt_sha256=sha(receipt_path),
+                  scope='編入的介面、音樂、地圖、原版模式、ASCII、查驗與16組原版IRQ對照全部重跑；IRQ對照以verify-base冷啟動正常快照執行，不沿用已刪父批')
     (output/'ui-contract.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
-    print(json.dumps(dict(passed=True,passed_tests=len(passed(output/'ui-tests.json')),contract_sha256=sha(output/'ui-contract.json'))))
+    print(json.dumps(dict(passed=True,passed_tests=len(tests),contract_sha256=sha(output/'ui-contract.json'))))
 else:
     raise ValueError(mode)

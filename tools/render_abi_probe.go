@@ -158,7 +158,7 @@ func main() {
 		boundaryChecks++
 	}
 	gate.Close()
-	state := filepath.Join(root, "workplace/probe/battle-continuation-20261025/control-r1/final.state")
+	state := filepath.Join(root, "workplace/probe/verify-base-20261031-r2/base/palanthas.state")
 	cases := []probeCase{}
 	for _, height := range []uint16{1, 3} {
 		for _, width := range []uint16{2, 5, 10} {

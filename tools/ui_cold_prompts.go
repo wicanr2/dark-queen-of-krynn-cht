@@ -56,6 +56,17 @@ type coldPromptUI struct {
 	ClearPages       []uint32
 	VisiblePage      uint32
 	VisibleKnown     bool
+	QuizEnter        quizEnterTrack
+}
+
+// 正式綁定的查驗「Enter」在底列。原版作答後不以填色清它：先清正文，再在另一頁畫好底圖並翻頁，
+// 最後以顯存複製蓋回原頁。Page為字形實際寫入的頁，Cover記錄正文清除後原頁字框被重寫的像素。
+const quizEnterRow = 189
+
+type quizEnterTrack struct {
+	Page  uint32
+	Known bool
+	Cover []bool
 }
 
 func (u *coldPromptUI) snapshot() []listWord {
@@ -102,6 +113,88 @@ func (u *coldPromptUI) replaceQuizFooter(word listWord) bool {
 	}
 	return removed
 }
+func (u *coldPromptUI) quizEnterWord() ([2]int, listWord, bool) {
+	for p, w := range u.Words {
+		if w.Key == "startup.quiz-enter" && w.Group == "quiz" && w.Width > 0 {
+			return p, w, true
+		}
+	}
+	return [2]int{}, listWord{}, false
+}
+
+// 查驗頁號、題號與標題仍在時，查驗尚未結束；這段期間游標或回顯寫到底列都不撤除「Enter」。
+func (u *coldPromptUI) quizBodyShown() bool {
+	for _, w := range u.Words {
+		if w.Group == "quiz" && (w.Key == "startup.quiz-page" || w.Key == "startup.quiz-word" || w.Key == "startup.quiz-heading") {
+			return true
+		}
+	}
+	return false
+}
+
+func (u *coldPromptUI) retireQuizEnter(pos [2]int, reason string, detail map[string]any) {
+	delete(u.Words, pos)
+	u.QuizEnter = quizEnterTrack{}
+	if u.Owner != nil && u.Owner.o != nil {
+		detail["reason"] = reason
+		u.Owner.coldPromptLog("quiz-enter-retired", detail)
+	}
+}
+
+// 只沿實際顯存寫入：字形繪製中的寫入決定所在頁；查驗正文已被原版清除後，
+// 同頁整個字框都被重寫才撤除。另一頁的底圖或局部游標寫入都不算。
+func (u *coldPromptUI) quizEnterWrite(hit oracle.VideoWriteEvent) {
+	if len(u.Config.Bindings) == 15 || !hit.Unchained || hit.Mode != 0x13 || hit.Pitch != 80 || hit.Offset >= 0x8000 {
+		return
+	}
+	// 每次顯存寫入都會經過這裡；先以綁定固定的底列y=189過濾，再查詞框。
+	rel := int(hit.Offset & 0x3fff)
+	y, x, page := rel/80, rel%80*4, hit.Offset&0x4000
+	if y < quizEnterRow || y >= quizEnterRow+8 {
+		return
+	}
+	pos, w, ok := u.quizEnterWord()
+	if !ok || w.Y != quizEnterRow {
+		return
+	}
+	if p := u.Prints[w.Key]; p != nil && !p.Complete {
+		for plane := 0; plane < 4; plane++ {
+			if hit.MapMask&(1<<plane) != 0 && x+plane >= w.X && x+plane < w.X+w.Width {
+				u.QuizEnter = quizEnterTrack{Page: page, Known: true}
+				return
+			}
+		}
+		return
+	}
+	if !u.QuizEnter.Known || page != u.QuizEnter.Page || u.quizBodyShown() {
+		return
+	}
+	if len(u.QuizEnter.Cover) != w.Width*8 {
+		u.QuizEnter.Cover = make([]bool, w.Width*8)
+	}
+	for plane := 0; plane < 4; plane++ {
+		if px := x + plane; hit.MapMask&(1<<plane) != 0 && px >= w.X && px < w.X+w.Width {
+			u.QuizEnter.Cover[(y-w.Y)*w.Width+px-w.X] = true
+		}
+	}
+	for _, covered := range u.QuizEnter.Cover {
+		if !covered {
+			return
+		}
+	}
+	u.retireQuizEnter(pos, "page-overwritten", map[string]any{"page": page})
+}
+
+// 查驗正文清除後，原版翻到另一頁顯示，「Enter」所在頁已不在畫面上。
+func (u *coldPromptUI) quizEnterDisplay(display uint32) {
+	if !u.QuizEnter.Known || len(u.Config.Bindings) == 15 || display&0x4000 == u.QuizEnter.Page || u.quizBodyShown() {
+		return
+	}
+	if pos, _, ok := u.quizEnterWord(); ok {
+		u.retireQuizEnter(pos, "page-hidden", map[string]any{"page": u.QuizEnter.Page, "display_start": display})
+	}
+}
+
 func (u *coldPromptUI) held() bool {
 	if len(u.Config.Bindings) == 15 {
 		u.syncPages()
@@ -129,6 +222,9 @@ func (u *coldPromptUI) held() bool {
 // 同一個實體頁再度顯示，不代表舊文字仍有效。離開後須等待原版覆寫。
 func (u *coldPromptUI) syncPages() {
 	if len(u.Config.Bindings) != 15 {
+		if u.QuizEnter.Known {
+			u.quizEnterDisplay(u.Owner.o.VideoLayoutState().DisplayStart)
+		}
 		return
 	}
 	if len(u.Words) == 0 && len(u.ClearPages) == 0 {
@@ -170,6 +266,7 @@ func coldWritePage(known *bool, page *uint32, hit oracle.VideoWriteEvent) {
 	*page = next
 }
 func (u *coldPromptUI) videoWrite(hit oracle.VideoWriteEvent) {
+	u.quizEnterWrite(hit)
 	if len(u.Config.Bindings) != 15 {
 		return
 	}

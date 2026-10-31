@@ -49,7 +49,15 @@ sources += [root / "tools" / n for n in ["early_text_live.go", "picture_text.go"
 sources += [root / "tools" / n for n in ["music_cues.go", "player_music_inputs.py", "player_ui_contract.py"]]
 sources += [root / "tools" / n for n in ["completion_audit.py", "player_sources.txt"]]
 sources += [root / "tools/text_hd_inputs.py"]
-abi_root = root / "workplace/probe/render-abi-resume-20261028-r1"
+# 2026-10-31原收據與戰鬥快照已刪，以verify-base冷啟動正常快照重跑1652組。
+base_receipt_path = root / "workplace/probe/verify-base-20261031-r2/base/receipt.json"
+base_snapshot = base_receipt_path.parent / "palanthas.state"
+base_snapshot_sha = None
+if base_receipt_path.is_file() and base_snapshot.is_file():
+    base_receipt = json.loads(base_receipt_path.read_text())
+    if base_receipt.get("exe_sha256") == sha(exe) and base_receipt["states"]["palanthas.state"]["sha256"] == sha(base_snapshot):
+        base_snapshot_sha = sha(base_snapshot)
+abi_root = root / "workplace/probe/render-abi-rebuild-20261031-r1"
 abi_path = abi_root / "evidence.json"
 verified = False
 if abi_path.is_file():
@@ -58,6 +66,7 @@ if abi_path.is_file():
                 and abi.get("virtual_time_verified") is True and abi.get("cases") == 1652
                 and abi.get("inputs", {}).get("original_exe") == sha(exe)
                 and abi.get("inputs", {}).get("bindings") == sha(bindings)
+                and base_snapshot_sha is not None and abi.get("inputs", {}).get("normal_source_snapshot") == base_snapshot_sha
                 and abi.get("receipt_sha256") == sha(abi_root / "abi-initial.json")
                 and all(sha(root / "tools" / name) == abi.get("sources", {}).get(name) for name in [
                     "player_owned_drivers.go", "render_scene_state.go", "player_video_overlay.py",
@@ -66,24 +75,22 @@ if abi_path.is_file():
     verified = verified and len(cases)==1652 and all(
         row.get("Passed") is True and ("reject" in row["Name"] or row["DirectWrites"]==0)
         for row in cases)
-ui_path = root / "workplace/probe/player-coverage-20261028/cold-fill-contract-final.json"
-camp_ui_path = root / "workplace/probe/player-hd-finish-20261029/camp-save-contract.json"
-if (output / "ui-contract.json").is_file():
-    camp_ui_path = output / "ui-contract.json"
-if camp_ui_path.is_file():
-    ui_path = camp_ui_path
+# 介面契約只採本次check-ui在同一整合目錄重跑的結果，並要求建置後來源未再變動。
+ui_path = output / "ui-contract.json"
 ui_verified = False
-if ui_path.is_file():
+if ui_path.is_file() and (output / "ui-tests.json").is_file():
     ui = json.loads(ui_path.read_text())
-    ui_verified = (ui.get("passed") is True and ui.get("cases") == 16 and ui.get("quiz_guard_cases") == 3
+    ui_verified = (ui.get("version") == 2 and ui.get("passed") is True and ui.get("cases") == 16
+                   and ui.get("quiz_guard_cases") == 3 and ui.get("camp_guard_cases") == 2
+                   and ui.get("quiz_footer_guard_cases") == 3 and ui.get("quiz_enter_retire_cases") == 2
                    and ui.get("machine_effects_unchanged") is True and ui.get("virtual_time_unchanged") is True
-                   and all(ui.get("sources", {}).get(name) == sha(root / name) for name in [
-                       "tools/ui_cold_prompts.go", "tools/ui_list_live.go", "tools/player_render_owner.go",
-                       "tools/early_text_live.go", "tools/ui_cold_fill_test.go"])
-                   and ui.get("tests_sha256") == sha(ui_path.parent / ("ui-tests.json" if ui_path == camp_ui_path else "cold-fill-tests-r4.json"))
-                   and ui.get("root_receipt_sha256") == sha(root / "workplace/probe/player-coverage-20261028/cold-fill-irq-root-r2.json"))
-    if ui_path == camp_ui_path:
-        ui_verified = ui_verified and ui.get("camp_guard_cases") == 2 and ui.get("quiz_footer_guard_cases") == 3
+                   and ui.get("tests_sha256") == sha(output / "ui-tests.json")
+                   and base_snapshot_sha is not None and ui.get("normal_source_snapshot_sha256") == base_snapshot_sha
+                   and ui.get("base_receipt_sha256") == sha(base_receipt_path)
+                   and len(ui.get("sources", {})) > 0
+                   and all((root / name).is_file() and sha(root / name) == digest for name, digest in ui["sources"].items())
+                   and all(ui["sources"].get("tools/" + name) == sha(root / "tools" / name) for name in [
+                       "ui_cold_prompts.go", "ui_list_live.go", "player_render_owner.go", "early_text_live.go", "ui_cold_fill_test.go"]))
 player_sample = root / "workplace/probe/player-sample-canvas-complete-20261026-r1/checks.json"
 for candidate in sorted((root / "workplace/probe").glob("player-sample-*/checks.json")):
     candidate_data=json.loads(candidate.read_text())

@@ -17,7 +17,7 @@ func TestColdFillObserverIRQBoundary(t *testing.T) {
 		t.Skip("需要合法原版及固定研究快照")
 	}
 	original := filepath.Join(root, "workplace/input/dos/drkqueen")
-	snapshot := filepath.Join(root, "workplace/probe/battle-continuation-20261025/control-r1/final.state")
+	snapshot := filepath.Join(root, "workplace/probe/verify-base-20261031-r2/base/palanthas.state")
 	if _, err := os.Stat(snapshot); os.IsNotExist(err) {
 		t.Skip("缺少原版快照")
 	}
@@ -204,6 +204,65 @@ func TestQuizFooterReplacement(t *testing.T) {
 			}
 			if u.replaceQuizFooter(tc.word) {
 				t.Fatal("同一詞框重複退休")
+			}
+		})
+	}
+}
+
+func TestQuizEnterRetiresWithOriginalFooter(t *testing.T) {
+	write := func(u *coldPromptUI, page uint32, x0, x1, y0, y1 int) {
+		for y := y0; y < y1; y++ {
+			for x := x0; x < x1; x += 4 {
+				u.videoWrite(oracle.VideoWriteEvent{Unchained: true, Mode: 0x13, Pitch: 80, Offset: page + uint32(y*80+x/4), MapMask: 15})
+			}
+		}
+	}
+	setup := func() *coldPromptUI {
+		u := &coldPromptUI{Words: map[[2]int]listWord{}, Prints: map[string]*coldPromptPrint{"startup.quiz-enter": {}}}
+		u.Config.Bindings = make([]coldPromptBinding, 17)
+		u.Words[[2]int{8, 189}] = listWord{X: 8, Y: 189, Width: 40, Key: "startup.quiz-enter", Group: "quiz"}
+		u.Words[[2]int{136, 189}] = listWord{X: 136, Y: 189, Width: 32, Key: "other-prompt", Group: "footer"}
+		for n, key := range []string{"startup.quiz-page", "startup.quiz-word", "startup.quiz-heading"} {
+			u.Words[[2]int{24, 16 + n*8}] = listWord{X: 24, Y: 16 + n*8, Width: 80, Key: key, Group: "quiz"}
+		}
+		// 字形繪製中的寫入決定所在頁。
+		write(u, 0, 8, 16, 189, 197)
+		u.Prints["startup.quiz-enter"].Complete = true
+		if !u.QuizEnter.Known || u.QuizEnter.Page != 0 {
+			t.Fatal("沒有記下「Enter」實際所在頁")
+		}
+		// 查驗進行中：整框重寫或翻頁都不撤除。
+		write(u, 0, 8, 48, 189, 197)
+		u.quizEnterDisplay(0x4000)
+		if _, _, ok := u.quizEnterWord(); !ok {
+			t.Fatal("查驗進行中撤除「Enter」")
+		}
+		// 原版填色清除查驗正文。
+		u.erase(8, 8, 304, 176)
+		// 另一頁的底圖、原頁的局部游標寫入及仍顯示原頁都不撤除。
+		write(u, 0x4000, 0, 320, 189, 197)
+		write(u, 0, 8, 24, 189, 197)
+		u.quizEnterDisplay(0)
+		if _, _, ok := u.quizEnterWord(); !ok {
+			t.Fatal("局部寫入或另一頁撤除「Enter」")
+		}
+		return u
+	}
+	for _, tc := range []struct {
+		name  string
+		apply func(*coldPromptUI)
+	}{
+		{"page-hidden", func(u *coldPromptUI) { u.quizEnterDisplay(0x4000) }},
+		{"page-overwritten", func(u *coldPromptUI) { write(u, 0, 0, 320, 189, 197) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			u := setup()
+			tc.apply(u)
+			if _, _, ok := u.quizEnterWord(); ok || u.QuizEnter.Known {
+				t.Fatal("原版換掉底列後仍保留「輸入」")
+			}
+			if _, ok := u.Words[[2]int{136, 189}]; !ok || len(u.Words) != 1 {
+				t.Fatalf("撤除了其他詞框：%v", u.Words)
 			}
 		})
 	}

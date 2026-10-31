@@ -13,7 +13,7 @@ test ! -e "$BASE"
 test -d "$SDK"
 test -d "$MODULES"
 test -d "$ROOT/workplace/probe/gocache"
-test -f "$ROOT/workplace/probe/battle-continuation-20261025/control-r1/final.state"
+test -f "$ROOT/workplace/probe/verify-base-20261031-r2/base/palanthas.state"
 test -f "$ROOT/workplace/input/dos/drkqueen/DQK.EXE"
 docker image inspect "$GO" >/dev/null
 docker image inspect "$PIL" >/dev/null
