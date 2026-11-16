@@ -1,5 +1,7 @@
 # 目前真相
 
+2026-11-11 空間維護：清除可重建的快取、舊版封包，移除 4,451 個檔案，合計約 10.761 GiB。原始輸入、程式來源、正式素材、存檔、研究紀錄、影片與現行封包保留。舊版封包的 manifest 與驗收紀錄保留；歷史封包路徑不代表實體檔案仍存在。詳見 [WORKLOG.md](WORKLOG.md)。
+
 更新：2026-10-31。規則見[AGENTS.md](AGENTS.md)，歷程見[WORKLOG.md](WORKLOG.md)。下表是唯一目前狀態；歷史批次的數字與缺項不重新開啟工作。
 
 | 項目 | 現況與證據 |
@@ -8,7 +10,7 @@
 | 工作順序 | 使用者2026-10-31刪除整個workplace/probe後，player-current由v.1.0.5 Windows完整包還原。v.1.0.5與私人Release沒有研究快照或收據，使用者選定以verify-base冷啟動快照重建驗證；1652組函式對照與介面IRQ對照改用新快照，build-info恢復READY。來源938025b固定後建置三平台、封包與啟動驗收。 |
 | 繪圖結案驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/render-two-rounds-checks.json` SHA-256 `6483aea49598010f6cd46f2e2c0b72c91ed83c108c7eee01f6e8fd391ed5f97f`。第一輪17家族49固定來源、196項GPU／CPU比較零差異，另驗正式程式正常開場。第二輪洞穴及戰鬥快照重畫、HD關閉／開啟、2倍／3倍通過；實際原版像素寫入、圖片退路與未完成交易0。預先登記、第一輪、第二輪取樣時機修正及彙整器皆在同批，正式程式、93份輸入與素材保持。 |
 | 兩輪完成驗收 | v.1.0.0歷史基線，修正版未重跑本父批。`completion-20261029/two-round-checks.json` SHA-256 `a381d5b2f191d6f2aede57d48f9e1365f05d8d193144d0ac578e1a4008a849dd`。final-r1驗正常示範中斷、角色管理、語言、縮放及說明；final-r2驗音樂、工具列與桌面服務。探索／戰鬥沿相同Go來源快照收據，資料差額及針對修正另驗；正常入口與注入分開。實際原版像素寫入、圖片退路及未完成交易均0。 |
-| 正式交付 | dist-all/v.1.0.7-20261031/full-local共三個獨立完整版。Windows 1270506776 bytes、SHA 315384996559c085176a0e9fabe467566ff35d360a50988f9e5b198b4adf5013；Linux AppImage 1109641720 bytes、SHA b74fd2e3c1a9693e9571cd8042cdfb090767de68b0fc4337c88d11452d276c8d；macOS 1274742330 bytes、SHA 4f75de11bd9c921288d7133e0b9105c11fd9cc27d8f849e9f98d12f8a9d01563。v.1.0.6與更早版本保留。 |
+| 正式交付 | dist-all/v.1.0.7-20261031/full-local共三個獨立完整版。Windows 1270506776 bytes、SHA 315384996559c085176a0e9fabe467566ff35d360a50988f9e5b198b4adf5013；Linux AppImage 1109641720 bytes、SHA b74fd2e3c1a9693e9571cd8042cdfb090767de68b0fc4337c88d11452d276c8d；macOS 1274742330 bytes、SHA 4f75de11bd9c921288d7133e0b9105c11fd9cc27d8f849e9f98d12f8a9d01563。v.1.0.4至v.1.0.6的舊版完整封包已於2026-11-11清除，驗收紀錄保留。 |
 | 私人素材備份 | 使用者2026-10-30明確授權必要與HD素材上傳。45個Release資產共1307818490 bytes：Linux原ZIP的38段、Windows／macOS無損差異、三個引擎包與兩份清單。必要原版、繁中、字模、閱讀、8曲、完整HD及製作主圖均在完整版。全部遠端大小與SHA核對，另實際下載一段；Windows／macOS已還原成與原ZIP相同SHA。入口docs/private-release-assets.json，證據remote-backup-check、download-check及delta-restore-check。額外掃描、研究快照、玩家存檔與影片未上傳。 |
 | 交付再次核對 | v.1.0.7的smoke/delivery-checks.json SHA dd51656cf839da14249e3958cfcda840da89a70c2020c0d6f0bc4ee21a185e56。來源938025b2daaf46c06f05fd911e6944c83eeddad5，三包內容雜湊、原版EXE與AppImage解壓核對通過；四個資產目錄與v.1.0.5相同，build-info為READY。 |
 | 封包啟動 | v.1.0.7的smoke/appimage、windows及windows-launcher沿既有正常入口首輪通過，無狀態注入。smoke/footer/footer-checks.json（SHA 8d670c9fc4af969debf7b93d2a5a94f6468ba85a160b997292b6b709dff9d6e6）驗Wine下Windows與正式Linux自動填入後進城，冷啟動詞框不再留查驗「輸入」，兩者進城畫格相同；v.1.0.6程式的殘留對照只差原生(8,189)至(47,196)。實際FUSE掛載、Windows原生及macOS真機未驗，macOS未簽章或公證。 |
@@ -45,7 +47,7 @@
 | README | 故事、機制及30張GitHub展示圖保持，來源與SHA在docs/images/manifest.json。現行交付改為本機v.1.0.7三個完整成品與Linux AppImage啟動方式；v.1.0.3私人素材備份另列，舊備份還原工具仍只還原v.1.0.3。大型遊戲素材不放一般Git物件，影片及新完整包留本機。 |
 | 尚未證實與可選項 | 完整遊玩驗證不列本輪條件，繪圖經最後兩輪抽驗結案。未知輸出、未走訪場景、正常結局與跨作匯入不宣稱已證實，亦不因這些範圍重開本輪。Windows原生與macOS真機、人工聽感仍未驗；額外美化不列阻塞，未公開Release或上傳影片。 |
 | 工具鏈 | SDK隔離來源`f79eab6db8c64a524a06535e53e5d32b0bbcf7c8`唯讀，Go1.24.13及Pillow r2保持。取樣沿既有wasteland-media映像與FluidSynth 2.3.1、FluidR3_GM 3.1。桌面執行映像`dqk-player-audio:1.24-r1` ID `70a02710cbba9dee61c8f56893fee51ea9ea55db7ef9fd79678dac602da589f9`，只補ALSA至PulseAudio橋接；Go建置仍用原8ed6bdee映像。新解碼依賴保存在本作music-go-deps，SDK及共用快取唯讀，原EXE保持。 |
-| 儲存與Docker | 現行約7.24GiB，含精簡後維護來源約3.82GiB及本次要求的三個完整成品3654841760 bytes，證據release-appimage-20261030/storage-check.json。新建置與打包暫存已清；沿既有固定Go、macOS、Pillow、Wine及kol AppImage工具映像，未建新image／volume，不清其他專案。必要來源及精簡報告保留，舊大型重播不還原；擁有權異常與殘留專案容器0。 |
+| 儲存與Docker | 2026-11-11清理後檔案約5.24 GiB，不含Git內部資料。現行v.1.0.7三平台成品、player-current、必要SDK、驗證基準及研究紀錄保留；舊版完整封包、Go快取與編譯暫存已清。工具映像與volume因執行權限限制未清理，本次未建立新映像或volume。歷史儲存驗收保留release-appimage-20261030/storage-check.json。 |
 
 ## 較早資料批的證據入口
 

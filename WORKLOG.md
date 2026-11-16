@@ -3645,3 +3645,10 @@ render-abi.sh、render_abi_probe.go與ui_cold_fill_test.go改用新快照。首�
 提交938025b。release-build後Linux binary 4e2265be、Windows e7025d88、macOS universal acbfbb5a，build-info READY。package-full產出v.1.0.7三包：Windows ZIP 1270506776 bytes、SHA 315384996559c085176a0e9fabe467566ff35d360a50988f9e5b198b4adf5013；macOS ZIP 1274742330 bytes、SHA 4f75de11bd9c921288d7133e0b9105c11fd9cc27d8f849e9f98d12f8a9d01563；Linux AppImage 1109641720 bytes、SHA b74fd2e3c1a9693e9571cd8042cdfb090767de68b0fc4337c88d11452d276c8d。appimage驗收通過。
 
 windows與windows-launcher首輪通過。Wine下Windows封包與正式Linux執行查驗流程，冷啟動詞框都不再留startup.quiz-enter，進城畫格相同；查驗畫格只差輸入游標閃爍的(104,189)附近。smoke/footer/footer-checks.json SHA 8d670c9f，smoke/delivery-checks.json SHA dd51656c，四個資產目錄與v.1.0.5相同。收尾刪除封包暫存（約6GiB）與研究畫格原檔；verify-base、render-abi-rebuild與重生的hd-assets是建置檢查輸入，保留。沒有push、建立Issue、tag或Release；容器皆--rm，無root-owned檔或殘留本作容器。
+
+
+## 2026-11-11 可重建產物清理
+
+清除可重建的快取、舊版封包，移除 4,451 個檔案，合計約 10.761 GiB。原始輸入、程式來源、正式素材、存檔、研究紀錄、影片與現行封包保留。
+
+保留檔案逐檔核對 SHA-256、大小、權限、擁有權及修改時間，並核對 Git 狀態。巢狀儲存庫的 rich2.test 曾誤列清理，已由 Git 物件還原，SHA-256、大小、擁有權及修改時間與清理前相同；執行權限依 Git，未取得原始完整權限位元。其他保留檔案的內容與上述屬性均相同。本節於核對後追加。Docker image 刪除及 volume 管理遭目前執行權限拒絕，未刪除映像或 volume；本次容器使用 --rm，未新增映像或 volume。未提交或推送。
