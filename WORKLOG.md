@@ -3656,3 +3656,4 @@ windows與windows-launcher首輪通過。Wine下Windows封包與正式Linux執�
 ## 2026-11-16 重複檔改唯讀硬連結
 
 依使用者要求清理空間，只處理git未追蹤、4096 bytes以上、不在巢狀git repo內的檔案。連結前在Docker重新計算兩端SHA-256並核對大小與擁有者，共657個檔案改成硬連結，省下156759259 bytes，略過1個。路徑與內容不變；共用檔已移除寫入權限，原地改寫會報錯而不會同時改到其他路徑。第一次執行在Go模組相依的唯讀目錄中斷，重新掃描後重跑，本收據只含第二次結果；中斷前已連結的部分未記錄，內容同樣已逐檔核對。收據與工具在`workplace/cleanup-20261116-dedup/`。要解除時，用`cp`複製成獨立檔案再補回寫入權限。原始輸入、程式來源、研究紀錄與dist-all內容都沒有刪除。
+- 依使用者要求打包git未追蹤的本機資料，不含dist-all與頂層.git，供放上Google Drive：`~/Downloads/golden_box-backup-20261116/dark_queen_of_krynn-backup-20261116.zip`，1641247207 bytes，SHA-256 `c502a782a31de19284e54156195114e2f1782ac29fe629391a1abd11bfa09ab0`。包內附SHA256SUMS、符號連結清單與還原說明，打包後重新讀取逐檔比對SHA全部相符。
